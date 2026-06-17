@@ -16,6 +16,7 @@ namespace PSUEISKOLARSystem.Server.Data
         public DbSet<Announcement> Announcements => Set<Announcement>();
         public DbSet<DocumentRequirement> DocumentRequirements => Set<DocumentRequirement>();
         public DbSet<DocumentSubmission> DocumentSubmissions => Set<DocumentSubmission>();
+        public DbSet<ActiveSemester> ActiveSemesters => Set<ActiveSemester>();
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -104,6 +105,12 @@ namespace PSUEISKOLARSystem.Server.Data
                 .WithMany()
                 .HasForeignKey(ds => ds.ReviewedById)
                 .OnDelete(DeleteBehavior.ClientSetNull);
+
+            builder.Entity<ActiveSemester>()
+                .HasOne(a => a.UpdatedBy)
+                .WithMany()
+                .HasForeignKey(a => a.UpdatedById)
+                .OnDelete(DeleteBehavior.SetNull);
         }
     }
 }

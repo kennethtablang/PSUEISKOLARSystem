@@ -155,6 +155,34 @@ namespace PSUEISKOLARSystem.Server.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("PSUEISKOLARSystem.Server.Models.ActiveSemester", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AcademicYear")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Semester")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedById")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UpdatedById");
+
+                    b.ToTable("ActiveSemesters");
+                });
+
             modelBuilder.Entity("PSUEISKOLARSystem.Server.Models.AcademicGrade", b =>
                 {
                     b.Property<int>("Id")
@@ -636,6 +664,16 @@ namespace PSUEISKOLARSystem.Server.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("PSUEISKOLARSystem.Server.Models.ActiveSemester", b =>
+                {
+                    b.HasOne("PSUEISKOLARSystem.Server.Models.ApplicationUser", "UpdatedBy")
+                        .WithMany()
+                        .HasForeignKey("UpdatedById")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("UpdatedBy");
                 });
 
             modelBuilder.Entity("PSUEISKOLARSystem.Server.Models.AcademicGrade", b =>

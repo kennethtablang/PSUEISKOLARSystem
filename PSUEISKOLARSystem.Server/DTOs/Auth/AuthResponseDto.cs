@@ -5,5 +5,7 @@ namespace PSUEISKOLARSystem.Server.DTOs.Auth
         public string Token { get; set; } = string.Empty;
         public DateTime ExpiresAtUtc { get; set; }
         public UserDto User { get; set; } = new();
+        public bool Requires2fa { get; set; }
+        public string? TwoFaTicket { get; set; }
     }
 }

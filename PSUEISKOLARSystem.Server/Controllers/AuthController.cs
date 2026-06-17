@@ -72,11 +72,8 @@ namespace PSUEISKOLARSystem.Server.Controllers
         [HttpPost("forgot-password")]
         public async Task<IActionResult> ForgotPassword(ForgotPasswordRequestDto request)
         {
-            var result = await authService.ForgotPasswordAsync(request.Email);
-            if (result is null)
-                return Ok(new { found = false, message = "If that email is registered, a reset link can be generated." });
-
-            return Ok(new { found = true, email = result.Value.Email, token = result.Value.Token });
+            var found = await authService.ForgotPasswordAsync(request.Email);
+            return Ok(new { found });
         }
 
         [HttpPost("reset-password")]
@@ -86,6 +83,76 @@ namespace PSUEISKOLARSystem.Server.Controllers
             {
                 await authService.ResetPasswordAsync(request);
                 return Ok(new { message = "Password reset successfully." });
+            }
+            catch (BadRequestException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("login-2fa")]
+        public async Task<ActionResult<AuthResponseDto>> Login2fa(TwoFactorLoginRequestDto request)
+        {
+            try
+            {
+                return Ok(await authService.VerifyTwoFactorLoginAsync(request));
+            }
+            catch (UnauthorizedException ex)
+            {
+                return Unauthorized(new { message = ex.Message });
+            }
+        }
+
+        [HttpGet("2fa/setup")]
+        [Authorize]
+        public async Task<IActionResult> Get2faSetup()
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)
+                ?? throw new UnauthorizedAccessException();
+            try
+            {
+                var (uri, key) = await authService.GetTwoFactorSetupAsync(userId);
+                return Ok(new { uri, key });
+            }
+            catch (NotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("2fa/enable")]
+        [Authorize]
+        public async Task<IActionResult> Enable2fa(EnableTwoFactorDto dto)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)
+                ?? throw new UnauthorizedAccessException();
+            try
+            {
+                var success = await authService.EnableTwoFactorAsync(userId, dto.Code);
+                if (!success)
+                    return BadRequest(new { message = "Invalid verification code. Please try again." });
+                return Ok(new { message = "Two-factor authentication enabled." });
+            }
+            catch (NotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("2fa/disable")]
+        [Authorize]
+        public async Task<IActionResult> Disable2fa(DisableTwoFactorDto dto)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)
+                ?? throw new UnauthorizedAccessException();
+            try
+            {
+                await authService.DisableTwoFactorAsync(userId, dto.Password);
+                return Ok(new { message = "Two-factor authentication disabled." });
+            }
+            catch (NotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
             }
             catch (BadRequestException ex)
             {

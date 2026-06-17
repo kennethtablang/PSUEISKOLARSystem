@@ -37,6 +37,7 @@ namespace PSUEISKOLARSystem.Server
                 .AddDefaultTokenProviders();
 
             builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("JwtSettings"));
+            builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("EmailSettings"));
             var jwtSettings = builder.Configuration.GetSection("JwtSettings").Get<JwtSettings>()
                 ?? throw new InvalidOperationException("JwtSettings configuration is missing.");
 
@@ -65,6 +66,7 @@ namespace PSUEISKOLARSystem.Server
             builder.Services.AddAutoMapper(cfg => { }, typeof(AuthMappingProfile));
 
             builder.Services.AddScoped<IAuthService, AuthService>();
+            builder.Services.AddScoped<IEmailService, EmailService>();
             builder.Services.AddSingleton<IFileStorageService, LocalFileStorageService>();
 
             builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>

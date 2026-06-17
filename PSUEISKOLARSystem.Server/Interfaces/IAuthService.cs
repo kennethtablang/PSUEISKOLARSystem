@@ -9,7 +9,11 @@ namespace PSUEISKOLARSystem.Server.Interfaces
         Task<UserDto> GetCurrentUserAsync(string userId);
         Task<UserDto> UpdateProfileAsync(string userId, UpdateProfileDto dto);
         Task<UserDto> RegisterScholarAsync(RegisterScholarRequestDto request);
-        Task<(string Email, string Token)?> ForgotPasswordAsync(string email);
+        Task<bool> ForgotPasswordAsync(string email);
         Task ResetPasswordAsync(ResetPasswordRequestDto request);
+        Task<(string Uri, string Key)> GetTwoFactorSetupAsync(string userId);
+        Task<bool> EnableTwoFactorAsync(string userId, string code);
+        Task DisableTwoFactorAsync(string userId, string password);
+        Task<AuthResponseDto> VerifyTwoFactorLoginAsync(TwoFactorLoginRequestDto request);
     }
 }

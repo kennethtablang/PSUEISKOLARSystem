@@ -74,6 +74,20 @@ namespace PSUEISKOLARSystem.Server.Data
                 await db.SaveChangesAsync();
             }
 
+            if (!db.ActiveSemesters.Any())
+            {
+                var month = DateTime.Now.Month;
+                var year  = DateTime.Now.Year;
+                var start = month >= 8 ? year : year - 1;
+                db.ActiveSemesters.Add(new ActiveSemester
+                {
+                    AcademicYear = $"{start}-{start + 1}",
+                    Semester     = (month >= 2 && month <= 7) ? 2 : 1,
+                    UpdatedAt    = DateTime.UtcNow,
+                });
+                await db.SaveChangesAsync();
+            }
+
             var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
 
             // Seed accounts: Administrator, Coordinator, Scholar

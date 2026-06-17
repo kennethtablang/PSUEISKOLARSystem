@@ -9,5 +9,6 @@ namespace PSUEISKOLARSystem.Server.DTOs.Auth
         public int? CampusId { get; set; }
         public string? CampusName { get; set; }
         public bool IsActive { get; set; }
+        public bool TwoFactorEnabled { get; set; }
     }
 }
