@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="psueiskolarsystem.client/psueiskolarsystem.client.esproj">
+    <Build />
+    <Deploy />
+  </Project>
+  <Project Path="PSUEISKOLARSystem.Server/PSUEISKOLARSystem.Server.csproj" />
+</Solution>
