@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { getSubmissions, reviewDocument, downloadFile } from '../api/documents';
+import { getActiveSemester } from '../api/settings';
 import { useTitle } from '../hooks/useTitle';
 
 const STATUSES = ['', 'Pending', 'Verified', 'Incomplete'];
@@ -11,23 +12,13 @@ const STATUS_STYLE = {
   Incomplete: 'bg-red-100 text-red-700',
 };
 
-function currentPeriod() {
-  const month = new Date().getMonth() + 1;
-  const year  = new Date().getFullYear();
-  const start = month >= 8 ? year : year - 1;
-  return {
-    academicYear: `${start}-${start + 1}`,
-    semester: String(month >= 2 && month <= 7 ? 2 : 1),
-  };
-}
-
 export default function DocumentReviewPage() {
   useTitle('Document Review');
   const { token } = useAuth();
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [reviewing, setReviewing] = useState(null);
-  const [filters, setFilters] = useState(() => ({ status: 'Pending', ...currentPeriod() }));
+  const [filters, setFilters] = useState({ status: 'Pending', academicYear: '', semester: '' });
 
   async function load(f = filters) {
     setLoading(true);
@@ -43,7 +34,15 @@ export default function DocumentReviewPage() {
     }
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    getActiveSemester(token)
+      .then(data => {
+        const initialFilters = { status: 'Pending', academicYear: data.academicYear, semester: String(data.semester) };
+        setFilters(initialFilters);
+        load(initialFilters);
+      })
+      .catch(() => load());
+  }, []);
 
   function setFilter(k, v) {
     const next = { ...filters, [k]: v };

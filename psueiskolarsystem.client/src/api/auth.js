@@ -73,6 +73,56 @@ export async function resetPassword(email, token, newPassword) {
   return res.json();
 }
 
+export async function verifyTwoFactorLogin(ticket, code) {
+  const res = await fetch(`${API}/login-2fa`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ticket, code }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Invalid authentication code.');
+  }
+  return res.json();
+}
+
+export async function get2faSetup(token) {
+  const res = await fetch(`${API}/2fa/setup`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to get 2FA setup.');
+  }
+  return res.json();
+}
+
+export async function enable2fa(code, token) {
+  const res = await fetch(`${API}/2fa/enable`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ code }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to enable 2FA.');
+  }
+  return res.json();
+}
+
+export async function disable2fa(password, token) {
+  const res = await fetch(`${API}/2fa/disable`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ password }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to disable 2FA.');
+  }
+  return res.json();
+}
+
 export async function register(data, token) {
   const res = await fetch(`${API}/register`, {
     method: 'POST',

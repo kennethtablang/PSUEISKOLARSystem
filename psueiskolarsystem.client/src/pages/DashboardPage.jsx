@@ -5,6 +5,7 @@ import { getAnnouncements } from '../api/announcements';
 import { getScholars } from '../api/scholars';
 import { getUsers } from '../api/users';
 import { getSubmissions, getRequirements } from '../api/documents';
+import { getActiveSemester } from '../api/settings';
 import { getScholarProfile } from '../api/scholars';
 import { GraduationCap, ClipboardList, AlertTriangle, BarChart2, Inbox, Clock, FileCheck } from 'lucide-react';
 import { useTitle } from '../hooks/useTitle';
@@ -53,9 +54,14 @@ export default function DashboardPage() {
 
   async function loadScholarCompliance() {
     try {
-      const profile = await getScholarProfile(user.id, token).catch(() => null);
-      const _m = new Date().getMonth() + 1, _y = new Date().getFullYear(), _s = _m >= 8 ? _y : _y - 1;
-      const CURRENT_YEAR = `${_s}-${_s + 1}`;
+      const [profile, period] = await Promise.all([
+        getScholarProfile(user.id, token).catch(() => null),
+        getActiveSemester(token).catch(() => null),
+      ]);
+      const CURRENT_YEAR = period?.academicYear ?? (() => {
+        const m = new Date().getMonth() + 1, y = new Date().getFullYear(), s = m >= 8 ? y : y - 1;
+        return `${s}-${s + 1}`;
+      })();
       const [reqs, subs] = await Promise.all([
         getRequirements(token, { scholarshipTypeId: profile?.scholarshipTypeId }),
         getSubmissions(token, { academicYear: CURRENT_YEAR }),

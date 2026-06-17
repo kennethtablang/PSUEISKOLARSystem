@@ -3,6 +3,7 @@ import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { getRequirements, getSubmissions, uploadDocument, deleteSubmission, downloadFile } from '../api/documents';
 import { getScholarProfile } from '../api/scholars';
+import { getActiveSemester } from '../api/settings';
 import { useTitle } from '../hooks/useTitle';
 
 const STATUS_STYLE = {
@@ -10,16 +11,6 @@ const STATUS_STYLE = {
   Verified:   'bg-emerald-100 text-emerald-700',
   Incomplete: 'bg-red-100 text-red-700',
 };
-
-function currentPeriod() {
-  const month = new Date().getMonth() + 1; // 1–12
-  const year  = new Date().getFullYear();
-  const start = month >= 8 ? year : year - 1;
-  return {
-    academicYear: `${start}-${start + 1}`,
-    semester: month >= 2 && month <= 7 ? 2 : 1,
-  };
-}
 
 export default function MyDocumentsPage() {
   useTitle('My Documents');
@@ -32,7 +23,8 @@ export default function MyDocumentsPage() {
   const [uploading, setUploading] = useState(null);
   const [error, setError] = useState('');
 
-  const [period, setPeriod] = useState(currentPeriod);
+  const [period, setPeriod] = useState({ academicYear: '', semester: 1 });
+  const [periodReady, setPeriodReady] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -53,7 +45,17 @@ export default function MyDocumentsPage() {
     }
   }
 
-  useEffect(() => { load(); }, [period.academicYear, period.semester]);
+  useEffect(() => {
+    getActiveSemester(token)
+      .then(data => setPeriod({ academicYear: data.academicYear, semester: data.semester }))
+      .catch(() => {
+        const m = new Date().getMonth() + 1, y = new Date().getFullYear(), s = m >= 8 ? y : y - 1;
+        setPeriod({ academicYear: `${s}-${s + 1}`, semester: m >= 2 && m <= 7 ? 2 : 1 });
+      })
+      .finally(() => setPeriodReady(true));
+  }, []);
+
+  useEffect(() => { if (periodReady) load(); }, [period.academicYear, period.semester, periodReady]);
 
   function submissionFor(reqId) {
     return submissions.find(s => s.requirementId === reqId) ?? null;

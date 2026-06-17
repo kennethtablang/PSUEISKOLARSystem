@@ -31,6 +31,8 @@ const navByRole = {
     { section: 'Engage' },
     { to: '/announcements',   label: 'Announcements',    Icon: Bell },
     { to: '/analytics',       label: 'Analytics',        Icon: BarChart2 },
+    { section: 'System' },
+    { to: '/settings',        label: 'Settings',         Icon: Settings },
   ],
   ScholarshipCoordinator: [
     { to: '/dashboard',       label: 'Dashboard',       Icon: LayoutDashboard },
@@ -149,21 +151,30 @@ export default function Layout({ children }) {
 
       {/* ── HEADER ── */}
       <div style={{
-        padding: isCollapsed ? '20px 10px' : '22px 18px 18px',
+        padding: isCollapsed ? '20px 13px' : '22px 18px 18px',
         borderBottom: '1px solid rgba(255,255,255,0.08)',
         position: 'relative', zIndex: 1,
         display: 'flex', alignItems: 'center',
         justifyContent: isCollapsed ? 'center' : 'space-between',
         transition: 'padding 0.25s',
+        minHeight: 74,
       }}>
-        {/* Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 11, overflow: 'hidden', minWidth: 0 }}>
+        {/* Logo — when collapsed on desktop, acts as the expand button */}
+        <div
+          onClick={isCollapsed && isDesktop ? () => setCollapsed(false) : undefined}
+          title={isCollapsed && isDesktop ? 'Expand sidebar' : undefined}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 11, overflow: 'hidden', minWidth: 0,
+            cursor: isCollapsed && isDesktop ? 'pointer' : 'default',
+          }}
+        >
           <div style={{
             width: 42, height: 42, borderRadius: 13, flexShrink: 0,
             background: 'linear-gradient(145deg, #ffd030, #e0a000)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontWeight: 900, fontSize: 11, color: '#1a0e00',
             boxShadow: '0 4px 0 rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.35)',
+            transition: 'box-shadow 0.15s',
           }}>PSU</div>
 
           {/* Text — hidden when collapsed */}
@@ -182,24 +193,21 @@ export default function Layout({ children }) {
           </div>
         </div>
 
-        {/* Desktop collapse toggle */}
-        {isDesktop && (
+        {/* Desktop collapse button — only visible when expanded */}
+        {isDesktop && !isCollapsed && (
           <button
-            onClick={() => setCollapsed(c => !c)}
-            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            onClick={() => setCollapsed(true)}
+            title="Collapse sidebar"
             style={{
               width: 26, height: 26, borderRadius: 8, border: 'none', cursor: 'pointer',
               background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center',
               justifyContent: 'center', flexShrink: 0, transition: 'background 0.15s',
-              marginLeft: isCollapsed ? 0 : 8,
+              marginLeft: 8,
             }}
             onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.18)'}
             onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
           >
-            <ChevronLeft
-              size={13} strokeWidth={2.5} color="rgba(255,255,255,0.75)"
-              style={{ transform: collapsed ? 'rotate(180deg)' : 'none', transition: 'transform 0.25s' }}
-            />
+            <ChevronLeft size={13} strokeWidth={2.5} color="rgba(255,255,255,0.75)" />
           </button>
         )}
 

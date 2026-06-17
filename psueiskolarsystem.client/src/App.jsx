@@ -14,6 +14,7 @@ import AnalyticsPage from './pages/AnalyticsPage';
 import MyDocumentsPage from './pages/MyDocumentsPage';
 import DocumentReviewPage from './pages/DocumentReviewPage';
 import RequirementsPage from './pages/RequirementsPage';
+import SettingsPage from './pages/SettingsPage';
 import UnauthorizedPage from './pages/UnauthorizedPage';
 import ProfilePage from './pages/ProfilePage';
 
@@ -39,6 +40,7 @@ export default function App() {
           <Route path="/my-documents" element={<ProtectedRoute roles={['Scholar']}><MyDocumentsPage /></ProtectedRoute>} />
           <Route path="/document-review" element={<ProtectedRoute roles={adminCoord}><DocumentReviewPage /></ProtectedRoute>} />
           <Route path="/requirements"  element={<ProtectedRoute roles={admin}><RequirementsPage /></ProtectedRoute>} />
+          <Route path="/settings"      element={<ProtectedRoute roles={admin}><SettingsPage /></ProtectedRoute>} />
           <Route path="/announcements" element={<ProtectedRoute roles={adminCoord}><AnnouncementsPage /></ProtectedRoute>} />
           <Route path="/analytics"    element={<ProtectedRoute roles={adminCoord}><AnalyticsPage /></ProtectedRoute>} />
           <Route path="/profile"      element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />

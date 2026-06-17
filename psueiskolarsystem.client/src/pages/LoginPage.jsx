@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { login, forgotPassword } from '../api/auth';
+import { login, forgotPassword, verifyTwoFactorLogin } from '../api/auth';
 import { useTitle } from '../hooks/useTitle';
-import { Mail, Lock, UserCheck, FolderUp, TrendingUp, Bell, ArrowRight, X, KeyRound, UserPlus, AlertTriangle } from 'lucide-react';
+import { Mail, Lock, UserCheck, FolderUp, TrendingUp, Bell, ArrowRight, X, KeyRound, UserPlus, AlertTriangle, ShieldCheck } from 'lucide-react';
 
 const HIGHLIGHTS = [
   { Icon: UserCheck,  label: 'Scholar Profiling',      desc: 'Academic records & personal information' },
@@ -18,6 +18,7 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [showForgot, setShowForgot] = useState(false);
+  const [twoFa, setTwoFa] = useState(null); // { userId } when 2FA required
 
   useTitle('Sign In');
   const { signIn } = useAuth();
@@ -29,8 +30,12 @@ export default function LoginPage() {
     setSubmitting(true);
     try {
       const data = await login(email, password);
-      signIn(data);
-      navigate('/dashboard', { replace: true });
+      if (data.requires2fa) {
+        setTwoFa({ ticket: data.twoFaTicket });
+      } else {
+        signIn(data);
+        navigate('/dashboard', { replace: true });
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -433,15 +438,103 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {showForgot && <ForgotPasswordModal onClose={() => setShowForgot(false)} navigate={navigate} />}
+      {showForgot && <ForgotPasswordModal onClose={() => setShowForgot(false)} />}
+      {twoFa && (
+        <TwoFaModal
+          ticket={twoFa.ticket}
+          onBack={() => setTwoFa(null)}
+          onSuccess={data => { signIn(data); navigate('/dashboard', { replace: true }); }}
+        />
+      )}
     </div>
   );
 }
 
-function ForgotPasswordModal({ onClose, navigate }) {
+function TwoFaModal({ ticket, onBack, onSuccess }) {
+  const [code, setCode] = useState('');
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError('');
+    setSubmitting(true);
+    try {
+      const data = await verifyTwoFactorLogin(ticket, code.replace(/\s/g, ''));
+      onSuccess(data);
+    } catch (err) {
+      setError(err.message);
+      setCode('');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 flex items-center justify-center z-50 p-4"
+      style={{ background: 'rgba(0,20,60,0.52)' }}>
+      <div className="clay-card-modal w-full p-7" style={{ maxWidth: 400 }}>
+
+        <div className="flex flex-col items-center text-center mb-6">
+          <div className="w-12 h-12 rounded-full flex items-center justify-center mb-3"
+            style={{ background: 'rgba(0,37,112,0.08)', border: '2px solid rgba(0,37,112,0.15)' }}>
+            <ShieldCheck size={24} color="#002570" strokeWidth={2} />
+          </div>
+          <h2 className="text-base font-black" style={{ color: '#0d1a33' }}>Two-Factor Verification</h2>
+          <p className="text-sm mt-1" style={{ color: '#4a5a7a' }}>
+            Enter the 6-digit code from your authenticator app
+          </p>
+        </div>
+
+        {error && (
+          <div className="mb-4 flex items-start gap-2 p-3 rounded-2xl text-sm"
+            style={{ background: '#fff0f0', color: '#b03030', border: '1.5px solid #f5b0b0' }}>
+            <AlertTriangle size={14} strokeWidth={2.5} className="shrink-0 mt-px" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold mb-2 uppercase tracking-wider"
+              style={{ color: '#4a5a7a' }}>
+              Authentication Code
+            </label>
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9 ]*"
+              maxLength={7}
+              required
+              value={code}
+              onChange={e => setCode(e.target.value)}
+              placeholder="000000"
+              className="clay-input text-center text-lg font-bold tracking-[0.25em]"
+              autoFocus
+              autoComplete="one-time-code"
+            />
+          </div>
+          <div className="flex gap-3">
+            <button type="button" onClick={onBack}
+              className="clay-btn clay-btn-ghost flex-1 py-3 text-sm">
+              Back
+            </button>
+            <button type="submit" disabled={submitting || code.replace(/\s/g, '').length < 6}
+              className="clay-btn clay-btn-primary flex-1 py-3 text-sm"
+              style={{ opacity: (submitting || code.replace(/\s/g, '').length < 6) ? 0.65 : 1 }}>
+              {submitting ? 'Verifying…' : 'Verify'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function ForgotPasswordModal({ onClose }) {
   const [email, setEmail] = useState('');
-  const [step, setStep] = useState(1);
-  const [resetData, setResetData] = useState(null);
+  const [step, setStep] = useState(1); // 1 = form, 2 = result
+  const [found, setFound] = useState(false);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -451,7 +544,7 @@ function ForgotPasswordModal({ onClose, navigate }) {
     setSubmitting(true);
     try {
       const data = await forgotPassword(email);
-      setResetData(data.found ? { email: data.email, token: data.token } : null);
+      setFound(data.found);
       setStep(2);
     } catch (err) {
       setError(err.message);
@@ -460,18 +553,12 @@ function ForgotPasswordModal({ onClose, navigate }) {
     }
   }
 
-  function handleResetNow() {
-    onClose();
-    navigate(`/reset-password?email=${encodeURIComponent(resetData.email)}&token=${encodeURIComponent(resetData.token)}`);
-  }
-
   return (
     <div className="fixed inset-0 flex items-center justify-center z-50 p-4"
       style={{ background: 'rgba(0,20,60,0.52)' }}
       onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="clay-card-modal w-full p-7" style={{ maxWidth: 400 }}>
 
-        {/* Header */}
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl flex items-center justify-center"
@@ -489,7 +576,7 @@ function ForgotPasswordModal({ onClose, navigate }) {
         {step === 1 ? (
           <>
             <p className="text-sm mb-5 leading-relaxed" style={{ color: '#4a5a7a' }}>
-              Enter your registered email address. A secure reset link will be generated for you.
+              Enter your registered email address and we will send you a password reset link.
             </p>
 
             {error && (
@@ -530,27 +617,30 @@ function ForgotPasswordModal({ onClose, navigate }) {
                 <button type="submit" disabled={submitting}
                   className="clay-btn clay-btn-primary flex-1 py-3 text-sm"
                   style={{ opacity: submitting ? 0.65 : 1 }}>
-                  {submitting ? 'Checking…' : 'Generate Link'}
+                  {submitting ? 'Sending…' : 'Send Reset Link'}
                 </button>
               </div>
             </form>
           </>
-        ) : resetData ? (
+        ) : found ? (
           <>
             <div className="flex flex-col items-center text-center py-2 mb-5">
               <div className="w-12 h-12 rounded-full flex items-center justify-center mb-3"
                 style={{ background: 'rgba(0,37,112,0.08)', border: '2px solid rgba(0,37,112,0.15)' }}>
-                <KeyRound size={22} color="#002570" strokeWidth={2} />
+                <Mail size={22} color="#002570" strokeWidth={2} />
               </div>
-              <p className="font-black text-base mb-1" style={{ color: '#0d1a33' }}>Reset Link Ready</p>
-              <p className="text-sm" style={{ color: '#4a5a7a' }}>
-                Click below to set a new password for <strong>{resetData.email}</strong>.
+              <p className="font-black text-base mb-1" style={{ color: '#0d1a33' }}>Check Your Inbox</p>
+              <p className="text-sm leading-relaxed" style={{ color: '#4a5a7a' }}>
+                A password reset link has been sent to <strong>{email}</strong>.
+                Please check your email and follow the instructions.
               </p>
             </div>
-            <button onClick={handleResetNow}
-              className="clay-btn clay-btn-primary w-full py-3.5 text-sm flex items-center justify-center gap-2">
-              Set New Password
-              <ArrowRight size={15} strokeWidth={2.5} />
+            <p className="text-xs text-center mb-4" style={{ color: '#9aaabb' }}>
+              The link expires in 24 hours. Check your spam folder if you don't see it.
+            </p>
+            <button onClick={onClose}
+              className="clay-btn clay-btn-ghost w-full py-3 text-sm">
+              Close
             </button>
           </>
         ) : (
