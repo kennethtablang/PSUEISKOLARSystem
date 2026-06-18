@@ -3,7 +3,7 @@ import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { getActiveSemester, setActiveSemester } from '../api/settings';
 import { useTitle } from '../hooks/useTitle';
-import { CalendarDays, CheckCircle } from 'lucide-react';
+import { CalendarDays, CheckCircle, Archive, AlertTriangle, X } from 'lucide-react';
 
 function yearOptions() {
   const y = new Date().getFullYear();
@@ -22,6 +22,10 @@ export default function SettingsPage() {
   const [saving, setSaving]   = useState(false);
   const [error, setError]     = useState('');
   const [saved, setSaved]     = useState(false);
+  const [archiveDays, setArchiveDays] = useState(180);
+  const [archiving, setArchiving]     = useState(false);
+  const [archiveResult, setArchiveResult] = useState(null);
+  const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
 
   useEffect(() => {
     getActiveSemester(token)
@@ -50,6 +54,25 @@ export default function SettingsPage() {
       setError(err.message);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleArchive() {
+    setArchiving(true);
+    setArchiveResult(null);
+    try {
+      const res = await fetch(`/api/users/archive-inactive?daysInactive=${archiveDays}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Archive failed.');
+      setArchiveResult(data);
+    } catch (e) {
+      setArchiveResult({ error: e.message });
+    } finally {
+      setArchiving(false);
+      setShowArchiveConfirm(false);
     }
   }
 
@@ -206,9 +229,107 @@ export default function SettingsPage() {
               </form>
             </div>
 
+            {/* Database maintenance — archive inactive scholars */}
+            <div className="clay-card p-6">
+              <div className="flex items-center gap-3 mb-5">
+                <div style={{ width: 44, height: 44, borderRadius: 13, flexShrink: 0, background: 'rgba(180,60,0,0.07)', border: '1px solid rgba(180,60,0,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Archive size={20} color="#b03000" strokeWidth={2} />
+                </div>
+                <div>
+                  <p style={{ fontSize: 13, fontWeight: 800, color: '#0d1a33' }}>Archive Inactive Scholars</p>
+                  <p style={{ fontSize: 12, color: '#7a8aaa', marginTop: 2 }}>
+                    Deactivate scholar accounts with no document submissions within the specified period.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-end gap-3 flex-wrap">
+                <div>
+                  <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: '#4a5a7a' }}>
+                    Inactive for more than
+                  </label>
+                  <select
+                    className="clay-input"
+                    value={archiveDays}
+                    onChange={e => setArchiveDays(Number(e.target.value))}
+                    style={{ minWidth: 160 }}
+                  >
+                    {[90, 180, 270, 365].map(d => (
+                      <option key={d} value={d}>{d} days ({Math.round(d / 30)} months)</option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  onClick={() => { setArchiveResult(null); setShowArchiveConfirm(true); }}
+                  disabled={archiving}
+                  className="clay-btn px-5 py-2.5 text-sm font-bold"
+                  style={{ background: '#b03000', color: '#fff', opacity: archiving ? 0.65 : 1, boxShadow: '4px 4px 0 rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.12)' }}>
+                  <Archive size={13} strokeWidth={2.5} className="inline mr-1.5" />
+                  Run Archive
+                </button>
+              </div>
+
+              {archiveResult && !archiveResult.error && (
+                <div className="mt-4 flex items-start gap-2 p-3.5 rounded-2xl text-sm"
+                  style={{ background: '#f0fdf4', color: '#166534', border: '1.5px solid #bbf7d0' }}>
+                  <CheckCircle size={15} strokeWidth={2.5} className="mt-px shrink-0" />
+                  <span>
+                    {archiveResult.archived === 0
+                      ? 'No inactive scholars found. All accounts are up to date.'
+                      : `${archiveResult.archived} scholar account${archiveResult.archived !== 1 ? 's' : ''} archived successfully.`}
+                  </span>
+                </div>
+              )}
+              {archiveResult?.error && (
+                <div className="mt-4 flex items-start gap-2 p-3.5 rounded-2xl text-sm"
+                  style={{ background: '#fff0f0', color: '#b03030', border: '1.5px solid #f5b0b0' }}>
+                  <AlertTriangle size={15} strokeWidth={2.5} className="mt-px shrink-0" />
+                  <span>{archiveResult.error}</span>
+                </div>
+              )}
+            </div>
+
           </div>
         )}
       </div>
+
+      {/* Archive confirmation modal */}
+      {showArchiveConfirm && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 p-4"
+          style={{ background: 'rgba(0,20,60,0.52)' }}
+          onClick={e => e.target === e.currentTarget && setShowArchiveConfirm(false)}>
+          <div className="clay-card-modal w-full p-7" style={{ maxWidth: 420 }}>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(180,60,0,0.08)' }}>
+                  <Archive size={15} color="#b03000" strokeWidth={2} />
+                </div>
+                <h2 className="text-base font-black" style={{ color: '#0d1a33' }}>Confirm Archive</h2>
+              </div>
+              <button onClick={() => setShowArchiveConfirm(false)}
+                className="w-7 h-7 rounded-xl flex items-center justify-center hover:bg-black/5">
+                <X size={15} color="#7a8aaa" strokeWidth={2.5} />
+              </button>
+            </div>
+            <p className="text-sm leading-relaxed mb-6" style={{ color: '#4a5a7a' }}>
+              This will <strong>deactivate</strong> all scholar accounts with no document submissions in the last{' '}
+              <strong>{archiveDays} days</strong>. Deactivated accounts cannot log in until re-activated by an administrator.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setShowArchiveConfirm(false)} className="clay-btn clay-btn-ghost flex-1 py-2.5 text-sm">
+                Cancel
+              </button>
+              <button
+                onClick={handleArchive}
+                disabled={archiving}
+                className="clay-btn flex-1 py-2.5 text-sm font-bold"
+                style={{ background: '#b03000', color: '#fff', opacity: archiving ? 0.65 : 1, boxShadow: '4px 4px 0 rgba(0,0,0,0.15)' }}>
+                {archiving ? 'Archiving…' : 'Yes, Archive'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }

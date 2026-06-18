@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PSUEISKOLARSystem.Server.Data;
+using PSUEISKOLARSystem.Server.Interfaces;
 using PSUEISKOLARSystem.Server.Models;
 using PSUEISKOLARSystem.Server.Models.Enums;
 using PSUEISKOLARSystem.Server.Services;
@@ -12,7 +13,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
     [ApiController]
     [Route("api/documents")]
     [Authorize]
-    public class DocumentsController(ApplicationDbContext db, IFileStorageService storage) : ControllerBase
+    public class DocumentsController(ApplicationDbContext db, IFileStorageService storage, IEmailService emailService) : ControllerBase
     {
         // Only these types may be rendered inline; everything else is forced to download.
         private static readonly HashSet<string> PreviewableTypes = new(StringComparer.OrdinalIgnoreCase)
@@ -205,7 +206,10 @@ namespace PSUEISKOLARSystem.Server.Controllers
             if (!Enum.TryParse<DocumentStatus>(dto.Status, out var status) || status == DocumentStatus.Pending)
                 return BadRequest(new { message = "Status must be 'Verified' or 'Incomplete'." });
 
-            var submission = await db.DocumentSubmissions.FindAsync(id);
+            var submission = await db.DocumentSubmissions
+                .Include(s => s.Scholar)
+                .Include(s => s.Requirement)
+                .FirstOrDefaultAsync(s => s.Id == id);
             if (submission is null) return NotFound();
 
             submission.Status = status;
@@ -214,6 +218,18 @@ namespace PSUEISKOLARSystem.Server.Controllers
             submission.ReviewedAt = DateTime.UtcNow;
 
             await db.SaveChangesAsync();
+
+            // Notify scholar by email (fire-and-forget — don't fail the request if email fails)
+            if (submission.Scholar?.Email is not null)
+            {
+                _ = emailService.SendDocumentStatusEmailAsync(
+                    submission.Scholar.Email,
+                    submission.Scholar.FullName,
+                    submission.Requirement?.Name ?? "Document",
+                    status.ToString(),
+                    dto.FeedbackNote);
+            }
+
             return NoContent();
         }
 

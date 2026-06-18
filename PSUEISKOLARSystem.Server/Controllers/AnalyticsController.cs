@@ -11,19 +11,25 @@ namespace PSUEISKOLARSystem.Server.Controllers
     [Authorize(Roles = $"{UserRoles.Administrator},{UserRoles.ScholarshipCoordinator}")]
     public class AnalyticsController(ApplicationDbContext db) : ControllerBase
     {
-        // GET /api/analytics/overview
+        // GET /api/analytics/overview?campusId=
         [HttpGet("overview")]
-        public async Task<IActionResult> Overview()
+        public async Task<IActionResult> Overview([FromQuery] int? campusId)
         {
             // Scholar counts
-            var scholars = await db.ScholarProfiles
+            var scholarQuery = db.ScholarProfiles
+                .Include(sp => sp.User)
                 .Include(sp => sp.Program)
                 .Include(sp => sp.ScholarshipType)
                 .Include(sp => sp.Grades
                     .OrderByDescending(g => g.AcademicYear)
                     .ThenByDescending(g => g.Semester)
                     .Take(1))
-                .ToListAsync();
+                .AsQueryable();
+
+            if (campusId.HasValue)
+                scholarQuery = scholarQuery.Where(sp => sp.User!.CampusId == campusId);
+
+            var scholars = await scholarQuery.ToListAsync();
 
             var totalScholars = scholars.Count;
             var scholarsWithGwa = scholars.Where(sp => sp.Grades.Any()).ToList();
@@ -48,7 +54,11 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 .ToList();
 
             // Submission stats
-            var submissions = await db.DocumentSubmissions.ToListAsync();
+            var submissionQuery = db.DocumentSubmissions.AsQueryable();
+            if (campusId.HasValue)
+                submissionQuery = submissionQuery.Where(s => db.Users
+                    .Any(u => u.Id == s.ScholarId && u.CampusId == campusId));
+            var submissions = await submissionQuery.ToListAsync();
             var totalSubs = submissions.Count;
             var verifiedSubs = submissions.Count(s => s.Status == DocumentStatus.Verified);
             var pendingSubs = submissions.Count(s => s.Status == DocumentStatus.Pending);

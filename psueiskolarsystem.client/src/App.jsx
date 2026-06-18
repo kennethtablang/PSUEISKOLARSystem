@@ -1,5 +1,7 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import { useAuth } from './context/AuthContext';
+import { Clock } from 'lucide-react';
 import ProtectedRoute from './components/ProtectedRoute';
 import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
@@ -27,6 +29,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <SessionExpiredModal />
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
@@ -53,5 +56,38 @@ export default function App() {
         </Routes>
       </AuthProvider>
     </BrowserRouter>
+  );
+}
+
+function SessionExpiredModal() {
+  const { sessionExpired, setSessionExpired } = useAuth();
+  const navigate = useNavigate();
+
+  if (!sessionExpired) return null;
+
+  function handleDismiss() {
+    setSessionExpired(false);
+    navigate('/login', { replace: true });
+  }
+
+  return (
+    <div className="fixed inset-0 flex items-center justify-center z-[9999] p-4"
+      style={{ background: 'rgba(0,20,60,0.6)' }}>
+      <div className="clay-card-modal w-full p-8 text-center" style={{ maxWidth: 380 }}>
+        <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4"
+          style={{ background: 'rgba(0,37,112,0.08)', border: '2px solid rgba(0,37,112,0.15)' }}>
+          <Clock size={26} color="#002570" strokeWidth={2} />
+        </div>
+        <p className="font-black text-lg mb-2" style={{ color: '#0d1a33' }}>Session Expired</p>
+        <p className="text-sm mb-6 leading-relaxed" style={{ color: '#4a5a7a' }}>
+          You have been signed out due to 30 minutes of inactivity. Please sign in again to continue.
+        </p>
+        <button
+          onClick={handleDismiss}
+          className="clay-btn clay-btn-primary w-full py-3 text-sm">
+          Back to Sign In
+        </button>
+      </div>
+    </div>
   );
 }

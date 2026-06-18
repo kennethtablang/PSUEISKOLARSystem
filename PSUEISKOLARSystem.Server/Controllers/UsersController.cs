@@ -166,5 +166,53 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
             return NoContent();
         }
+
+        // POST /api/users/archive-inactive
+        // Deactivates all Scholar accounts that have had no document submissions in the last N days.
+        [HttpPost("archive-inactive")]
+        public async Task<IActionResult> ArchiveInactive([FromQuery] int daysInactive = 180)
+        {
+            if (daysInactive < 30)
+                return BadRequest(new { message = "daysInactive must be at least 30." });
+
+            var cutoff = DateTime.UtcNow.AddDays(-daysInactive);
+
+            // Find active scholars whose last submission (or account creation) is older than cutoff
+            var scholarIds = await db.UserRoles
+                .Where(ur => db.Roles.Any(r => r.Id == ur.RoleId && r.Name == UserRoles.Scholar))
+                .Select(ur => ur.UserId)
+                .ToListAsync();
+
+            var activeScholars = await db.Users
+                .Where(u => u.IsActive && scholarIds.Contains(u.Id))
+                .ToListAsync();
+
+            var recentSubmitters = await db.DocumentSubmissions
+                .Where(s => s.SubmittedAt >= cutoff)
+                .Select(s => s.ScholarId)
+                .Distinct()
+                .ToListAsync();
+
+            var toArchive = activeScholars
+                .Where(u => !recentSubmitters.Contains(u.Id) && u.CreatedAt < cutoff)
+                .ToList();
+
+            foreach (var u in toArchive)
+                u.IsActive = false;
+
+            if (toArchive.Count > 0)
+            {
+                var actorId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+                db.AuditLogs.Add(new AuditLog
+                {
+                    UserId  = actorId,
+                    Action  = "ArchiveInactiveScholars",
+                    Details = $"Archived {toArchive.Count} scholar(s) inactive for >{daysInactive} days: {string.Join(", ", toArchive.Select(u => u.Email))}",
+                });
+                await db.SaveChangesAsync();
+            }
+
+            return Ok(new { archived = toArchive.Count, emails = toArchive.Select(u => u.Email) });
+        }
     }
 }

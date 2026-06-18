@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { getAnalyticsOverview } from '../api/analytics';
+import { getCampuses } from '../api/campuses';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
 } from 'recharts';
-import { GraduationCap, FileCheck, Clock, AlertTriangle, TrendingUp } from 'lucide-react';
+import { GraduationCap, FileCheck, Clock, AlertTriangle, TrendingUp, Download, Loader } from 'lucide-react';
 import { useTitle } from '../hooks/useTitle';
+import { exportScholars, exportSubmissions } from '../api/reports';
 
 const BLUE_SHADES = ['#003087', '#1a4fa0', '#3368b8', '#4d80d0', '#6699e8', '#80b2ff'];
 const PIE_COLORS  = ['#003087', '#f5b800', '#10b981', '#8b5cf6', '#f97316', '#06b6d4'];
@@ -16,15 +18,36 @@ export default function AnalyticsPage() {
   useTitle('Analytics');
   const { token } = useAuth();
   const [data, setData] = useState(null);
+  const [campuses, setCampuses] = useState([]);
+  const [campusId, setCampusId] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [exporting, setExporting] = useState(null); // 'scholars' | 'submissions' | null
 
   useEffect(() => {
-    getAnalyticsOverview(token)
+    getCampuses(token).then(setCampuses).catch(() => {});
+  }, []);
+
+  async function handleExport(type) {
+    setExporting(type);
+    try {
+      if (type === 'scholars') await exportScholars(token, { campusId: campusId || undefined });
+      else await exportSubmissions(token);
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setExporting(null);
+    }
+  }
+
+  useEffect(() => {
+    setLoading(true);
+    setError('');
+    getAnalyticsOverview(token, { campusId: campusId || undefined })
       .then(setData)
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
-  }, []);
+  }, [campusId]);
 
   if (loading) return (
     <Layout>
@@ -55,10 +78,41 @@ export default function AnalyticsPage() {
       <div className="p-8 max-w-6xl space-y-8">
 
         {/* Header */}
-        <div>
-          <h1 className="page-title">Analytics &amp; Reports</h1>
-          <p className="page-subtitle">Descriptive analytics — PSU Lingayen Campus</p>
-          <span className="page-title-bar" />
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h1 className="page-title">Analytics &amp; Reports</h1>
+            <p className="page-subtitle">
+              Descriptive analytics — {campusId
+                ? (campuses.find(c => String(c.id) === String(campusId))?.name ?? 'Selected Campus')
+                : 'All Campuses'}
+            </p>
+            <span className="page-title-bar" />
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            {campuses.length > 0 && (
+              <select
+                value={campusId}
+                onChange={e => setCampusId(e.target.value)}
+                className="clay-input text-sm"
+                style={{ minWidth: 180 }}
+              >
+                <option value="">All Campuses</option>
+                {campuses.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            )}
+            <ExportButton
+              label="Scholar Roster"
+              loading={exporting === 'scholars'}
+              onClick={() => handleExport('scholars')}
+            />
+            <ExportButton
+              label="Submissions"
+              loading={exporting === 'submissions'}
+              onClick={() => handleExport('submissions')}
+            />
+          </div>
         </div>
 
         {/* KPI cards */}
@@ -249,5 +303,21 @@ function EmptyChart() {
     <div className="flex items-center justify-center h-[220px]">
       <p className="text-sm" style={{ color: '#b0bdd0' }}>No data available yet.</p>
     </div>
+  );
+}
+
+function ExportButton({ label, loading, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={loading}
+      className="clay-btn clay-btn-ghost flex items-center gap-2 px-4 py-2 text-xs font-bold"
+      style={{ opacity: loading ? 0.65 : 1 }}
+    >
+      {loading
+        ? <Loader size={13} strokeWidth={2.5} className="animate-spin" />
+        : <Download size={13} strokeWidth={2.5} />}
+      {loading ? 'Exporting…' : `Export ${label}`}
+    </button>
   );
 }
