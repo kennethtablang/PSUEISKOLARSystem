@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { registerScholar } from '../api/auth';
 import { useTitle } from '../hooks/useTitle';
-import { Mail, Lock, User, UserCheck, FolderUp, TrendingUp, Bell, ArrowRight, ArrowLeft, AlertTriangle, GraduationCap } from 'lucide-react';
+import { Mail, Lock, User, UserCheck, FolderUp, TrendingUp, Bell, ArrowRight, ArrowLeft, AlertTriangle, GraduationCap, CheckCircle, XCircle, MailCheck } from 'lucide-react';
 
 const HIGHLIGHTS = [
   { Icon: UserCheck,  label: 'Scholar Profiling',   desc: 'Academic records and personal information' },
@@ -11,8 +11,49 @@ const HIGHLIGHTS = [
   { Icon: Bell,       label: 'Announcements',       desc: 'Deadlines and notices in one place' },
 ];
 
+function getPasswordStrength(pw) {
+  const checks = {
+    length:    pw.length >= 8,
+    uppercase: /[A-Z]/.test(pw),
+    lowercase: /[a-z]/.test(pw),
+    digit:     /[0-9]/.test(pw),
+    special:   /[^A-Za-z0-9]/.test(pw),
+  };
+  const passed = Object.values(checks).filter(Boolean).length;
+  return { checks, passed, total: 5 };
+}
+
+function PasswordRequirements({ password }) {
+  const { checks } = getPasswordStrength(password);
+  if (!password) return null;
+
+  const rules = [
+    { key: 'length',    label: 'At least 8 characters' },
+    { key: 'uppercase', label: 'One uppercase letter (A–Z)' },
+    { key: 'lowercase', label: 'One lowercase letter (a–z)' },
+    { key: 'digit',     label: 'One number (0–9)' },
+    { key: 'special',   label: 'One special character (!@#$…)' },
+  ];
+
+  return (
+    <div className="mt-2 space-y-1">
+      {rules.map(({ key, label }) => (
+        <div key={key} className="flex items-center gap-1.5 text-xs">
+          {checks[key]
+            ? <CheckCircle size={12} color="#16a34a" strokeWidth={2.5} />
+            : <XCircle    size={12} color="#dc2626" strokeWidth={2.5} />}
+          <span style={{ color: checks[key] ? '#16a34a' : '#9aaabb' }}>{label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function RegisterPage() {
-  const [form, setForm] = useState({ fullName: '', email: '', password: '', confirmPassword: '' });
+  const [form, setForm] = useState({
+    firstName: '', middleName: '', lastName: '',
+    email: '', password: '', confirmPassword: '',
+  });
   const [error, setError]       = useState('');
   const [success, setSuccess]   = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -24,16 +65,33 @@ export default function RegisterPage() {
     setForm(f => ({ ...f, [field]: value }));
   }
 
+  function isPasswordValid() {
+    const { passed } = getPasswordStrength(form.password);
+    return passed === 5;
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
+
+    if (!isPasswordValid()) {
+      setError('Password does not meet the requirements below.');
+      return;
+    }
     if (form.password !== form.confirmPassword) {
       setError('Passwords do not match.');
       return;
     }
+
     setSubmitting(true);
     try {
-      await registerScholar({ fullName: form.fullName, email: form.email, password: form.password });
+      await registerScholar({
+        firstName:  form.firstName.trim(),
+        middleName: form.middleName.trim() || null,
+        lastName:   form.lastName.trim(),
+        email:      form.email,
+        password:   form.password,
+      });
       setSuccess(true);
     } catch (err) {
       setError(err.message);
@@ -88,8 +146,6 @@ export default function RegisterPage() {
         </div>
 
         <div className="relative z-10 flex flex-col h-full p-12">
-
-          {/* Wordmark */}
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-2xl flex items-center justify-center font-black text-sm shrink-0"
               style={{ background: '#f5b800', color: '#002570', boxShadow: '0 4px 0px rgba(0,0,0,0.25)' }}>
@@ -101,27 +157,23 @@ export default function RegisterPage() {
             </div>
           </div>
 
-          {/* Headline */}
           <div className="flex-1 flex flex-col justify-center">
             <div className="mb-8">
               <span className="inline-block px-3 py-1 rounded-full text-xs font-bold mb-5"
                 style={{ background: 'rgba(245,184,0,0.15)', color: '#f5d060', border: '1px solid rgba(245,184,0,0.25)' }}>
                 Scholar Registration
               </span>
-
               <h1 className="text-[2.75rem] font-black text-white leading-[1.1] mb-4"
                 style={{ letterSpacing: '-1px' }}>
                 Your Scholar<br />
                 <span style={{ color: '#f5b800' }}>Journey</span><br />
                 Starts Here.
               </h1>
-
               <p className="text-base leading-relaxed" style={{ color: 'rgba(255,255,255,0.6)', maxWidth: '340px' }}>
                 Create your scholar account to access all PSU e-Iskolar features — from document submission to grade tracking.
               </p>
             </div>
 
-            {/* Feature grid */}
             <div className="grid grid-cols-2 gap-3">
               {HIGHLIGHTS.map(({ Icon, label, desc }) => (
                 <div key={label} className="p-4 rounded-2xl"
@@ -145,7 +197,7 @@ export default function RegisterPage() {
 
       {/* ── RIGHT PANEL ── */}
       <div className="flex-1 flex flex-col items-center justify-center p-6 lg:p-12"
-        style={{ background: '#e8edf5' }}>
+        style={{ background: '#e8edf5', overflowY: 'auto' }}>
 
         {/* Mobile logo */}
         <div className="flex items-center gap-3 mb-8 lg:hidden">
@@ -159,7 +211,7 @@ export default function RegisterPage() {
           </div>
         </div>
 
-        <div className="w-full" style={{ maxWidth: '420px' }}>
+        <div className="w-full" style={{ maxWidth: '440px' }}>
 
           <div className="mb-6 px-1">
             <div className="flex items-center gap-2.5 mb-1">
@@ -177,25 +229,40 @@ export default function RegisterPage() {
           <div className="clay-card-modal p-8">
 
             {success ? (
+              /* ── Email Verification Sent State ── */
               <div className="text-center py-4">
-                <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4"
+                <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
                   style={{ background: 'rgba(0,48,135,0.08)', border: '2px solid rgba(0,48,135,0.15)' }}>
-                  <GraduationCap size={26} color="#002570" strokeWidth={2} />
+                  <MailCheck size={30} color="#002570" strokeWidth={1.8} />
                 </div>
-                <p className="font-black text-lg mb-1" style={{ color: '#0d1a33' }}>Account Created!</p>
-                <p className="text-sm mb-6" style={{ color: '#4a5a7a' }}>
-                  Your scholar account is ready. Sign in to get started.
+                <p className="font-black text-lg mb-2" style={{ color: '#0d1a33' }}>Check Your Email!</p>
+                <p className="text-sm leading-relaxed mb-4" style={{ color: '#4a5a7a' }}>
+                  A verification link has been sent to <strong>{form.email}</strong>.
+                  Please click the link in that email to activate your account before signing in.
                 </p>
+
+                <div className="rounded-2xl p-4 mb-5 text-left"
+                  style={{ background: '#fffbea', border: '1px solid rgba(245,184,0,0.35)' }}>
+                  <p className="text-xs leading-relaxed" style={{ color: '#7a5c00' }}>
+                    <strong>Can&apos;t find the email?</strong> Check your <strong>spam</strong> or{' '}
+                    <strong>junk</strong> folder. If it&apos;s there, mark it as &quot;Not Spam&quot; so
+                    future emails reach your inbox.
+                  </p>
+                </div>
+
                 <div className="flex gap-3">
                   <button
-                    onClick={() => { setForm({ fullName: '', email: '', password: '', confirmPassword: '' }); setSuccess(false); }}
+                    onClick={() => {
+                      setForm({ firstName: '', middleName: '', lastName: '', email: '', password: '', confirmPassword: '' });
+                      setSuccess(false);
+                    }}
                     className="clay-btn clay-btn-ghost flex-1 py-3 text-sm">
                     Register Another
                   </button>
                   <button
                     onClick={() => navigate('/login')}
                     className="clay-btn clay-btn-primary flex-1 py-3 text-sm">
-                    Sign In
+                    Go to Sign In
                   </button>
                 </div>
               </div>
@@ -211,33 +278,77 @@ export default function RegisterPage() {
 
                 <form onSubmit={handleSubmit} className="space-y-4">
 
+                  {/* First Name + Last Name */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: '#4a5a7a' }}>
+                        First Name
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
+                          <User size={14} color="#7a8aaa" strokeWidth={2} />
+                        </span>
+                        <input
+                          type="text"
+                          required
+                          value={form.firstName}
+                          onChange={e => set('firstName', e.target.value)}
+                          placeholder="Juan"
+                          className="clay-input"
+                          style={{ paddingLeft: '36px' }}
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: '#4a5a7a' }}>
+                        Last Name
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
+                          <User size={14} color="#7a8aaa" strokeWidth={2} />
+                        </span>
+                        <input
+                          type="text"
+                          required
+                          value={form.lastName}
+                          onChange={e => set('lastName', e.target.value)}
+                          placeholder="Dela Cruz"
+                          className="clay-input"
+                          style={{ paddingLeft: '36px' }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Middle Name */}
                   <div>
                     <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: '#4a5a7a' }}>
-                      Full Name
+                      Middle Name <span style={{ color: '#9aaabb', fontWeight: 400, textTransform: 'none' }}>(optional)</span>
                     </label>
                     <div className="relative">
                       <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
-                        <User size={15} color="#7a8aaa" strokeWidth={2} />
+                        <User size={14} color="#7a8aaa" strokeWidth={2} />
                       </span>
                       <input
                         type="text"
-                        required
-                        value={form.fullName}
-                        onChange={e => set('fullName', e.target.value)}
-                        placeholder="Juan Dela Cruz"
+                        value={form.middleName}
+                        onChange={e => set('middleName', e.target.value)}
+                        placeholder="e.g. Santos"
                         className="clay-input"
-                        style={{ paddingLeft: '38px' }}
+                        style={{ paddingLeft: '36px' }}
                       />
                     </div>
                   </div>
 
+                  {/* Email */}
                   <div>
                     <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: '#4a5a7a' }}>
                       Email Address
                     </label>
                     <div className="relative">
                       <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
-                        <Mail size={15} color="#7a8aaa" strokeWidth={2} />
+                        <Mail size={14} color="#7a8aaa" strokeWidth={2} />
                       </span>
                       <input
                         type="email"
@@ -246,54 +357,60 @@ export default function RegisterPage() {
                         onChange={e => set('email', e.target.value)}
                         placeholder="juan@psu.edu.ph"
                         className="clay-input"
-                        style={{ paddingLeft: '38px' }}
+                        style={{ paddingLeft: '36px' }}
                         autoComplete="off"
                       />
                     </div>
                   </div>
 
+                  {/* Password */}
                   <div>
                     <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: '#4a5a7a' }}>
                       Password
                     </label>
                     <div className="relative">
                       <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
-                        <Lock size={15} color="#7a8aaa" strokeWidth={2} />
+                        <Lock size={14} color="#7a8aaa" strokeWidth={2} />
                       </span>
                       <input
                         type="password"
                         required
-                        minLength={8}
                         value={form.password}
                         onChange={e => set('password', e.target.value)}
-                        placeholder="Min. 8 characters"
+                        placeholder="Create a strong password"
                         className="clay-input"
-                        style={{ paddingLeft: '38px' }}
+                        style={{ paddingLeft: '36px' }}
                         autoComplete="new-password"
                       />
                     </div>
+                    <PasswordRequirements password={form.password} />
                   </div>
 
+                  {/* Confirm Password */}
                   <div>
                     <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: '#4a5a7a' }}>
                       Confirm Password
                     </label>
                     <div className="relative">
                       <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
-                        <Lock size={15} color="#7a8aaa" strokeWidth={2} />
+                        <Lock size={14} color="#7a8aaa" strokeWidth={2} />
                       </span>
                       <input
                         type="password"
                         required
-                        minLength={8}
                         value={form.confirmPassword}
                         onChange={e => set('confirmPassword', e.target.value)}
                         placeholder="Re-enter password"
                         className="clay-input"
-                        style={{ paddingLeft: '38px' }}
+                        style={{ paddingLeft: '36px' }}
                         autoComplete="new-password"
                       />
                     </div>
+                    {form.confirmPassword && form.password !== form.confirmPassword && (
+                      <p className="mt-1.5 text-xs flex items-center gap-1" style={{ color: '#dc2626' }}>
+                        <XCircle size={12} strokeWidth={2.5} /> Passwords do not match
+                      </p>
+                    )}
                   </div>
 
                   <button

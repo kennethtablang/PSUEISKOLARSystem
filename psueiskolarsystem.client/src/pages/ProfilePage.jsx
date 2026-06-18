@@ -1,9 +1,8 @@
-import { useState, useEffect } from 'react';
-import { QRCodeSVG } from 'qrcode.react';
+import { useState } from 'react';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
-import { updateProfile, get2faSetup, enable2fa, disable2fa } from '../api/auth';
-import { User, Mail, Shield, Lock, KeyRound, CheckCircle, AlertCircle, ShieldCheck, ShieldOff, Smartphone, X, Copy } from 'lucide-react';
+import { updateProfile, enable2fa, disable2fa } from '../api/auth';
+import { User, Mail, Shield, Lock, KeyRound, CheckCircle, AlertCircle, ShieldCheck, ShieldOff, X } from 'lucide-react';
 import { useTitle } from '../hooks/useTitle';
 
 const ROLE_BADGE = {
@@ -16,9 +15,11 @@ export default function ProfilePage() {
   useTitle('Profile');
   const { user, token, refreshUser } = useAuth();
 
-  const [name, setName]           = useState(user?.fullName ?? '');
-  const [savingName, setSavingName]   = useState(false);
-  const [nameMsg, setNameMsg]         = useState(null);
+  const [firstName,  setFirstName]  = useState(user?.firstName  ?? '');
+  const [middleName, setMiddleName] = useState(user?.middleName ?? '');
+  const [lastName,   setLastName]   = useState(user?.lastName   ?? '');
+  const [savingName, setSavingName] = useState(false);
+  const [nameMsg, setNameMsg]       = useState(null);
 
   const [currentPw, setCurrentPw]   = useState('');
   const [newPw, setNewPw]           = useState('');
@@ -26,11 +27,12 @@ export default function ProfilePage() {
   const [savingPw, setSavingPw]     = useState(false);
   const [pwMsg, setPwMsg]           = useState(null);
 
-  const [showSetup2fa, setShowSetup2fa]     = useState(false);
+  const [enabling2fa, setEnabling2fa]       = useState(false);
+  const [twoFaMsg, setTwoFaMsg]             = useState(null);
   const [showDisable2fa, setShowDisable2fa] = useState(false);
 
-  const initials   = user?.fullName?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() ?? '?';
-  const roleBadge  = ROLE_BADGE[user?.role] ?? { cls: 'badge-inactive', label: user?.role };
+  const initials  = ((user?.firstName?.[0] ?? '') + (user?.lastName?.[0] ?? '')).toUpperCase() || '?';
+  const roleBadge = ROLE_BADGE[user?.role] ?? { cls: 'badge-inactive', label: user?.role };
   const twoFaEnabled = user?.twoFactorEnabled ?? false;
 
   async function handleSaveName(e) {
@@ -38,9 +40,9 @@ export default function ProfilePage() {
     setSavingName(true);
     setNameMsg(null);
     try {
-      await updateProfile({ fullName: name.trim() }, token);
+      await updateProfile({ firstName: firstName.trim(), middleName: middleName.trim() || null, lastName: lastName.trim() }, token);
       await refreshUser();
-      setNameMsg({ ok: true, text: 'Display name updated.' });
+      setNameMsg({ ok: true, text: 'Name updated.' });
     } catch (err) {
       setNameMsg({ ok: false, text: err.message });
     } finally {
@@ -61,13 +63,27 @@ export default function ProfilePage() {
     }
     setSavingPw(true);
     try {
-      await updateProfile({ fullName: user?.fullName ?? '', currentPassword: currentPw, newPassword: newPw }, token);
+      await updateProfile({ firstName: user?.firstName ?? '', middleName: user?.middleName ?? null, lastName: user?.lastName ?? '', currentPassword: currentPw, newPassword: newPw }, token);
       setPwMsg({ ok: true, text: 'Password changed successfully.' });
       setCurrentPw(''); setNewPw(''); setConfirmPw('');
     } catch (err) {
       setPwMsg({ ok: false, text: err.message });
     } finally {
       setSavingPw(false);
+    }
+  }
+
+  async function handleEnable2fa() {
+    setEnabling2fa(true);
+    setTwoFaMsg(null);
+    try {
+      await enable2fa(token);
+      await refreshUser();
+      setTwoFaMsg({ ok: true, text: 'Two-factor authentication enabled. A code will be sent to your email each time you sign in.' });
+    } catch (err) {
+      setTwoFaMsg({ ok: false, text: err.message });
+    } finally {
+      setEnabling2fa(false);
     }
   }
 
@@ -98,6 +114,7 @@ export default function ProfilePage() {
               <p style={{ fontSize: '1.25rem', fontWeight: 900, color: '#0d1a33', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
                 {user?.fullName}
               </p>
+
               <div className="flex items-center gap-1.5 mt-1.5">
                 <Mail size={12} strokeWidth={2} color="#7a8aaa" />
                 <p style={{ fontSize: '0.82rem', color: '#4a5a7a' }}>{user?.email}</p>
@@ -136,22 +153,25 @@ export default function ProfilePage() {
               <div style={{ width: 32, height: 32, borderRadius: 10, background: 'rgba(0,48,135,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <User size={15} color="#003087" strokeWidth={2} />
               </div>
-              <h2 style={{ fontSize: '0.85rem', fontWeight: 800, color: '#0d1a33' }}>Display Name</h2>
+              <h2 style={{ fontSize: '0.85rem', fontWeight: 800, color: '#0d1a33' }}>Personal Information</h2>
             </div>
 
             <form onSubmit={handleSaveName} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: '#4a5a7a' }}>First Name</label>
+                  <input type="text" required value={firstName} onChange={e => setFirstName(e.target.value)} className="clay-input" placeholder="First name" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: '#4a5a7a' }}>Last Name</label>
+                  <input type="text" required value={lastName} onChange={e => setLastName(e.target.value)} className="clay-input" placeholder="Last name" />
+                </div>
+              </div>
               <div>
                 <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: '#4a5a7a' }}>
-                  Full Name
+                  Middle Name <span style={{ color: '#9aaabb', fontWeight: 400, textTransform: 'none' }}>(optional)</span>
                 </label>
-                <input
-                  type="text"
-                  required
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  className="clay-input"
-                  placeholder="Your full name"
-                />
+                <input type="text" value={middleName} onChange={e => setMiddleName(e.target.value)} className="clay-input" placeholder="Middle name" />
               </div>
               <button type="submit" disabled={savingName} className="clay-btn clay-btn-primary w-full">
                 {savingName ? 'Saving…' : 'Save Name'}
@@ -172,8 +192,8 @@ export default function ProfilePage() {
 
             <form onSubmit={handleChangePassword} className="space-y-4">
               {[
-                { label: 'Current Password', val: currentPw, set: setCurrentPw, ac: 'current-password' },
-                { label: 'New Password',     val: newPw,     set: setNewPw,     ac: 'new-password' },
+                { label: 'Current Password',     val: currentPw, set: setCurrentPw, ac: 'current-password' },
+                { label: 'New Password',         val: newPw,     set: setNewPw,     ac: 'new-password' },
                 { label: 'Confirm New Password', val: confirmPw, set: setConfirmPw, ac: 'new-password' },
               ].map(({ label, val, set, ac }) => (
                 <div key={label}>
@@ -223,8 +243,8 @@ export default function ProfilePage() {
                 </h2>
                 <p style={{ fontSize: '0.78rem', color: '#4a5a7a', marginTop: 2 }}>
                   {twoFaEnabled
-                    ? 'Your account is protected with an authenticator app.'
-                    : 'Add an extra layer of security to your account.'}
+                    ? 'A verification code will be sent to your email each time you sign in.'
+                    : 'Toggle on to receive an email code at every sign-in for extra security.'}
                 </p>
               </div>
             </div>
@@ -237,7 +257,7 @@ export default function ProfilePage() {
                     Enabled
                   </span>
                   <button
-                    onClick={() => setShowDisable2fa(true)}
+                    onClick={() => { setTwoFaMsg(null); setShowDisable2fa(true); }}
                     className="clay-btn clay-btn-ghost text-sm px-4 py-2"
                     style={{ color: '#c03030' }}>
                     Disable
@@ -250,207 +270,45 @@ export default function ProfilePage() {
                     Disabled
                   </span>
                   <button
-                    onClick={() => setShowSetup2fa(true)}
-                    className="clay-btn clay-btn-primary text-sm px-4 py-2">
-                    Set Up 2FA
+                    onClick={handleEnable2fa}
+                    disabled={enabling2fa}
+                    className="clay-btn clay-btn-primary text-sm px-4 py-2"
+                    style={{ opacity: enabling2fa ? 0.65 : 1 }}>
+                    {enabling2fa ? 'Enabling…' : 'Enable 2FA'}
                   </button>
                 </>
               )}
             </div>
           </div>
 
-          {!twoFaEnabled && (
-            <div className="mt-4 pt-4 border-t border-black/5 flex items-start gap-2.5">
-              <Smartphone size={14} color="#7a8aaa" strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} />
-              <p style={{ fontSize: '0.75rem', color: '#7a8aaa', lineHeight: 1.5 }}>
-                Use Google Authenticator, Microsoft Authenticator, or any TOTP-compatible app.
-                After setup, you will be required to enter a code from the app each time you sign in.
-              </p>
+          {twoFaMsg && (
+            <div className="mt-4">
+              <StatusMsg msg={twoFaMsg} />
             </div>
           )}
         </div>
 
       </div>
 
-      {showSetup2fa && (
-        <Setup2faModal
-          token={token}
-          onClose={() => setShowSetup2fa(false)}
-          onEnabled={async () => { setShowSetup2fa(false); await refreshUser(); }}
-        />
-      )}
-
       {showDisable2fa && (
         <Disable2faModal
           token={token}
           onClose={() => setShowDisable2fa(false)}
-          onDisabled={async () => { setShowDisable2fa(false); await refreshUser(); }}
+          onDisabled={async () => {
+            setShowDisable2fa(false);
+            await refreshUser();
+            setTwoFaMsg({ ok: true, text: 'Two-factor authentication has been disabled.' });
+          }}
         />
       )}
     </Layout>
   );
 }
 
-function Setup2faModal({ token, onClose, onEnabled }) {
-  const [step, setStep] = useState(1); // 1 = qr, 2 = verify
-  const [setup, setSetup] = useState(null); // { uri, key }
-  const [code, setCode] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    get2faSetup(token)
-      .then(setSetup)
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false));
-  }, []);
-
-  async function handleEnable(e) {
-    e.preventDefault();
-    setError('');
-    setSaving(true);
-    try {
-      await enable2fa(code.replace(/\s/g, ''), token);
-      onEnabled();
-    } catch (err) {
-      setError(err.message);
-      setCode('');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  function copyKey() {
-    if (!setup?.key) return;
-    navigator.clipboard.writeText(setup.key.replace(/\s/g, '')).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
-  }
-
-  return (
-    <div className="fixed inset-0 flex items-center justify-center z-50 p-4"
-      style={{ background: 'rgba(0,20,60,0.52)' }}
-      onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="clay-card-modal w-full p-7" style={{ maxWidth: 440 }}>
-
-        <div className="flex items-center justify-between mb-5">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl flex items-center justify-center"
-              style={{ background: 'rgba(0,48,135,0.08)' }}>
-              <ShieldCheck size={15} color="#003087" strokeWidth={2} />
-            </div>
-            <h2 className="text-base font-black" style={{ color: '#0d1a33' }}>
-              {step === 1 ? 'Set Up Authenticator' : 'Verify Code'}
-            </h2>
-          </div>
-          <button onClick={onClose}
-            className="w-7 h-7 rounded-xl flex items-center justify-center hover:bg-black/5">
-            <X size={15} color="#7a8aaa" strokeWidth={2.5} />
-          </button>
-        </div>
-
-        {error && (
-          <div className="mb-4 flex items-start gap-2 p-3 rounded-2xl text-sm"
-            style={{ background: '#fff0f0', color: '#b03030', border: '1.5px solid #f5b0b0' }}>
-            <AlertCircle size={14} strokeWidth={2.5} className="shrink-0 mt-px" />
-            <span>{error}</span>
-          </div>
-        )}
-
-        {step === 1 ? (
-          <>
-            <p className="text-sm mb-5" style={{ color: '#4a5a7a' }}>
-              Scan this QR code with your authenticator app (Google Authenticator, Microsoft Authenticator, etc.).
-            </p>
-
-            {loading ? (
-              <div className="flex justify-center py-8">
-                <div className="text-sm" style={{ color: '#7a8aaa' }}>Loading…</div>
-              </div>
-            ) : setup ? (
-              <div className="flex flex-col items-center gap-4">
-                <div className="p-3 rounded-2xl" style={{ background: '#fff', border: '1.5px solid rgba(0,0,0,0.08)' }}>
-                  <QRCodeSVG value={setup.uri} size={180} />
-                </div>
-
-                <div className="w-full">
-                  <p className="text-xs font-bold mb-1.5 uppercase tracking-wider" style={{ color: '#7a8aaa' }}>
-                    Or enter this key manually
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 clay-input text-xs font-mono" style={{ letterSpacing: '0.1em', color: '#0d1a33', userSelect: 'all' }}>
-                      {setup.key}
-                    </div>
-                    <button onClick={copyKey}
-                      className="clay-btn clay-btn-ghost p-2.5 shrink-0"
-                      title="Copy key">
-                      {copied
-                        ? <CheckCircle size={14} color="#10a060" strokeWidth={2.5} />
-                        : <Copy size={14} color="#7a8aaa" strokeWidth={2.5} />}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex gap-3 w-full">
-                  <button onClick={onClose} className="clay-btn clay-btn-ghost flex-1 py-2.5 text-sm">Cancel</button>
-                  <button onClick={() => setStep(2)} className="clay-btn clay-btn-primary flex-1 py-2.5 text-sm">
-                    Next — Enter Code
-                  </button>
-                </div>
-              </div>
-            ) : null}
-          </>
-        ) : (
-          <>
-            <p className="text-sm mb-5" style={{ color: '#4a5a7a' }}>
-              Enter the 6-digit code shown in your authenticator app to confirm setup.
-            </p>
-            <form onSubmit={handleEnable} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: '#4a5a7a' }}>
-                  Verification Code
-                </label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9 ]*"
-                  maxLength={7}
-                  required
-                  value={code}
-                  onChange={e => setCode(e.target.value)}
-                  placeholder="000000"
-                  className="clay-input text-center text-lg font-bold tracking-[0.25em]"
-                  autoFocus
-                  autoComplete="one-time-code"
-                />
-              </div>
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setStep(1)}
-                  className="clay-btn clay-btn-ghost flex-1 py-2.5 text-sm">
-                  Back
-                </button>
-                <button type="submit"
-                  disabled={saving || code.replace(/\s/g, '').length < 6}
-                  className="clay-btn clay-btn-primary flex-1 py-2.5 text-sm"
-                  style={{ opacity: (saving || code.replace(/\s/g, '').length < 6) ? 0.65 : 1 }}>
-                  {saving ? 'Enabling…' : 'Enable 2FA'}
-                </button>
-              </div>
-            </form>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
 function Disable2faModal({ token, onClose, onDisabled }) {
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [saving, setSaving] = useState(false);
+  const [error, setError]       = useState('');
+  const [saving, setSaving]     = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();

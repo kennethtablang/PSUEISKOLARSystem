@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
-import { getRequirements, getSubmissions, uploadDocument, deleteSubmission, downloadFile } from '../api/documents';
+import { getRequirements, getSubmissions, uploadDocument, deleteSubmission, downloadFile, previewFile } from '../api/documents';
 import { getScholarProfile } from '../api/scholars';
 import { getActiveSemester } from '../api/settings';
 import { useTitle } from '../hooks/useTitle';
+import { Eye, X, Download, FileText, Image, FileX, Loader } from 'lucide-react';
 
 const STATUS_STYLE = {
   Pending:    'bg-amber-100 text-amber-700',
@@ -17,14 +18,51 @@ export default function MyDocumentsPage() {
   const { token, user } = useAuth();
 
   const [requirements, setRequirements] = useState([]);
-  const [submissions, setSubmissions] = useState([]);
-  const [profile, setProfile] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState(null);
-  const [error, setError] = useState('');
+  const [submissions,  setSubmissions]  = useState([]);
+  const [profile,      setProfile]      = useState(null);
+  const [loading,      setLoading]      = useState(true);
+  const [uploading,    setUploading]    = useState(null);
+  const [error,        setError]        = useState('');
 
-  const [period, setPeriod] = useState({ academicYear: '', semester: 1 });
+  const [period,      setPeriod]      = useState({ academicYear: '', semester: 1 });
   const [periodReady, setPeriodReady] = useState(false);
+
+  // preview state
+  const [preview,        setPreview]        = useState(null);   // { url, contentType, fileName, submissionId }
+  const [loadingPreview, setLoadingPreview] = useState(null);   // submissionId being loaded
+  const [previewError,   setPreviewError]   = useState('');
+  const prevUrlRef = useRef(null);
+
+  function closePreview() {
+    if (prevUrlRef.current) {
+      URL.revokeObjectURL(prevUrlRef.current);
+      prevUrlRef.current = null;
+    }
+    setPreview(null);
+    setPreviewError('');
+  }
+
+  async function handlePreview(submission) {
+    if (loadingPreview) return;
+    // If same doc already open, close it
+    if (preview?.submissionId === submission.id) { closePreview(); return; }
+
+    setLoadingPreview(submission.id);
+    setPreviewError('');
+    try {
+      const { url, contentType } = await previewFile(submission.id, token);
+      if (prevUrlRef.current) URL.revokeObjectURL(prevUrlRef.current);
+      prevUrlRef.current = url;
+      setPreview({ url, contentType, fileName: submission.fileName, submissionId: submission.id });
+    } catch (e) {
+      setPreviewError(e.message);
+    } finally {
+      setLoadingPreview(null);
+    }
+  }
+
+  // Clean up blob URL on unmount
+  useEffect(() => () => { if (prevUrlRef.current) URL.revokeObjectURL(prevUrlRef.current); }, []);
 
   async function load() {
     setLoading(true);
@@ -75,6 +113,7 @@ export default function MyDocumentsPage() {
 
   async function handleDelete(submissionId) {
     if (!confirm('Remove this submission?')) return;
+    if (preview?.submissionId === submissionId) closePreview();
     try {
       await deleteSubmission(submissionId, token);
       setSubmissions(prev => prev.filter(s => s.id !== submissionId));
@@ -84,65 +123,138 @@ export default function MyDocumentsPage() {
   }
 
   const verified = submissions.filter(s => s.status === 'Verified').length;
-  const total = requirements.filter(r => r.isRequired).length;
+  const total    = requirements.filter(r => r.isRequired).length;
 
   return (
     <Layout>
-      <div className="p-8 max-w-3xl">
-        <div className="flex items-start justify-between mb-6">
-          <div>
-            <h1 className="page-title">My Documents</h1>
-            <p className="page-subtitle">{profile?.scholarshipTypeName ?? 'No scholarship type set'} · {verified}/{total} required verified</p>
-            <span className="page-title-bar" />
-          </div>
-          <div className="flex gap-2 items-center">
-            <input
-              type="text"
-              value={period.academicYear}
-              onChange={e => setPeriod(p => ({ ...p, academicYear: e.target.value }))}
-              className="clay-input w-28"
-              placeholder="2025-2026"
-            />
-            <select
-              value={period.semester}
-              onChange={e => setPeriod(p => ({ ...p, semester: parseInt(e.target.value) }))}
-              className="clay-input"
-            >
-              <option value={1}>Sem 1</option>
-              <option value={2}>Sem 2</option>
-            </select>
+      <div className="flex h-full" style={{ minHeight: 0 }}>
+
+        {/* ── Left: Document list ── */}
+        <div
+          className="flex flex-col overflow-y-auto"
+          style={{
+            width: preview ? '50%' : '100%',
+            transition: 'width 0.25s ease',
+            borderRight: preview ? '1.5px solid #d8e2f0' : 'none',
+          }}
+        >
+          <div className="p-8" style={{ maxWidth: preview ? undefined : '768px' }}>
+
+            <div className="flex items-start justify-between mb-6 flex-wrap gap-3">
+              <div>
+                <h1 className="page-title">My Documents</h1>
+                <p className="page-subtitle">
+                  {profile?.scholarshipTypeName ?? 'No scholarship type set'} · {verified}/{total} required verified
+                </p>
+                <span className="page-title-bar" />
+              </div>
+              <div className="flex gap-2 items-center">
+                <input
+                  type="text"
+                  value={period.academicYear}
+                  onChange={e => setPeriod(p => ({ ...p, academicYear: e.target.value }))}
+                  className="clay-input w-28"
+                  placeholder="2025-2026"
+                />
+                <select
+                  value={period.semester}
+                  onChange={e => setPeriod(p => ({ ...p, semester: parseInt(e.target.value) }))}
+                  className="clay-input"
+                >
+                  <option value={1}>Sem 1</option>
+                  <option value={2}>Sem 2</option>
+                </select>
+              </div>
+            </div>
+
+            {!profile && (
+              <div className="clay-card p-4 mb-5 text-sm"
+                style={{ background: '#fffbe8', border: '1.5px solid #f5d060', color: '#7a5500' }}>
+                Your scholar profile is not set up yet. Contact your coordinator to complete your profile.
+              </div>
+            )}
+
+            {error && <p className="text-sm mb-4" style={{ color: '#e03030' }}>{error}</p>}
+
+            {previewError && (
+              <div className="mb-4 flex items-start gap-2.5 p-3.5 rounded-2xl text-sm"
+                style={{ background: '#fff0f0', color: '#b03030', border: '1.5px solid #f5b0b0' }}>
+                <span className="shrink-0 mt-px">⚠</span>
+                <span>{previewError}</span>
+                <button onClick={() => setPreviewError('')} className="ml-auto shrink-0 opacity-50 hover:opacity-100">✕</button>
+              </div>
+            )}
+
+            {loading ? (
+              <p className="text-sm" style={{ color: '#7a8aaa' }}>Loading…</p>
+            ) : requirements.length === 0 ? (
+              <p className="text-sm" style={{ color: '#7a8aaa' }}>No document requirements found.</p>
+            ) : (
+              <div className="space-y-3">
+                {requirements.map(req => {
+                  const sub = submissionFor(req.id);
+                  return (
+                    <RequirementRow
+                      key={req.id}
+                      requirement={req}
+                      submission={sub}
+                      uploading={uploading === req.id}
+                      loadingPreview={loadingPreview === sub?.id}
+                      isPreviewing={preview?.submissionId === sub?.id}
+                      onUpload={file => handleUpload(req.id, file)}
+                      onDelete={() => handleDelete(sub.id)}
+                      onPreview={() => handlePreview(sub)}
+                      token={token}
+                    />
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
 
-        {!profile && (
-          <div className="clay-card p-4 mb-5 text-sm"
-            style={{ background: '#fffbe8', border: '1.5px solid #f5d060', color: '#7a5500' }}>
-            Your scholar profile is not set up yet. Contact your coordinator to complete your profile.
-          </div>
-        )}
+        {/* ── Right: Preview panel ── */}
+        {preview && (
+          <div
+            className="flex flex-col"
+            style={{ width: '50%', minHeight: 0, background: '#f4f6fa' }}
+          >
+            {/* Panel header */}
+            <div className="flex items-center justify-between gap-3 px-5 py-3 shrink-0"
+              style={{
+                background: '#fff',
+                borderBottom: '1.5px solid #d8e2f0',
+                boxShadow: '0 2px 0 rgba(0,37,112,0.04)',
+              }}>
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0"
+                  style={{ background: 'rgba(0,37,112,0.08)', border: '1px solid rgba(0,37,112,0.12)' }}>
+                  <Eye size={13} color="#002570" strokeWidth={2} />
+                </div>
+                <span className="text-sm font-bold truncate" style={{ color: '#0d1a33' }}>
+                  {preview.fileName}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => downloadFile(preview.submissionId, preview.fileName, token).catch(e => alert(e.message))}
+                  className="clay-btn clay-btn-ghost text-xs px-3 py-1.5 flex items-center gap-1.5"
+                  style={{ color: '#003087' }}>
+                  <Download size={12} strokeWidth={2.5} />
+                  Download
+                </button>
+                <button
+                  onClick={closePreview}
+                  className="w-7 h-7 rounded-xl flex items-center justify-center hover:bg-black/5 transition-colors shrink-0">
+                  <X size={15} color="#7a8aaa" strokeWidth={2.5} />
+                </button>
+              </div>
+            </div>
 
-        {error && <p className="text-sm mb-4" style={{ color: '#e03030' }}>{error}</p>}
-
-        {loading ? (
-          <p className="text-sm" style={{ color: '#7a8aaa' }}>Loading…</p>
-        ) : requirements.length === 0 ? (
-          <p className="text-sm" style={{ color: '#7a8aaa' }}>No document requirements found.</p>
-        ) : (
-          <div className="space-y-3">
-            {requirements.map(req => {
-              const sub = submissionFor(req.id);
-              return (
-                <RequirementRow
-                  key={req.id}
-                  requirement={req}
-                  submission={sub}
-                  uploading={uploading === req.id}
-                  onUpload={file => handleUpload(req.id, file)}
-                  onDelete={() => handleDelete(sub.id)}
-                  token={token}
-                />
-              );
-            })}
+            {/* Preview content */}
+            <div className="flex-1 overflow-hidden">
+              <PreviewContent preview={preview} />
+            </div>
           </div>
         )}
       </div>
@@ -150,12 +262,59 @@ export default function MyDocumentsPage() {
   );
 }
 
-function RequirementRow({ requirement, submission, uploading, onUpload, onDelete, token }) {
-  const inputId = `file-${requirement.id}`;
+function PreviewContent({ preview }) {
+  const { url, contentType, fileName } = preview;
+  const isPdf   = contentType === 'application/pdf';
+  const isImage = contentType?.startsWith('image/');
+
+  if (isPdf) {
+    return (
+      <iframe
+        src={url}
+        title={fileName}
+        className="w-full h-full"
+        style={{ border: 'none', display: 'block' }}
+      />
+    );
+  }
+
+  if (isImage) {
+    return (
+      <div className="w-full h-full flex items-center justify-center p-6 overflow-auto">
+        <img
+          src={url}
+          alt={fileName}
+          style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: 12,
+            boxShadow: '0 4px 24px rgba(0,0,0,0.12)' }}
+        />
+      </div>
+    );
+  }
+
+  // Word docs and other unsupported types
+  return (
+    <div className="w-full h-full flex flex-col items-center justify-center gap-4 p-8">
+      <div className="w-16 h-16 rounded-2xl flex items-center justify-center"
+        style={{ background: 'rgba(0,37,112,0.07)', border: '1.5px solid rgba(0,37,112,0.12)' }}>
+        <FileX size={28} color="#7a8aaa" strokeWidth={1.5} />
+      </div>
+      <div className="text-center">
+        <p className="font-bold text-sm mb-1" style={{ color: '#0d1a33' }}>Preview Not Available</p>
+        <p className="text-xs leading-relaxed" style={{ color: '#7a8aaa', maxWidth: 240 }}>
+          This file type cannot be previewed in the browser. Use the Download button to open it.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function RequirementRow({ requirement, submission, uploading, loadingPreview, isPreviewing, onUpload, onDelete, onPreview, token }) {
+  const inputId  = `file-${requirement.id}`;
   const canUpload = !submission || submission.status === 'Incomplete';
 
   return (
-    <div className="clay-card p-5">
+    <div className="clay-card p-5"
+      style={isPreviewing ? { border: '1.5px solid rgba(0,37,112,0.35)', background: 'rgba(0,37,112,0.025)' } : {}}>
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -186,11 +345,10 @@ function RequirementRow({ requirement, submission, uploading, onUpload, onDelete
           <button
             onClick={() => downloadFile(submission.id, submission.fileName, token).catch(e => alert(e.message))}
             className="hover:underline truncate max-w-xs text-left"
-            style={{ color: '#003087' }}
-          >
+            style={{ color: '#003087' }}>
             {submission.fileName}
           </button>
-          <span className="text-xs" style={{ color: '#7a8aaa' }}>{formatBytes(submission.fileSizeBytes)}</span>
+          <span className="text-xs shrink-0" style={{ color: '#7a8aaa' }}>{formatBytes(submission.fileSizeBytes)}</span>
         </div>
       )}
 
@@ -201,14 +359,34 @@ function RequirementRow({ requirement, submission, uploading, onUpload, onDelete
         </div>
       )}
 
-      <div className="mt-3 flex items-center gap-3">
+      <div className="mt-3 flex items-center gap-2 flex-wrap">
+        {/* Preview button — only when there's a submission */}
+        {submission && (
+          <button
+            onClick={onPreview}
+            disabled={!!loadingPreview}
+            className="clay-btn text-sm px-3 py-1.5 flex items-center gap-1.5"
+            style={{
+              color: isPreviewing ? '#002570' : '#003087',
+              background: isPreviewing ? 'rgba(0,37,112,0.10)' : undefined,
+              border: isPreviewing ? '1.5px solid rgba(0,37,112,0.25)' : undefined,
+              opacity: loadingPreview ? 0.6 : 1,
+            }}>
+            {loadingPreview
+              ? <Loader size={13} strokeWidth={2.5} className="animate-spin" />
+              : <Eye size={13} strokeWidth={2.5} />}
+            {isPreviewing ? 'Close Preview' : 'Preview'}
+          </button>
+        )}
+
         {canUpload && (
           <>
             <label
               htmlFor={inputId}
               className={`clay-btn text-sm px-3 py-1.5 ${uploading ? '' : 'clay-btn-ghost'}`}
-              style={uploading ? { opacity: 0.5, cursor: 'not-allowed', color: '#7a8aaa' } : { color: '#003087' }}
-            >
+              style={uploading
+                ? { opacity: 0.5, cursor: 'not-allowed', color: '#7a8aaa' }
+                : { color: '#003087' }}>
               {uploading ? 'Uploading…' : submission ? 'Resubmit' : 'Upload'}
             </label>
             <input
@@ -221,8 +399,11 @@ function RequirementRow({ requirement, submission, uploading, onUpload, onDelete
             />
           </>
         )}
+
         {submission && submission.status !== 'Verified' && (
-          <button onClick={onDelete} className="text-xs hover:underline" style={{ color: '#e03030' }}>Remove</button>
+          <button onClick={onDelete} className="text-xs hover:underline ml-auto" style={{ color: '#e03030' }}>
+            Remove
+          </button>
         )}
       </div>
     </div>

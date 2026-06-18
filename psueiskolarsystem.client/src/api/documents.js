@@ -43,6 +43,18 @@ export async function uploadDocument(file, requirementId, academicYear, semester
   return res.json();
 }
 
+export async function previewFile(id, token) {
+  const res = await fetch(`${API}/${id}/preview`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || `Preview failed (${res.status}).`);
+  }
+  const blob = await res.blob();
+  return { url: URL.createObjectURL(blob), contentType: blob.type };
+}
+
 export async function downloadFile(id, fileName, token) {
   const res = await fetch(`${API}/${id}/download`, {
     headers: { Authorization: `Bearer ${token}` },

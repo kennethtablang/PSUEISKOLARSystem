@@ -47,6 +47,16 @@ export async function registerScholar(data) {
   return res.json();
 }
 
+export async function verifyEmail(email, token) {
+  const params = new URLSearchParams({ email, token });
+  const res = await fetch(`${API}/verify-email?${params}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Verification failed.');
+  }
+  return res.json();
+}
+
 export async function forgotPassword(email) {
   const res = await fetch(`${API}/forgot-password`, {
     method: 'POST',
@@ -86,22 +96,10 @@ export async function verifyTwoFactorLogin(ticket, code) {
   return res.json();
 }
 
-export async function get2faSetup(token) {
-  const res = await fetch(`${API}/2fa/setup`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || 'Failed to get 2FA setup.');
-  }
-  return res.json();
-}
-
-export async function enable2fa(code, token) {
+export async function enable2fa(token) {
   const res = await fetch(`${API}/2fa/enable`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ code }),
+    headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));

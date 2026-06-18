@@ -14,6 +14,17 @@ namespace PSUEISKOLARSystem.Server.Controllers
     [Authorize]
     public class DocumentsController(ApplicationDbContext db, IFileStorageService storage) : ControllerBase
     {
+        // Only these types may be rendered inline; everything else is forced to download.
+        private static readonly HashSet<string> PreviewableTypes = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "application/pdf",
+            "image/png",
+            "image/jpeg",
+            "image/jpg",
+            "image/gif",
+            "image/webp",
+        };
+
         // GET /api/documents?scholarId=&requirementId=&status=&academicYear=&semester=
         [HttpGet]
         public async Task<IActionResult> GetAll(
@@ -125,6 +136,40 @@ namespace PSUEISKOLARSystem.Server.Controllers
             catch (InvalidOperationException ex)
             {
                 return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        // GET /api/documents/{id}/preview  — serves inline (no download prompt)
+        [HttpGet("{id}/preview")]
+        public async Task<IActionResult> Preview(int id)
+        {
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            var isAdminOrCoord = User.IsInRole(UserRoles.Administrator) || User.IsInRole(UserRoles.ScholarshipCoordinator);
+
+            var submission = await db.DocumentSubmissions.FindAsync(id);
+            if (submission is null) return NotFound();
+
+            if (!isAdminOrCoord && submission.ScholarId != currentUserId)
+                return Forbid();
+
+            try
+            {
+                var (stream, _) = await storage.GetAsync(submission.StoredFileName, submission.ContentType);
+
+                // Only allow known-safe types inline; anything else (HTML, SVG, Word…) is forced to download.
+                var safeType = PreviewableTypes.Contains(submission.ContentType)
+                    ? submission.ContentType
+                    : "application/octet-stream";
+
+                Response.Headers["X-Content-Type-Options"] = "nosniff";
+                Response.Headers["Content-Security-Policy"] =
+                    "default-src 'none'; img-src 'self' blob:; object-src 'none'; sandbox";
+
+                return File(stream, safeType, fileDownloadName: null, enableRangeProcessing: true);
+            }
+            catch (FileNotFoundException)
+            {
+                return NotFound(new { message = "File not found on server." });
             }
         }
 

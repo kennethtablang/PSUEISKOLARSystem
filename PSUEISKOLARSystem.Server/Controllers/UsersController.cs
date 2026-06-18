@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -26,7 +27,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             if (campusId.HasValue)
                 query = query.Where(u => u.CampusId == campusId);
 
-            var users = await query.OrderBy(u => u.FullName).ToListAsync();
+            var users = await query.OrderBy(u => u.LastName).ThenBy(u => u.FirstName).ToListAsync();
 
             var result = new List<object>();
             foreach (var u in users)
@@ -39,6 +40,9 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 result.Add(new UserDto
                 {
                     Id = u.Id,
+                    FirstName = u.FirstName,
+                    MiddleName = u.MiddleName,
+                    LastName = u.LastName,
                     FullName = u.FullName,
                     Email = u.Email ?? string.Empty,
                     Role = userRole,
@@ -61,6 +65,9 @@ namespace PSUEISKOLARSystem.Server.Controllers
             return Ok(new UserDto
             {
                 Id = user.Id,
+                FirstName = user.FirstName,
+                MiddleName = user.MiddleName,
+                LastName = user.LastName,
                 FullName = user.FullName,
                 Email = user.Email ?? string.Empty,
                 Role = roles.FirstOrDefault() ?? string.Empty,
@@ -82,7 +89,9 @@ namespace PSUEISKOLARSystem.Server.Controllers
             if (dto.CampusId.HasValue && !await db.Campuses.AnyAsync(c => c.Id == dto.CampusId))
                 return BadRequest(new { message = $"Campus does not exist." });
 
-            user.FullName = dto.FullName;
+            user.FirstName = dto.FirstName.Trim();
+            user.MiddleName = string.IsNullOrWhiteSpace(dto.MiddleName) ? null : dto.MiddleName.Trim();
+            user.LastName = dto.LastName.Trim();
             user.CampusId = dto.CampusId;
 
             var currentRoles = await userManager.GetRolesAsync(user);
@@ -90,6 +99,16 @@ namespace PSUEISKOLARSystem.Server.Controllers
             await userManager.AddToRoleAsync(user, dto.Role);
 
             await userManager.UpdateAsync(user);
+
+            var actorId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            db.AuditLogs.Add(new AuditLog
+            {
+                UserId  = actorId,
+                Action  = "UpdateUser",
+                Details = $"Updated user {user.Email} — role: {dto.Role}",
+            });
+            await db.SaveChangesAsync();
+
             return NoContent();
         }
 
@@ -101,6 +120,16 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
             user.IsActive = isActive;
             await userManager.UpdateAsync(user);
+
+            var actorId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            db.AuditLogs.Add(new AuditLog
+            {
+                UserId  = actorId,
+                Action  = isActive ? "ActivateUser" : "DeactivateUser",
+                Details = $"{(isActive ? "Activated" : "Deactivated")} user {user.Email}",
+            });
+            await db.SaveChangesAsync();
+
             return NoContent();
         }
 
@@ -109,6 +138,8 @@ namespace PSUEISKOLARSystem.Server.Controllers
         {
             var user = await userManager.FindByIdAsync(id);
             if (user is null) return NotFound(new { message = "User not found." });
+
+            var deletedEmail = user.Email;
 
             // Null out audit FK fields before deleting to avoid FK constraint violations
             // (ClientSetNull on these columns means EF won't cascade automatically)
@@ -123,6 +154,15 @@ namespace PSUEISKOLARSystem.Server.Controllers
             var result = await userManager.DeleteAsync(user);
             if (!result.Succeeded)
                 return BadRequest(new { message = string.Join("; ", result.Errors.Select(e => e.Description)) });
+
+            var actorId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            db.AuditLogs.Add(new AuditLog
+            {
+                UserId  = actorId,
+                Action  = "DeleteUser",
+                Details = $"Deleted user {deletedEmail}",
+            });
+            await db.SaveChangesAsync();
 
             return NoContent();
         }

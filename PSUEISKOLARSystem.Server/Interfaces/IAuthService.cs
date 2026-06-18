@@ -11,9 +11,9 @@ namespace PSUEISKOLARSystem.Server.Interfaces
         Task<UserDto> RegisterScholarAsync(RegisterScholarRequestDto request);
         Task<bool> ForgotPasswordAsync(string email);
         Task ResetPasswordAsync(ResetPasswordRequestDto request);
-        Task<(string Uri, string Key)> GetTwoFactorSetupAsync(string userId);
-        Task<bool> EnableTwoFactorAsync(string userId, string code);
+        Task EnableTwoFactorAsync(string userId);
         Task DisableTwoFactorAsync(string userId, string password);
         Task<AuthResponseDto> VerifyTwoFactorLoginAsync(TwoFactorLoginRequestDto request);
+        Task VerifyEmailAsync(string email, string token);
     }
 }

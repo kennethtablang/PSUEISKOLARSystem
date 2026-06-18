@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
-import { getUsers, setUserStatus, deleteUser } from '../api/users';
+import { getUsers, updateUser, setUserStatus, deleteUser } from '../api/users';
 import { register } from '../api/auth';
+import { getCampuses } from '../api/campuses';
 import { useTitle } from '../hooks/useTitle';
 
 const ROLES = ['Administrator', 'ScholarshipCoordinator', 'Scholar'];
@@ -16,17 +17,28 @@ const ROLE_BADGE_CLASS = {
 export default function UsersPage() {
   useTitle('User Management');
   const { token } = useAuth();
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [showModal, setShowModal] = useState(false);
+  const [users, setUsers]           = useState([]);
+  const [campuses, setCampuses]     = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState('');
+  const [showModal, setShowModal]   = useState(false);
+  const [editing, setEditing]       = useState(null);     // null = create, object = edit
   const [filterRole, setFilterRole] = useState('');
+  const [filterCampus, setFilterCampus] = useState('');
+  const [search, setSearch]         = useState('');
+
+  useEffect(() => {
+    getCampuses(token).then(setCampuses).catch(() => {});
+  }, []);
 
   async function load() {
     setLoading(true);
     setError('');
     try {
-      const u = await getUsers(token, { role: filterRole || undefined });
+      const u = await getUsers(token, {
+        role:     filterRole   || undefined,
+        campusId: filterCampus || undefined,
+      });
       setUsers(u);
     } catch (e) {
       setError(e.message);
@@ -35,7 +47,13 @@ export default function UsersPage() {
     }
   }
 
-  useEffect(() => { load(); }, [filterRole]);
+  useEffect(() => { load(); }, [filterRole, filterCampus]);
+
+  const displayed = search
+    ? users.filter(u =>
+        u.fullName.toLowerCase().includes(search.toLowerCase()) ||
+        u.email.toLowerCase().includes(search.toLowerCase()))
+    : users;
 
   async function handleToggleStatus(user) {
     try {
@@ -52,24 +70,39 @@ export default function UsersPage() {
     } catch (e) { alert(e.message); }
   }
 
+  function openCreate() { setEditing(null); setShowModal(true); }
+  function openEdit(u)  { setEditing(u);    setShowModal(true); }
+
   return (
     <Layout>
       <div className="p-8">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="page-title">User Management</h1>
-            <p className="page-subtitle">{users.length} user{users.length !== 1 ? 's' : ''}</p>
+            <p className="page-subtitle">{displayed.length} user{displayed.length !== 1 ? 's' : ''}</p>
             <span className="page-title-bar" />
           </div>
-          <button onClick={() => setShowModal(true)} className="clay-btn clay-btn-primary px-4 py-2.5 text-sm">
+          <button onClick={openCreate} className="clay-btn clay-btn-primary px-4 py-2.5 text-sm">
             + Add User
           </button>
         </div>
 
-        <div className="flex gap-3 mb-5">
+        {/* Filters */}
+        <div className="flex flex-wrap gap-3 mb-5">
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="clay-input flex-1"
+            style={{ minWidth: 180, maxWidth: 280 }}
+            placeholder="Search name or email…"
+          />
           <select value={filterRole} onChange={e => setFilterRole(e.target.value)} className="clay-input" style={{ width: 'auto' }}>
             <option value="">All Roles</option>
             {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+          </select>
+          <select value={filterCampus} onChange={e => setFilterCampus(e.target.value)} className="clay-input" style={{ width: 'auto' }}>
+            <option value="">All Campuses</option>
+            {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
 
@@ -78,24 +111,27 @@ export default function UsersPage() {
         <div className="clay-card overflow-hidden">
           {loading ? (
             <p className="text-center py-12 text-sm" style={{ color: '#7a8aaa' }}>Loading…</p>
-          ) : users.length === 0 ? (
+          ) : displayed.length === 0 ? (
             <p className="text-center py-12 text-sm" style={{ color: '#7a8aaa' }}>No users found.</p>
           ) : (
             <table className="w-full text-sm">
               <thead className="clay-table-head">
                 <tr>
-                  {['Name', 'Email', 'Role', 'Status', ''].map(h => (
+                  {['Name', 'Email', 'Role', 'Campus', 'Status', ''].map(h => (
                     <th key={h} className="text-left px-5 py-3 text-xs font-bold uppercase tracking-wider" style={{ color: '#7a8aaa' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {users.map((u, i) => (
+                {displayed.map(u => (
                   <tr key={u.id} className="clay-table-row">
                     <td className="px-5 py-3.5 font-semibold" style={{ color: '#0d1a33' }}>{u.fullName}</td>
                     <td className="px-5 py-3.5" style={{ color: '#4a5a7a' }}>{u.email}</td>
                     <td className="px-5 py-3.5">
                       <span className={`clay-badge ${ROLE_BADGE_CLASS[u.role] ?? ''}`}>{u.role}</span>
+                    </td>
+                    <td className="px-5 py-3.5 text-sm" style={{ color: '#4a5a7a' }}>
+                      {u.campusName ?? <span style={{ color: '#b0bdd0', fontStyle: 'italic' }}>—</span>}
                     </td>
                     <td className="px-5 py-3.5">
                       <span className={`clay-badge ${u.isActive ? 'badge-active' : 'badge-inactive'}`}>
@@ -104,10 +140,13 @@ export default function UsersPage() {
                     </td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-3 justify-end">
+                        <button onClick={() => openEdit(u)} className="text-xs font-medium hover:underline" style={{ color: '#003087' }}>
+                          Edit
+                        </button>
                         <button onClick={() => handleToggleStatus(u)} className="text-xs font-medium hover:underline" style={{ color: '#1a3a7a' }}>
                           {u.isActive ? 'Deactivate' : 'Activate'}
                         </button>
-                        <button onClick={() => handleDelete(u)} className="text-xs font-medium hover:underline" style={{ color: '#003087' }}>
+                        <button onClick={() => handleDelete(u)} className="text-xs font-medium hover:underline" style={{ color: '#e03030' }}>
                           Delete
                         </button>
                       </div>
@@ -121,19 +160,31 @@ export default function UsersPage() {
       </div>
 
       {showModal && (
-        <CreateUserModal
-          token={token}
-          onClose={() => setShowModal(false)}
-          onCreated={() => { setShowModal(false); load(); }}
-        />
+        editing ? (
+          <EditUserModal
+            user={editing}
+            campuses={campuses}
+            token={token}
+            onClose={() => setShowModal(false)}
+            onSaved={() => { setShowModal(false); load(); }}
+          />
+        ) : (
+          <CreateUserModal
+            campuses={campuses}
+            token={token}
+            onClose={() => setShowModal(false)}
+            onCreated={() => { setShowModal(false); load(); }}
+          />
+        )
       )}
     </Layout>
   );
 }
 
-function CreateUserModal({ token, onClose, onCreated }) {
-  const [form, setForm] = useState({ fullName: '', email: '', password: '', role: 'Scholar' });
-  const [error, setError] = useState('');
+/* ── Create User Modal ─────────────────────────────── */
+function CreateUserModal({ campuses, token, onClose, onCreated }) {
+  const [form, setForm] = useState({ firstName: '', middleName: '', lastName: '', email: '', password: '', role: 'Scholar', campusId: '' });
+  const [error, setError]         = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   function set(field, value) { setForm(f => ({ ...f, [field]: value })); }
@@ -143,7 +194,15 @@ function CreateUserModal({ token, onClose, onCreated }) {
     setError('');
     setSubmitting(true);
     try {
-      await register({ ...form, campusId: null }, token);
+      await register({
+        firstName:  form.firstName.trim(),
+        middleName: form.middleName.trim() || null,
+        lastName:   form.lastName.trim(),
+        email:      form.email,
+        password:   form.password,
+        role:       form.role,
+        campusId:   form.campusId ? parseInt(form.campusId) : null,
+      }, token);
       onCreated();
     } catch (err) {
       setError(err.message);
@@ -156,20 +215,111 @@ function CreateUserModal({ token, onClose, onCreated }) {
     <ClayModal title="Add New User" onClose={onClose}>
       {error && <ErrorBox>{error}</ErrorBox>}
       <form onSubmit={handleSubmit} className="space-y-4">
-        <Field label="Full Name"><input required value={form.fullName} onChange={e => set('fullName', e.target.value)} className="clay-input" placeholder="Juan Dela Cruz" /></Field>
-        <Field label="Email Address"><input type="email" required value={form.email} onChange={e => set('email', e.target.value)} className="clay-input" placeholder="juan@psu.edu.ph" /></Field>
-        <Field label="Password"><input type="password" required minLength={8} value={form.password} onChange={e => set('password', e.target.value)} className="clay-input" placeholder="Min. 8 characters" /></Field>
-        <Field label="Role">
-          <select required value={form.role} onChange={e => set('role', e.target.value)} className="clay-input">
-            {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
-          </select>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="First Name">
+            <input required value={form.firstName} onChange={e => set('firstName', e.target.value)} className="clay-input" placeholder="Juan" />
+          </Field>
+          <Field label="Last Name">
+            <input required value={form.lastName} onChange={e => set('lastName', e.target.value)} className="clay-input" placeholder="Dela Cruz" />
+          </Field>
+        </div>
+        <Field label="Middle Name (optional)">
+          <input value={form.middleName} onChange={e => set('middleName', e.target.value)} className="clay-input" placeholder="Santos" />
         </Field>
+        <Field label="Email Address">
+          <input type="email" required value={form.email} onChange={e => set('email', e.target.value)} className="clay-input" placeholder="juan@psu.edu.ph" />
+        </Field>
+        <Field label="Password">
+          <input type="password" required minLength={8} value={form.password} onChange={e => set('password', e.target.value)} className="clay-input" placeholder="Min. 8 characters" />
+        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Role">
+            <select required value={form.role} onChange={e => set('role', e.target.value)} className="clay-input">
+              {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </Field>
+          <Field label="Campus">
+            <select value={form.campusId} onChange={e => set('campusId', e.target.value)} className="clay-input">
+              <option value="">— Select —</option>
+              {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </Field>
+        </div>
         <ModalButtons onClose={onClose} submitting={submitting} label="Create User" />
       </form>
     </ClayModal>
   );
 }
 
+/* ── Edit User Modal ───────────────────────────────── */
+function EditUserModal({ user, campuses, token, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    firstName:  user.firstName  ?? '',
+    middleName: user.middleName ?? '',
+    lastName:   user.lastName   ?? '',
+    role:       user.role       ?? 'Scholar',
+    campusId:   user.campusId   ? String(user.campusId) : '',
+  });
+  const [error, setError]         = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  function set(field, value) { setForm(f => ({ ...f, [field]: value })); }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError('');
+    setSubmitting(true);
+    try {
+      await updateUser(user.id, {
+        firstName:  form.firstName.trim(),
+        middleName: form.middleName.trim() || null,
+        lastName:   form.lastName.trim(),
+        role:       form.role,
+        campusId:   form.campusId ? parseInt(form.campusId) : null,
+      }, token);
+      onSaved();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <ClayModal title={`Edit — ${user.fullName}`} onClose={onClose}>
+      {error && <ErrorBox>{error}</ErrorBox>}
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="First Name">
+            <input required value={form.firstName} onChange={e => set('firstName', e.target.value)} className="clay-input" />
+          </Field>
+          <Field label="Last Name">
+            <input required value={form.lastName} onChange={e => set('lastName', e.target.value)} className="clay-input" />
+          </Field>
+        </div>
+        <Field label="Middle Name (optional)">
+          <input value={form.middleName} onChange={e => set('middleName', e.target.value)} className="clay-input" />
+        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Role">
+            <select required value={form.role} onChange={e => set('role', e.target.value)} className="clay-input">
+              {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </Field>
+          <Field label="Campus">
+            <select value={form.campusId} onChange={e => set('campusId', e.target.value)} className="clay-input">
+              <option value="">— None —</option>
+              {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </Field>
+        </div>
+        <ModalButtons onClose={onClose} submitting={submitting} label="Save Changes" />
+      </form>
+    </ClayModal>
+  );
+}
+
+/* ── Shared UI helpers (exported for reuse in other pages) ── */
 export function ClayModal({ title, onClose, children }) {
   return (
     <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{ background: 'rgba(0,20,60,0.45)' }}>

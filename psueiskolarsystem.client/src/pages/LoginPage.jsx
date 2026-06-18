@@ -482,7 +482,7 @@ function TwoFaModal({ ticket, onBack, onSuccess }) {
           </div>
           <h2 className="text-base font-black" style={{ color: '#0d1a33' }}>Two-Factor Verification</h2>
           <p className="text-sm mt-1" style={{ color: '#4a5a7a' }}>
-            Enter the 6-digit code from your authenticator app
+            Enter the 6-digit code sent to your email
           </p>
         </div>
 

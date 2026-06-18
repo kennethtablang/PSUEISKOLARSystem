@@ -93,12 +93,12 @@ namespace PSUEISKOLARSystem.Server.Data
             // Seed accounts: Administrator, Coordinator, Scholar
             var seedAccounts = new[]
             {
-                (Email: "admin@psu.edu.ph",       FullName: "System Administrator",      Role: UserRoles.Administrator,          Password: "ChangeMe123!"),
-                (Email: "coordinator@psu.edu.ph", FullName: "Maria Santos (Coordinator)", Role: UserRoles.ScholarshipCoordinator, Password: "ChangeMe123!"),
-                (Email: "scholar@psu.edu.ph",     FullName: "Juan Dela Cruz (Scholar)",   Role: UserRoles.Scholar,               Password: "ChangeMe123!"),
+                (Email: "c",       FirstName: "System", MiddleName: (string?)null, LastName: "Administrator", Role: UserRoles.Administrator,          Password: "ChangeMe123!"),
+                (Email: "coordinator@psu.edu.ph", FirstName: "Maria",  MiddleName: (string?)null, LastName: "Santos",        Role: UserRoles.ScholarshipCoordinator, Password: "ChangeMe123!"),
+                (Email: "scholar@psu.edu.ph",     FirstName: "Juan",   MiddleName: "Dela",        LastName: "Cruz",          Role: UserRoles.Scholar,               Password: "ChangeMe123!"),
             };
 
-            foreach (var (Email, FullName, Role, Password) in seedAccounts)
+            foreach (var (Email, FirstName, MiddleName, LastName, Role, Password) in seedAccounts)
             {
                 if (await userManager.FindByEmailAsync(Email) is null)
                 {
@@ -106,7 +106,9 @@ namespace PSUEISKOLARSystem.Server.Data
                     {
                         UserName = Email,
                         Email = Email,
-                        FullName = FullName,
+                        FirstName = FirstName,
+                        MiddleName = MiddleName,
+                        LastName = LastName,
                         EmailConfirmed = true
                     };
                     var result = await userManager.CreateAsync(user, Password);

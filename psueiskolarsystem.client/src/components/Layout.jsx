@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import {
   LayoutDashboard, GraduationCap, FileCheck, Users, Bell,
   FolderOpen, User, LogOut, BarChart2, ChevronRight,
-  ChevronLeft, Settings, Menu, X, ClipboardList,
+  ChevronLeft, Settings, Menu, X, ClipboardList, Activity,
 } from 'lucide-react';
 
 /* ── Responsive hook ─────────────────────────────── */
@@ -32,7 +32,8 @@ const navByRole = {
     { to: '/announcements',   label: 'Announcements',    Icon: Bell },
     { to: '/analytics',       label: 'Analytics',        Icon: BarChart2 },
     { section: 'System' },
-    { to: '/settings',        label: 'Settings',         Icon: Settings },
+    { to: '/settings',      label: 'Settings',      Icon: Settings  },
+    { to: '/activity-log',  label: 'Activity Log',  Icon: Activity  },
   ],
   ScholarshipCoordinator: [
     { to: '/dashboard',       label: 'Dashboard',       Icon: LayoutDashboard },

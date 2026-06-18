@@ -10,6 +10,7 @@ namespace PSUEISKOLARSystem.Server.Mappings
         {
             CreateMap<ApplicationUser, UserDto>()
                 .ForMember(dest => dest.Email, opt => opt.MapFrom(src => src.Email ?? string.Empty))
+                .ForMember(dest => dest.FullName, opt => opt.MapFrom(src => src.FullName))
                 .ForMember(dest => dest.CampusName, opt => opt.MapFrom(src => src.Campus != null ? src.Campus.Name : null))
                 .ForMember(dest => dest.Role, opt => opt.Ignore())
                 .ForMember(dest => dest.TwoFactorEnabled, opt => opt.MapFrom(src => src.TwoFactorEnabled));

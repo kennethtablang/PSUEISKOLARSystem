@@ -5,6 +5,7 @@ import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
+import VerifyEmailPage from './pages/VerifyEmailPage';
 import DashboardPage from './pages/DashboardPage';
 import UsersPage from './pages/UsersPage';
 import ScholarsPage from './pages/ScholarsPage';
@@ -15,6 +16,7 @@ import MyDocumentsPage from './pages/MyDocumentsPage';
 import DocumentReviewPage from './pages/DocumentReviewPage';
 import RequirementsPage from './pages/RequirementsPage';
 import SettingsPage from './pages/SettingsPage';
+import ActivityLogPage from './pages/ActivityLogPage';
 import UnauthorizedPage from './pages/UnauthorizedPage';
 import ProfilePage from './pages/ProfilePage';
 
@@ -30,6 +32,7 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/verify-email" element={<VerifyEmailPage />} />
           <Route path="/unauthorized" element={<UnauthorizedPage />} />
 
           <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
@@ -41,6 +44,7 @@ export default function App() {
           <Route path="/document-review" element={<ProtectedRoute roles={adminCoord}><DocumentReviewPage /></ProtectedRoute>} />
           <Route path="/requirements"  element={<ProtectedRoute roles={admin}><RequirementsPage /></ProtectedRoute>} />
           <Route path="/settings"      element={<ProtectedRoute roles={admin}><SettingsPage /></ProtectedRoute>} />
+          <Route path="/activity-log" element={<ProtectedRoute roles={admin}><ActivityLogPage /></ProtectedRoute>} />
           <Route path="/announcements" element={<ProtectedRoute roles={adminCoord}><AnnouncementsPage /></ProtectedRoute>} />
           <Route path="/analytics"    element={<ProtectedRoute roles={adminCoord}><AnalyticsPage /></ProtectedRoute>} />
           <Route path="/profile"      element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />

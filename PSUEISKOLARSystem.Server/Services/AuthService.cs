@@ -6,7 +6,6 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.Extensions.Options;
 using PSUEISKOLARSystem.Server.Data;
 using PSUEISKOLARSystem.Server.DTOs.Auth;
 using PSUEISKOLARSystem.Server.Exceptions;
@@ -35,12 +34,17 @@ namespace PSUEISKOLARSystem.Server.Services
                 .FirstOrDefaultAsync(u => u.Email == request.Email);
 
             if (user is null || !user.IsActive || !await userManager.CheckPasswordAsync(user, request.Password))
-            {
                 throw new UnauthorizedException("Invalid email or password.");
-            }
+
+            if (!user.EmailConfirmed)
+                throw new UnauthorizedException("Your email address has not been verified. Please check your inbox and click the verification link before signing in.");
 
             if (user.TwoFactorEnabled)
+            {
+                var code = await userManager.GenerateTwoFactorTokenAsync(user, TokenOptions.DefaultEmailProvider);
+                await emailService.SendTwoFactorCodeAsync(user.Email!, user.FullName, code);
                 return new AuthResponseDto { Requires2fa = true, TwoFaTicket = GenerateTwoFactorTicket(user.Id) };
+            }
 
             var roles = await userManager.GetRolesAsync(user);
             var role = roles.FirstOrDefault() ?? throw new UnauthorizedException("User has no assigned role.");
@@ -50,49 +54,86 @@ namespace PSUEISKOLARSystem.Server.Services
             await dbContext.SaveChangesAsync();
 
             var (token, expiresAtUtc) = GenerateJwtToken(user, role);
-
             var userDto = mapper.Map<UserDto>(user);
             userDto.Role = role;
 
-            return new AuthResponseDto
-            {
-                Token = token,
-                ExpiresAtUtc = expiresAtUtc,
-                User = userDto
-            };
+            return new AuthResponseDto { Token = token, ExpiresAtUtc = expiresAtUtc, User = userDto };
         }
 
         public async Task<UserDto> RegisterAsync(RegisterRequestDto request)
         {
             if (!await roleManager.RoleExistsAsync(request.Role))
-            {
                 throw new BadRequestException($"Role '{request.Role}' does not exist.");
-            }
 
             if (request.CampusId.HasValue && !await dbContext.Campuses.AnyAsync(c => c.Id == request.CampusId))
-            {
                 throw new BadRequestException($"Campus '{request.CampusId}' does not exist.");
-            }
 
             var user = new ApplicationUser
             {
                 UserName = request.Email,
                 Email = request.Email,
-                FullName = request.FullName,
-                CampusId = request.CampusId
+                FirstName = request.FirstName.Trim(),
+                MiddleName = string.IsNullOrWhiteSpace(request.MiddleName) ? null : request.MiddleName.Trim(),
+                LastName = request.LastName.Trim(),
+                CampusId = request.CampusId,
+                EmailConfirmed = true,
             };
 
             var result = await userManager.CreateAsync(user, request.Password);
             if (!result.Succeeded)
-            {
                 throw new BadRequestException(string.Join("; ", result.Errors.Select(e => e.Description)));
-            }
 
             await userManager.AddToRoleAsync(user, request.Role);
 
             var userDto = mapper.Map<UserDto>(user);
             userDto.Role = request.Role;
             return userDto;
+        }
+
+        public async Task<UserDto> RegisterScholarAsync(RegisterScholarRequestDto request)
+        {
+            if (await userManager.FindByEmailAsync(request.Email) is not null)
+                throw new BadRequestException("An account with this email already exists.");
+
+            var user = new ApplicationUser
+            {
+                UserName = request.Email,
+                Email = request.Email,
+                FirstName = request.FirstName.Trim(),
+                MiddleName = string.IsNullOrWhiteSpace(request.MiddleName) ? null : request.MiddleName.Trim(),
+                LastName = request.LastName.Trim(),
+                EmailConfirmed = false,
+            };
+
+            var result = await userManager.CreateAsync(user, request.Password);
+            if (!result.Succeeded)
+                throw new BadRequestException(string.Join("; ", result.Errors.Select(e => e.Description)));
+
+            await userManager.AddToRoleAsync(user, "Scholar");
+
+            var token = await userManager.GenerateEmailConfirmationTokenAsync(user);
+            var verifyLink = $"{_emailSettings.AppBaseUrl}/verify-email" +
+                             $"?email={Uri.EscapeDataString(user.Email!)}" +
+                             $"&token={Uri.EscapeDataString(token)}";
+
+            await emailService.SendEmailVerificationAsync(user.Email!, user.FullName, verifyLink);
+
+            var userDto = mapper.Map<UserDto>(user);
+            userDto.Role = "Scholar";
+            return userDto;
+        }
+
+        public async Task VerifyEmailAsync(string email, string token)
+        {
+            var user = await userManager.FindByEmailAsync(email)
+                ?? throw new BadRequestException("Invalid or expired verification link.");
+
+            if (user.EmailConfirmed)
+                return;
+
+            var result = await userManager.ConfirmEmailAsync(user, token);
+            if (!result.Succeeded)
+                throw new BadRequestException("Invalid or expired verification link. Please register again to receive a new link.");
         }
 
         public async Task<UserDto> GetCurrentUserAsync(string userId)
@@ -103,7 +144,6 @@ namespace PSUEISKOLARSystem.Server.Services
                 ?? throw new NotFoundException("User not found.");
 
             var roles = await userManager.GetRolesAsync(user);
-
             var userDto = mapper.Map<UserDto>(user);
             userDto.Role = roles.FirstOrDefault() ?? string.Empty;
             return userDto;
@@ -116,8 +156,11 @@ namespace PSUEISKOLARSystem.Server.Services
                 .FirstOrDefaultAsync(u => u.Id == userId)
                 ?? throw new NotFoundException("User not found.");
 
-            if (!string.IsNullOrWhiteSpace(dto.FullName))
-                user.FullName = dto.FullName.Trim();
+            if (!string.IsNullOrWhiteSpace(dto.FirstName))
+                user.FirstName = dto.FirstName.Trim();
+            if (!string.IsNullOrWhiteSpace(dto.LastName))
+                user.LastName = dto.LastName.Trim();
+            user.MiddleName = string.IsNullOrWhiteSpace(dto.MiddleName) ? null : dto.MiddleName.Trim();
 
             if (!string.IsNullOrEmpty(dto.CurrentPassword) && !string.IsNullOrEmpty(dto.NewPassword))
             {
@@ -133,16 +176,6 @@ namespace PSUEISKOLARSystem.Server.Services
             userDto.Role = roles.FirstOrDefault() ?? string.Empty;
             return userDto;
         }
-
-        public Task<UserDto> RegisterScholarAsync(RegisterScholarRequestDto request) =>
-            RegisterAsync(new RegisterRequestDto
-            {
-                FullName = request.FullName,
-                Email    = request.Email,
-                Password = request.Password,
-                Role     = "Scholar",
-                CampusId = null,
-            });
 
         public async Task<bool> ForgotPasswordAsync(string email)
         {
@@ -168,38 +201,11 @@ namespace PSUEISKOLARSystem.Server.Services
                 throw new BadRequestException(string.Join("; ", result.Errors.Select(e => e.Description)));
         }
 
-        public async Task<(string Uri, string Key)> GetTwoFactorSetupAsync(string userId)
+        public async Task EnableTwoFactorAsync(string userId)
         {
             var user = await userManager.FindByIdAsync(userId)
                 ?? throw new NotFoundException("User not found.");
-
-            var key = await userManager.GetAuthenticatorKeyAsync(user);
-            if (string.IsNullOrEmpty(key))
-            {
-                await userManager.ResetAuthenticatorKeyAsync(user);
-                key = await userManager.GetAuthenticatorKeyAsync(user)!;
-            }
-
-            var cleanKey = key!.Replace(" ", "");
-            const string issuer = "EIskolarSystem";
-            var uri = $"otpauth://totp/{Uri.EscapeDataString(issuer)}:{Uri.EscapeDataString(user.Email!)}?secret={cleanKey}&issuer={Uri.EscapeDataString(issuer)}";
-
-            return (uri, key!);
-        }
-
-        public async Task<bool> EnableTwoFactorAsync(string userId, string code)
-        {
-            var user = await userManager.FindByIdAsync(userId)
-                ?? throw new NotFoundException("User not found.");
-
-            var cleanCode = code.Replace(" ", "").Replace("-", "");
-            var isValid = await userManager.VerifyTwoFactorTokenAsync(
-                user, userManager.Options.Tokens.AuthenticatorTokenProvider, cleanCode);
-
-            if (!isValid) return false;
-
             await userManager.SetTwoFactorEnabledAsync(user, true);
-            return true;
         }
 
         public async Task DisableTwoFactorAsync(string userId, string password)
@@ -228,7 +234,7 @@ namespace PSUEISKOLARSystem.Server.Services
 
             var cleanCode = request.Code.Replace(" ", "").Replace("-", "");
             var isValid = await userManager.VerifyTwoFactorTokenAsync(
-                user, userManager.Options.Tokens.AuthenticatorTokenProvider, cleanCode);
+                user, TokenOptions.DefaultEmailProvider, cleanCode);
 
             if (!isValid)
             {
@@ -315,9 +321,7 @@ namespace PSUEISKOLARSystem.Server.Services
             };
 
             if (user.CampusId.HasValue)
-            {
                 claims.Add(new Claim("campusId", user.CampusId.Value.ToString()));
-            }
 
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSettings.Key));
             var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
