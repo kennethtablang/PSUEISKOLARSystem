@@ -68,7 +68,9 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 {
                     ds.Id,
                     ds.ScholarId,
-                    ScholarName = ds.Scholar.FullName,
+                    ScholarName = ds.Scholar.MiddleName != null
+                        ? ds.Scholar.FirstName + " " + ds.Scholar.MiddleName + " " + ds.Scholar.LastName
+                        : ds.Scholar.FirstName + " " + ds.Scholar.LastName,
                     ScholarEmail = ds.Scholar.Email,
                     CampusName = ds.Scholar.Campus != null ? ds.Scholar.Campus.Name : null,
                     ds.RequirementId,
@@ -78,7 +80,11 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     ds.ContentType,
                     Status = ds.Status.ToString(),
                     ds.FeedbackNote,
-                    ReviewedBy = ds.ReviewedBy != null ? ds.ReviewedBy.FullName : null,
+                    ReviewedBy = ds.ReviewedBy != null
+                        ? (ds.ReviewedBy.MiddleName != null
+                            ? ds.ReviewedBy.FirstName + " " + ds.ReviewedBy.MiddleName + " " + ds.ReviewedBy.LastName
+                            : ds.ReviewedBy.FirstName + " " + ds.ReviewedBy.LastName)
+                        : null,
                     ds.ReviewedAt,
                     ds.SubmittedAt,
                     ds.AcademicYear,

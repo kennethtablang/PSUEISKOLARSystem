@@ -36,9 +36,14 @@ namespace PSUEISKOLARSystem.Server.Controllers
             if (scholarshipTypeId.HasValue)
                 query = query.Where(sp => sp.ScholarshipTypeId == scholarshipTypeId);
             if (!string.IsNullOrWhiteSpace(search))
-                query = query.Where(sp => sp.User.FullName.Contains(search) || sp.StudentId.Contains(search) || (sp.User.Email != null && sp.User.Email.Contains(search)));
+                query = query.Where(sp =>
+                    (sp.User.FirstName + " " + sp.User.LastName).Contains(search) ||
+                    sp.User.FirstName.Contains(search) ||
+                    sp.User.LastName.Contains(search) ||
+                    sp.StudentId.Contains(search) ||
+                    (sp.User.Email != null && sp.User.Email.Contains(search)));
 
-            var profiles = await query.OrderBy(sp => sp.User.FullName).ToListAsync();
+            var profiles = await query.OrderBy(sp => sp.User.LastName).ThenBy(sp => sp.User.FirstName).ToListAsync();
             return Ok(profiles.Select(Map));
         }
 

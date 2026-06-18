@@ -41,7 +41,9 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     TargetCampus = a.TargetCampus != null ? a.TargetCampus.Name : null,
                     a.ExpiresAt,
                     a.CreatedAt,
-                    CreatedBy = a.CreatedBy.FullName,
+                    CreatedBy = a.CreatedBy.MiddleName != null
+                        ? a.CreatedBy.FirstName + " " + a.CreatedBy.MiddleName + " " + a.CreatedBy.LastName
+                        : a.CreatedBy.FirstName + " " + a.CreatedBy.LastName,
                 })
                 .ToListAsync();
 
