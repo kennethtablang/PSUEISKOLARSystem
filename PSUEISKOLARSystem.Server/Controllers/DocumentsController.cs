@@ -138,6 +138,30 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
                 db.DocumentSubmissions.Add(submission);
                 await db.SaveChangesAsync();
+
+                // Record initial Pending history entry
+                db.DocumentStatusHistories.Add(new DocumentStatusHistory
+                {
+                    SubmissionId = submission.Id,
+                    Status = "Pending",
+                    Note = "Document submitted by scholar.",
+                    ChangedById = scholarId,
+                    ChangedAt = submission.SubmittedAt,
+                });
+                await db.SaveChangesAsync();
+
+                // Notify scholar (fire-and-forget)
+                var scholar = await db.Users.FindAsync(scholarId);
+                if (scholar?.Email is not null)
+                {
+                    _ = emailService.SendDocumentUploadConfirmationAsync(
+                        scholar.Email,
+                        scholar.FullName,
+                        requirement.Name,
+                        academicYear,
+                        semester);
+                }
+
                 return Ok(new { submission.Id });
             }
             catch (InvalidOperationException ex)
@@ -218,10 +242,20 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 .FirstOrDefaultAsync(s => s.Id == id);
             if (submission is null) return NotFound();
 
+            var reviewerId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
             submission.Status = status;
             submission.FeedbackNote = dto.FeedbackNote;
-            submission.ReviewedById = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            submission.ReviewedById = reviewerId;
             submission.ReviewedAt = DateTime.UtcNow;
+
+            db.DocumentStatusHistories.Add(new DocumentStatusHistory
+            {
+                SubmissionId = id,
+                Status = status.ToString(),
+                Note = dto.FeedbackNote,
+                ChangedById = reviewerId,
+                ChangedAt = DateTime.UtcNow,
+            });
 
             await db.SaveChangesAsync();
 
@@ -237,6 +271,38 @@ namespace PSUEISKOLARSystem.Server.Controllers
             }
 
             return NoContent();
+        }
+
+        // GET /api/documents/{id}/history
+        [HttpGet("{id}/history")]
+        public async Task<IActionResult> GetHistory(int id)
+        {
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            var isAdminOrCoord = User.IsInRole(UserRoles.Administrator) || User.IsInRole(UserRoles.ScholarshipCoordinator);
+
+            var submission = await db.DocumentSubmissions.FindAsync(id);
+            if (submission is null) return NotFound();
+
+            if (!isAdminOrCoord && submission.ScholarId != currentUserId)
+                return Forbid();
+
+            var history = await db.DocumentStatusHistories
+                .Include(h => h.ChangedBy)
+                .Where(h => h.SubmissionId == id)
+                .OrderBy(h => h.ChangedAt)
+                .Select(h => new
+                {
+                    h.Id,
+                    h.Status,
+                    h.Note,
+                    ChangedBy = h.ChangedBy.MiddleName != null
+                        ? h.ChangedBy.FirstName + " " + h.ChangedBy.MiddleName + " " + h.ChangedBy.LastName
+                        : h.ChangedBy.FirstName + " " + h.ChangedBy.LastName,
+                    h.ChangedAt,
+                })
+                .ToListAsync();
+
+            return Ok(history);
         }
 
         // DELETE /api/documents/{id}

@@ -6,6 +6,7 @@ export async function getScholars(token, filters = {}) {
   if (filters.programId) params.set('programId', filters.programId);
   if (filters.scholarshipTypeId) params.set('scholarshipTypeId', filters.scholarshipTypeId);
   if (filters.search) params.set('search', filters.search);
+  if (filters.meetsRequirement !== undefined && filters.meetsRequirement !== '') params.set('meetsRequirement', filters.meetsRequirement);
   const res = await fetch(`${API}?${params}`, {
     headers: { Authorization: `Bearer ${token}` },
   });

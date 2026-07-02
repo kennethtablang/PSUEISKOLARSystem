@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
-import { getRequirements, getSubmissions, uploadDocument, deleteSubmission, downloadFile, previewFile } from '../api/documents';
-import { getScholarProfile } from '../api/scholars';
+import { getRequirements, getSubmissions, uploadDocument, deleteSubmission, downloadFile, previewFile, getSubmissionHistory } from '../api/documents';
+import { getScholarProfile, upsertScholarProfile } from '../api/scholars';
+import { getScholarshipTypes } from '../api/lookups';
 import { getActiveSemester } from '../api/settings';
 import { useTitle } from '../hooks/useTitle';
-import { Eye, X, Download, FileText, Image, FileX, Loader } from 'lucide-react';
+import { Eye, X, Download, FileText, Image, FileX, Loader, BookOpen, ChevronDown, ChevronUp } from 'lucide-react';
 
 const STATUS_STYLE = {
   Pending:    'bg-amber-100 text-amber-700',
@@ -17,12 +18,16 @@ export default function MyDocumentsPage() {
   useTitle('My Documents');
   const { token, user } = useAuth();
 
-  const [requirements, setRequirements] = useState([]);
-  const [submissions,  setSubmissions]  = useState([]);
-  const [profile,      setProfile]      = useState(null);
-  const [loading,      setLoading]      = useState(true);
-  const [uploading,    setUploading]    = useState(null);
-  const [error,        setError]        = useState('');
+  const [requirements,    setRequirements]    = useState([]);
+  const [submissions,     setSubmissions]     = useState([]);
+  const [profile,         setProfile]         = useState(null);
+  const [scholarshipTypes, setScholarshipTypes] = useState([]);
+  const [loading,         setLoading]         = useState(true);
+  const [uploading,       setUploading]       = useState(null);
+  const [error,           setError]           = useState('');
+  const [pickingType,     setPickingType]     = useState('');
+  const [savingType,      setSavingType]      = useState(false);
+  const [showTypePicker,  setShowTypePicker]  = useState(false);
 
   const [period,      setPeriod]      = useState({ academicYear: '', semester: 1 });
   const [periodReady, setPeriodReady] = useState(false);
@@ -68,8 +73,13 @@ export default function MyDocumentsPage() {
     setLoading(true);
     setError('');
     try {
-      const p = await getScholarProfile(user.id, token).catch(() => null);
+      const [p, types] = await Promise.all([
+        getScholarProfile(user.id, token).catch(() => null),
+        getScholarshipTypes(token).catch(() => []),
+      ]);
       setProfile(p);
+      setScholarshipTypes(types);
+      setPickingType(p?.scholarshipTypeId?.toString() ?? '');
       const [reqs, subs] = await Promise.all([
         getRequirements(token, { scholarshipTypeId: p?.scholarshipTypeId }),
         getSubmissions(token, { academicYear: period.academicYear, semester: period.semester }),
@@ -80,6 +90,28 @@ export default function MyDocumentsPage() {
       setError(e.message);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleSaveScholarshipType() {
+    if (!pickingType) return;
+    setSavingType(true);
+    try {
+      await upsertScholarProfile(user.id, {
+        studentId:         profile?.studentId ?? '',
+        programId:         profile?.programId ?? null,
+        scholarshipTypeId: parseInt(pickingType),
+        yearLevel:         profile?.yearLevel ?? 1,
+        contactNumber:     profile?.contactNumber ?? null,
+        birthDate:         profile?.birthDate ?? null,
+        address:           profile?.address ?? null,
+      }, token);
+      setShowTypePicker(false);
+      await load();
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setSavingType(false);
     }
   }
 
@@ -143,8 +175,19 @@ export default function MyDocumentsPage() {
             <div className="flex items-start justify-between mb-6 flex-wrap gap-3">
               <div>
                 <h1 className="page-title">My Documents</h1>
-                <p className="page-subtitle">
-                  {profile?.scholarshipTypeName ?? 'No scholarship type set'} · {verified}/{total} required verified
+                <p className="page-subtitle" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {profile?.scholarshipTypeName
+                    ? `${profile.scholarshipTypeName} · ${verified}/${total} required verified`
+                    : 'Select your scholarship type below'}
+                  {profile?.scholarshipTypeName && !showTypePicker && (
+                    <button
+                      onClick={() => { setPickingType(profile.scholarshipTypeId?.toString() ?? ''); setShowTypePicker(true); }}
+                      className="text-xs font-semibold hover:underline"
+                      style={{ color: '#003087', marginLeft: 4 }}
+                    >
+                      Change
+                    </button>
+                  )}
                 </p>
                 <span className="page-title-bar" />
               </div>
@@ -167,10 +210,57 @@ export default function MyDocumentsPage() {
               </div>
             </div>
 
-            {!profile && (
-              <div className="clay-card p-4 mb-5 text-sm"
-                style={{ background: '#fffbe8', border: '1.5px solid #f5d060', color: '#7a5500' }}>
-                Your scholar profile is not set up yet. Contact your coordinator to complete your profile.
+            {/* Scholarship type picker — shown when no type set, or when changing */}
+            {(!profile?.scholarshipTypeId || showTypePicker) && (
+              <div className="clay-card p-5 mb-5"
+                style={{ background: '#f0f5ff', border: '1.5px solid #80aaee' }}>
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                    style={{ background: 'rgba(0,37,112,0.10)', border: '1px solid rgba(0,37,112,0.15)' }}>
+                    <BookOpen size={16} color="#002570" strokeWidth={2} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold mb-0.5" style={{ color: '#002570' }}>
+                      {showTypePicker && profile?.scholarshipTypeId
+                        ? 'Change Scholarship Type'
+                        : 'Select Your Scholarship Type'}
+                    </p>
+                    <p className="text-xs mb-3" style={{ color: '#4a5a7a' }}>
+                      {showTypePicker && profile?.scholarshipTypeId
+                        ? `Currently: ${profile.scholarshipTypeName}. Changing this will update the required documents shown.`
+                        : 'Choose the scholarship you are enrolled in to see your required documents.'}
+                    </p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <select
+                        value={pickingType}
+                        onChange={e => setPickingType(e.target.value)}
+                        className="clay-input flex-1"
+                        style={{ minWidth: 220 }}
+                      >
+                        <option value="">— Choose scholarship type —</option>
+                        {scholarshipTypes.map(st => (
+                          <option key={st.id} value={st.id}>{st.name}</option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={handleSaveScholarshipType}
+                        disabled={!pickingType || savingType}
+                        className="clay-btn clay-btn-primary px-4 py-2 text-sm shrink-0"
+                        style={{ opacity: !pickingType || savingType ? 0.6 : 1 }}
+                      >
+                        {savingType ? 'Saving…' : 'Confirm'}
+                      </button>
+                      {showTypePicker && profile?.scholarshipTypeId && (
+                        <button
+                          onClick={() => setShowTypePicker(false)}
+                          className="clay-btn clay-btn-ghost px-4 py-2 text-sm shrink-0"
+                        >
+                          Cancel
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -308,9 +398,21 @@ function PreviewContent({ preview }) {
   );
 }
 
+const STATUS_DOT = { Pending: '#c07800', Verified: '#0a7a50', Incomplete: '#c03010' };
+
 function RequirementRow({ requirement, submission, uploading, loadingPreview, isPreviewing, onUpload, onDelete, onPreview, token }) {
   const inputId  = `file-${requirement.id}`;
   const canUpload = !submission || submission.status === 'Incomplete';
+  const [showHistory, setShowHistory] = useState(false);
+  const [history, setHistory] = useState(null);
+
+  async function toggleHistory() {
+    if (!showHistory && history === null) {
+      try { setHistory(await getSubmissionHistory(submission.id, token)); }
+      catch { setHistory([]); }
+    }
+    setShowHistory(v => !v);
+  }
 
   return (
     <div className="clay-card p-5"
@@ -405,7 +507,43 @@ function RequirementRow({ requirement, submission, uploading, loadingPreview, is
             Remove
           </button>
         )}
+
+        {submission && (
+          <button
+            onClick={toggleHistory}
+            className="text-xs flex items-center gap-1 ml-auto hover:underline"
+            style={{ color: '#7a8aaa' }}>
+            {showHistory ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+            History
+          </button>
+        )}
       </div>
+
+      {showHistory && history !== null && (
+        <div className="mt-3 pt-3" style={{ borderTop: '1px solid rgba(0,0,0,0.07)' }}>
+          {history.length === 0 ? (
+            <p className="text-xs" style={{ color: '#9aaabb' }}>No history yet.</p>
+          ) : (
+            <ol className="space-y-2.5">
+              {history.map((h, i) => (
+                <li key={h.id} className="flex items-start gap-2.5">
+                  <div className="flex flex-col items-center shrink-0">
+                    <div className="w-2 h-2 rounded-full mt-0.5" style={{ background: STATUS_DOT[h.status] ?? '#7a8aaa' }} />
+                    {i < history.length - 1 && <div className="w-px flex-1 mt-1" style={{ background: 'rgba(0,0,0,0.1)', minHeight: 12 }} />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold" style={{ color: '#0d1a33' }}>{h.status}</p>
+                    {h.note && <p className="text-xs" style={{ color: '#4a5a7a' }}>{h.note}</p>}
+                    <p className="text-xs mt-0.5" style={{ color: '#9aaabb' }}>
+                      {new Date(h.changedAt).toLocaleString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
-import { getSubmissions, reviewDocument, downloadFile } from '../api/documents';
+import { getSubmissions, reviewDocument, downloadFile, getSubmissionHistory } from '../api/documents';
 import { getActiveSemester } from '../api/settings';
 import { useTitle } from '../hooks/useTitle';
 
@@ -150,11 +150,18 @@ export default function DocumentReviewPage() {
   );
 }
 
+const STATUS_DOT = { Pending: '#c07800', Verified: '#0a7a50', Incomplete: '#c03010' };
+
 function ReviewModal({ submission, token, onClose, onSaved }) {
   const [status, setStatus] = useState('Verified');
   const [feedback, setFeedback] = useState(submission.feedbackNote ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [history, setHistory] = useState([]);
+
+  useEffect(() => {
+    getSubmissionHistory(submission.id, token).then(setHistory).catch(() => {});
+  }, [submission.id]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -172,7 +179,7 @@ function ReviewModal({ submission, token, onClose, onSaved }) {
 
   return (
     <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{ background: 'rgba(0,20,60,0.45)' }}>
-      <div className="clay-card-modal w-full max-w-md p-7">
+      <div className="clay-card-modal w-full max-w-md p-7" style={{ maxHeight: '90vh', overflowY: 'auto' }}>
         <h2 className="text-base font-black mb-1" style={{ color: '#0d1a33' }}>Review Document</h2>
         <p className="text-sm mb-5" style={{ color: '#4a5a7a' }}>
           {submission.scholarName} · {submission.requirementName}
@@ -233,6 +240,29 @@ function ReviewModal({ submission, token, onClose, onSaved }) {
             </button>
           </div>
         </form>
+
+        {history.length > 0 && (
+          <div className="mt-6 pt-5" style={{ borderTop: '1.5px solid rgba(0,0,0,0.07)' }}>
+            <p className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: '#7a8aaa' }}>Status History</p>
+            <ol className="space-y-3">
+              {history.map((h, i) => (
+                <li key={h.id} className="flex items-start gap-3">
+                  <div className="flex flex-col items-center shrink-0">
+                    <div className="w-2.5 h-2.5 rounded-full mt-0.5" style={{ background: STATUS_DOT[h.status] ?? '#7a8aaa' }} />
+                    {i < history.length - 1 && <div className="w-px flex-1 mt-1" style={{ background: 'rgba(0,0,0,0.1)', minHeight: 16 }} />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold" style={{ color: '#0d1a33' }}>{h.status}</p>
+                    {h.note && <p className="text-xs mt-0.5" style={{ color: '#4a5a7a' }}>{h.note}</p>}
+                    <p className="text-xs mt-0.5" style={{ color: '#9aaabb' }}>
+                      {h.changedBy} · {new Date(h.changedAt).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
       </div>
     </div>
   );

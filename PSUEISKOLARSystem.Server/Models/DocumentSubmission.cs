@@ -41,5 +41,7 @@ namespace PSUEISKOLARSystem.Server.Models
         public string AcademicYear { get; set; } = string.Empty;
 
         public int Semester { get; set; }
+
+        public ICollection<DocumentStatusHistory> StatusHistory { get; set; } = [];
     }
 }

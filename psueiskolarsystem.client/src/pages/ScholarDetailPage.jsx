@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { AlertTriangle } from 'lucide-react';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { getScholarProfile, upsertScholarProfile, getGrades, addGrade } from '../api/scholars';
@@ -81,6 +82,23 @@ export default function ScholarDetailPage() {
           </div>
         ) : (
           <>
+            {/* GWA threshold alert */}
+            {profile.latestGwa != null && profile.minimumGwa != null && profile.latestGwa > profile.minimumGwa && (
+              <div className="flex items-start gap-3 p-4 rounded-2xl mb-5"
+                style={{ background: '#fff2ec', border: '1.5px solid #fca572', color: '#7a3010' }}>
+                <AlertTriangle size={16} strokeWidth={2.5} className="mt-0.5 shrink-0" style={{ color: '#d05010' }} />
+                <div>
+                  <p className="text-sm font-bold" style={{ color: '#7a3010' }}>GWA Below Scholarship Threshold</p>
+                  <p className="text-xs mt-0.5">
+                    Current GWA <strong>{profile.latestGwa.toFixed(2)}</strong> exceeds the maximum of{' '}
+                    <strong>{profile.minimumGwa.toFixed(2)}</strong> required for{' '}
+                    {profile.scholarshipTypeName ?? 'this scholarship'}.
+                    {isAdminOrCoord ? ' Review the scholar\'s standing.' : ' Please contact your coordinator.'}
+                  </p>
+                </div>
+              </div>
+            )}
+
             <div className="clay-card p-6 mb-5">
               <h2 className="text-xs font-bold uppercase tracking-wider mb-4" style={{ color: '#7a8aaa' }}>Scholar Information</h2>
               <dl className="grid grid-cols-2 gap-x-8 gap-y-4">
@@ -121,12 +139,23 @@ export default function ScholarDetailPage() {
                     {grades.map((g, i) => (
                       <tr key={g.id} style={{ borderTop: i > 0 ? '1px solid rgba(0,0,0,0.05)' : 'none' }}>
                         <td className="py-2.5" style={{ color: '#2a3a5a' }}>{g.academicYear}</td>
-                        <td className="py-2.5" style={{ color: '#2a3a5a' }}>{g.semester}</td>
-                        <td className="py-2.5 font-mono font-bold" style={{ color: '#0d1a33' }}>{g.gwa.toFixed(2)}</td>
+                        <td className="py-2.5" style={{ color: '#2a3a5a' }}>Sem {g.semester}</td>
                         <td className="py-2.5">
-                          <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${g.meetsRequirement ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                            {g.meetsRequirement ? 'Compliant' : 'Flagged'}
+                          <span className="font-mono font-bold" style={{ color: g.meetsRequirement ? '#0d1a33' : '#c03010' }}>
+                            {g.gwa.toFixed(2)}
                           </span>
+                        </td>
+                        <td className="py-2.5">
+                          {g.meetsRequirement ? (
+                            <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium" style={{ background: '#d4f4e2', color: '#166534' }}>
+                              Compliant
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium" style={{ background: '#ffe4dc', color: '#c03010' }}>
+                              <AlertTriangle size={10} strokeWidth={2.5} />
+                              Flagged
+                            </span>
+                          )}
                         </td>
                         <td className="py-2.5 text-xs" style={{ color: '#4a5a7a' }}>{g.remarks ?? '—'}</td>
                       </tr>
@@ -210,54 +239,46 @@ function EditProfileModal({ profile, userId, programs, scholarshipTypes, token, 
     }
   }
 
-  const programLabel       = programs.find(p => p.id === parseInt(form.programId))?.name ?? '—';
-  const scholarshipLabel   = scholarshipTypes.find(s => s.id === parseInt(form.scholarshipTypeId))?.name ?? '—';
-
   return (
     <ClayModal title={scholarMode ? 'Edit My Info' : 'Edit Scholar Profile'} onClose={onClose}>
       {error && <ErrorBox>{error}</ErrorBox>}
-      {scholarMode && (
-        <p className="text-xs mb-4 p-3 rounded-2xl" style={{ background: 'rgba(0,48,135,0.06)', color: '#4a5a7a', border: '1px solid rgba(0,48,135,0.1)' }}>
-          Program and scholarship type are managed by your coordinator.
-        </p>
-      )}
       <form onSubmit={handleSubmit} className="space-y-4">
-        <Field label="Student ID"><input required value={form.studentId} onChange={e => set('studentId', e.target.value)} className="clay-input" /></Field>
+        <Field label="Student ID">
+          <input required value={form.studentId} onChange={e => set('studentId', e.target.value)} className="clay-input" />
+        </Field>
         <div className="grid grid-cols-2 gap-4">
           <Field label="Year Level">
             <select value={form.yearLevel} onChange={e => set('yearLevel', e.target.value)} className="clay-input">
               {[1,2,3,4,5].map(y => <option key={y} value={y}>Year {y}</option>)}
             </select>
           </Field>
-          <Field label="Contact Number"><input value={form.contactNumber} onChange={e => set('contactNumber', e.target.value)} className="clay-input" placeholder="09xx" /></Field>
+          <Field label="Contact Number">
+            <input value={form.contactNumber} onChange={e => set('contactNumber', e.target.value)} className="clay-input" placeholder="09xx" />
+          </Field>
         </div>
-        {scholarMode ? (
-          <>
-            <Field label="Program">
-              <input value={programLabel} readOnly disabled className="clay-input opacity-60 cursor-not-allowed" />
-            </Field>
-            <Field label="Scholarship Type">
-              <input value={scholarshipLabel} readOnly disabled className="clay-input opacity-60 cursor-not-allowed" />
-            </Field>
-          </>
-        ) : (
-          <>
-            <Field label="Program">
-              <select value={form.programId} onChange={e => set('programId', e.target.value)} className="clay-input">
-                <option value="">— Select Program —</option>
-                {programs.map(p => <option key={p.id} value={p.id}>{p.name} ({p.code})</option>)}
-              </select>
-            </Field>
-            <Field label="Scholarship Type">
-              <select value={form.scholarshipTypeId} onChange={e => set('scholarshipTypeId', e.target.value)} className="clay-input">
-                <option value="">— Select Scholarship —</option>
-                {scholarshipTypes.map(st => <option key={st.id} value={st.id}>{st.name}</option>)}
-              </select>
-            </Field>
-          </>
-        )}
-        <Field label="Birth Date"><input type="date" value={form.birthDate} onChange={e => set('birthDate', e.target.value)} className="clay-input" /></Field>
-        <Field label="Address"><textarea value={form.address} onChange={e => set('address', e.target.value)} rows={2} className="clay-input" /></Field>
+        <Field label="Program">
+          <select value={form.programId} onChange={e => set('programId', e.target.value)} className="clay-input">
+            <option value="">— Select Program —</option>
+            {programs.map(p => <option key={p.id} value={p.id}>{p.name} ({p.code})</option>)}
+          </select>
+        </Field>
+        <Field label="Scholarship Type">
+          <select value={form.scholarshipTypeId} onChange={e => set('scholarshipTypeId', e.target.value)} className="clay-input">
+            <option value="">— Select Scholarship Type —</option>
+            {scholarshipTypes.map(st => <option key={st.id} value={st.id}>{st.name}</option>)}
+          </select>
+          {scholarMode && (
+            <p className="text-xs mt-1.5" style={{ color: '#7a8aaa' }}>
+              Choose the scholarship you are enrolled in — this sets which documents you need to submit.
+            </p>
+          )}
+        </Field>
+        <Field label="Birth Date">
+          <input type="date" value={form.birthDate} onChange={e => set('birthDate', e.target.value)} className="clay-input" />
+        </Field>
+        <Field label="Address">
+          <textarea value={form.address} onChange={e => set('address', e.target.value)} rows={2} className="clay-input" />
+        </Field>
         <ModalButtons onClose={onClose} submitting={submitting} label="Save" />
       </form>
     </ClayModal>

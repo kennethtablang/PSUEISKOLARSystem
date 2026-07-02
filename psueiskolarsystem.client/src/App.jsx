@@ -17,6 +17,7 @@ import AnalyticsPage from './pages/AnalyticsPage';
 import MyDocumentsPage from './pages/MyDocumentsPage';
 import DocumentReviewPage from './pages/DocumentReviewPage';
 import RequirementsPage from './pages/RequirementsPage';
+import ScholarshipTypesPage from './pages/ScholarshipTypesPage';
 import SettingsPage from './pages/SettingsPage';
 import ActivityLogPage from './pages/ActivityLogPage';
 import UnauthorizedPage from './pages/UnauthorizedPage';
@@ -45,7 +46,8 @@ export default function App() {
           <Route path="/my-profile" element={<ProtectedRoute><ScholarDetailPage /></ProtectedRoute>} />
           <Route path="/my-documents" element={<ProtectedRoute roles={['Scholar']}><MyDocumentsPage /></ProtectedRoute>} />
           <Route path="/document-review" element={<ProtectedRoute roles={adminCoord}><DocumentReviewPage /></ProtectedRoute>} />
-          <Route path="/requirements"  element={<ProtectedRoute roles={admin}><RequirementsPage /></ProtectedRoute>} />
+          <Route path="/requirements"       element={<ProtectedRoute roles={admin}><RequirementsPage /></ProtectedRoute>} />
+          <Route path="/scholarship-types"  element={<ProtectedRoute roles={admin}><ScholarshipTypesPage /></ProtectedRoute>} />
           <Route path="/settings"      element={<ProtectedRoute roles={admin}><SettingsPage /></ProtectedRoute>} />
           <Route path="/activity-log" element={<ProtectedRoute roles={admin}><ActivityLogPage /></ProtectedRoute>} />
           <Route path="/announcements" element={<ProtectedRoute roles={adminCoord}><AnnouncementsPage /></ProtectedRoute>} />

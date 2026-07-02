@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { getAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement } from '../api/announcements';
+import { getCampuses } from '../api/campuses';
+import { getPrograms, getScholarshipTypes } from '../api/lookups';
 import { useTitle } from '../hooks/useTitle';
 
 const ROLES = ['', 'Scholar', 'ScholarshipCoordinator'];
@@ -11,6 +13,7 @@ export default function AnnouncementsPage() {
   useTitle('Announcements');
   const { token } = useAuth();
   const [announcements, setAnnouncements] = useState([]);
+  const [lookups, setLookups] = useState({ campuses: [], scholarshipTypes: [], programs: [] });
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -18,8 +21,14 @@ export default function AnnouncementsPage() {
   async function load() {
     setLoading(true);
     try {
-      const a = await getAnnouncements(token);
+      const [a, campuses, scholarshipTypes, programs] = await Promise.all([
+        getAnnouncements(token),
+        getCampuses(token),
+        getScholarshipTypes(token),
+        getPrograms(token),
+      ]);
       setAnnouncements(a);
+      setLookups({ campuses, scholarshipTypes, programs });
     } finally {
       setLoading(false);
     }
@@ -57,31 +66,7 @@ export default function AnnouncementsPage() {
         ) : (
           <div className="space-y-3">
             {announcements.map(a => (
-              <div key={a.id} className="clay-card p-5 group relative">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1">
-                    <p className="font-bold text-sm" style={{ color: '#0d1a33' }}>{a.title}</p>
-                    <p className="text-sm mt-1 leading-relaxed whitespace-pre-line" style={{ color: '#2a3a5a' }}>{a.content}</p>
-                  </div>
-                  {a.expiresAt && (
-                    <span className="clay-badge shrink-0 text-xs" style={{ background: '#fff3cd', color: '#7d5a00', border: '1.5px solid #f0d060' }}>
-                      Expires {new Date(a.expiresAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center justify-between mt-3">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs" style={{ color: '#7a8aaa' }}>
-                      {new Date(a.createdAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })} · {a.createdBy}
-                    </span>
-                    {a.targetRole && <span className="clay-badge text-xs badge-coord">{a.targetRole}</span>}
-                  </div>
-                  <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => openEdit(a)} className="text-xs font-medium hover:underline" style={{ color: '#003087' }}>Edit</button>
-                    <button onClick={() => handleDelete(a.id)} className="text-xs font-medium hover:underline" style={{ color: '#e03030' }}>Delete</button>
-                  </div>
-                </div>
-              </div>
+              <AnnouncementCard key={a.id} a={a} onEdit={() => openEdit(a)} onDelete={() => handleDelete(a.id)} />
             ))}
           </div>
         )}
@@ -90,6 +75,7 @@ export default function AnnouncementsPage() {
       {showModal && (
         <AnnouncementModal
           initial={editing}
+          lookups={lookups}
           token={token}
           onClose={() => setShowModal(false)}
           onSaved={() => { setShowModal(false); load(); }}
@@ -99,12 +85,65 @@ export default function AnnouncementsPage() {
   );
 }
 
-function AnnouncementModal({ initial, token, onClose, onSaved }) {
+function AnnouncementCard({ a, onEdit, onDelete }) {
+  const date = new Date(a.createdAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
+  const targets = [
+    a.targetRole,
+    a.targetCampus,
+    a.targetScholarshipType,
+    a.targetProgram,
+  ].filter(Boolean);
+
+  return (
+    <div className="clay-card p-5 group relative">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1">
+          <p className="font-bold text-sm" style={{ color: '#0d1a33' }}>{a.title}</p>
+          <p className="text-sm mt-1 leading-relaxed whitespace-pre-line" style={{ color: '#2a3a5a' }}>{a.content}</p>
+        </div>
+        {a.expiresAt && (
+          <span className="clay-badge shrink-0 text-xs" style={{ background: '#fff3cd', color: '#7d5a00', border: '1.5px solid #f0d060' }}>
+            Expires {new Date(a.expiresAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}
+          </span>
+        )}
+      </div>
+      <div className="flex items-center justify-between mt-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs" style={{ color: '#7a8aaa' }}>
+            {date} · {a.createdBy}
+          </span>
+          {targets.length > 0 ? (
+            targets.map(t => (
+              <span key={t} className="clay-badge text-xs" style={{ background: '#dce8ff', color: '#003087', border: '1px solid #80aaee' }}>
+                {t}
+              </span>
+            ))
+          ) : (
+            <span className="clay-badge text-xs" style={{ background: '#e8edf5', color: '#7a8aaa', border: '1px solid rgba(0,0,0,0.08)' }}>
+              All users
+            </span>
+          )}
+        </div>
+        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button onClick={onEdit} className="text-xs font-medium hover:underline" style={{ color: '#003087' }}>Edit</button>
+          <button onClick={onDelete} className="text-xs font-medium hover:underline" style={{ color: '#e03030' }}>Delete</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AnnouncementModal({ initial, lookups, token, onClose, onSaved }) {
   const [form, setForm] = useState({
-    title: initial?.title ?? '',
-    content: initial?.content ?? '',
-    targetRole: initial?.targetRole ?? '',
-    expiresAt: '',
+    title:                  initial?.title ?? '',
+    content:                initial?.content ?? '',
+    targetRole:             initial?.targetRole ?? '',
+    targetCampusId:         initial?.targetCampusId?.toString() ?? '',
+    targetScholarshipTypeId: initial?.targetScholarshipTypeId?.toString() ?? '',
+    targetProgramId:        initial?.targetProgramId?.toString() ?? '',
+    expiresAt:              initial?.expiresAt
+      ? new Date(initial.expiresAt).toISOString().slice(0, 16)
+      : '',
   });
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -117,11 +156,13 @@ function AnnouncementModal({ initial, token, onClose, onSaved }) {
     setSubmitting(true);
     try {
       const payload = {
-        title: form.title,
-        content: form.content,
-        targetRole: form.targetRole || null,
-        targetCampusId: null,
-        expiresAt: form.expiresAt || null,
+        title:                  form.title,
+        content:                form.content,
+        targetRole:             form.targetRole || null,
+        targetCampusId:         form.targetCampusId ? parseInt(form.targetCampusId) : null,
+        targetScholarshipTypeId: form.targetScholarshipTypeId ? parseInt(form.targetScholarshipTypeId) : null,
+        targetProgramId:        form.targetProgramId ? parseInt(form.targetProgramId) : null,
+        expiresAt:              form.expiresAt || null,
       };
       if (initial) {
         await updateAnnouncement(initial.id, payload, token);
@@ -138,7 +179,7 @@ function AnnouncementModal({ initial, token, onClose, onSaved }) {
 
   return (
     <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{ background: 'rgba(0,20,60,0.45)' }}>
-      <div className="clay-card-modal w-full max-w-md p-7">
+      <div className="clay-card-modal w-full p-7" style={{ maxWidth: 520, maxHeight: '90vh', overflowY: 'auto' }}>
         <h2 className="text-base font-black mb-5" style={{ color: '#0d1a33' }}>
           {initial ? 'Edit Announcement' : 'New Announcement'}
         </h2>
@@ -152,16 +193,48 @@ function AnnouncementModal({ initial, token, onClose, onSaved }) {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <Field label="Title">
-            <input required value={form.title} onChange={e => set('title', e.target.value)} className="clay-input" placeholder="e.g. Deadline for COR Submission" />
+            <input required value={form.title} onChange={e => set('title', e.target.value)}
+              className="clay-input" placeholder="e.g. Deadline for COR Submission" />
           </Field>
+
           <Field label="Content">
-            <textarea required rows={4} value={form.content} onChange={e => set('content', e.target.value)} className="clay-input" placeholder="Announcement body…" />
+            <textarea required rows={4} value={form.content} onChange={e => set('content', e.target.value)}
+              className="clay-input" placeholder="Announcement body…" />
           </Field>
-          <Field label="Audience">
-            <select value={form.targetRole} onChange={e => set('targetRole', e.target.value)} className="clay-input">
-              {ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
-            </select>
-          </Field>
+
+          <p className="text-xs font-bold uppercase tracking-wider pt-1" style={{ color: '#4a5a7a' }}>
+            Target Audience (leave blank to target all)
+          </p>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Role">
+              <select value={form.targetRole} onChange={e => set('targetRole', e.target.value)} className="clay-input">
+                {ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
+              </select>
+            </Field>
+
+            <Field label="Campus">
+              <select value={form.targetCampusId} onChange={e => set('targetCampusId', e.target.value)} className="clay-input">
+                <option value="">All Campuses</option>
+                {lookups.campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </Field>
+
+            <Field label="Scholarship Type">
+              <select value={form.targetScholarshipTypeId} onChange={e => set('targetScholarshipTypeId', e.target.value)} className="clay-input">
+                <option value="">All Types</option>
+                {lookups.scholarshipTypes.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </Field>
+
+            <Field label="Program">
+              <select value={form.targetProgramId} onChange={e => set('targetProgramId', e.target.value)} className="clay-input">
+                <option value="">All Programs</option>
+                {lookups.programs.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </Field>
+          </div>
+
           <Field label="Expires At (optional)">
             <input type="datetime-local" value={form.expiresAt} onChange={e => set('expiresAt', e.target.value)} className="clay-input" />
           </Field>

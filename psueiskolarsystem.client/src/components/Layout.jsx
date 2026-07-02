@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import {
   LayoutDashboard, GraduationCap, FileCheck, Users, Bell,
   FolderOpen, User, LogOut, BarChart2, ChevronRight,
-  ChevronLeft, Settings, Menu, X, ClipboardList, Activity,
+  ChevronLeft, Settings, Menu, X, ClipboardList, Activity, Award,
 } from 'lucide-react';
 
 /* ── Responsive hook ─────────────────────────────── */
@@ -26,6 +26,7 @@ const navByRole = {
     { section: 'Manage' },
     { to: '/scholars',        label: 'Scholars',         Icon: GraduationCap },
     { to: '/document-review', label: 'Document Review',  Icon: FileCheck },
+    { to: '/scholarship-types', label: 'Scholarship Types', Icon: Award },
     { to: '/requirements',    label: 'Requirements',     Icon: ClipboardList },
     { to: '/users',           label: 'Users',            Icon: Users },
     { section: 'Engage' },
@@ -189,7 +190,7 @@ export default function Layout({ children }) {
               e-Iskolar
             </p>
             <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.38)', fontWeight: 500, marginTop: 2 }}>
-              Lingayen Campus
+              {user?.campusName ?? 'Pangasinan State University'}
             </p>
           </div>
         </div>

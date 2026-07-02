@@ -17,6 +17,8 @@ namespace PSUEISKOLARSystem.Server.Data
         public DbSet<DocumentRequirement> DocumentRequirements => Set<DocumentRequirement>();
         public DbSet<DocumentSubmission> DocumentSubmissions => Set<DocumentSubmission>();
         public DbSet<ActiveSemester> ActiveSemesters => Set<ActiveSemester>();
+        public DbSet<ScholarshipTypeRequirement> ScholarshipTypeRequirements => Set<ScholarshipTypeRequirement>();
+        public DbSet<DocumentStatusHistory> DocumentStatusHistories => Set<DocumentStatusHistory>();
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -74,6 +76,18 @@ namespace PSUEISKOLARSystem.Server.Data
                 .HasForeignKey(a => a.TargetCampusId)
                 .OnDelete(DeleteBehavior.SetNull);
 
+            builder.Entity<Announcement>()
+                .HasOne(a => a.TargetScholarshipType)
+                .WithMany()
+                .HasForeignKey(a => a.TargetScholarshipTypeId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            builder.Entity<Announcement>()
+                .HasOne(a => a.TargetProgram)
+                .WithMany()
+                .HasForeignKey(a => a.TargetProgramId)
+                .OnDelete(DeleteBehavior.SetNull);
+
             builder.Entity<ScholarshipType>()
                 .Property(st => st.MinimumGwa)
                 .HasPrecision(3, 2);
@@ -111,6 +125,33 @@ namespace PSUEISKOLARSystem.Server.Data
                 .WithMany()
                 .HasForeignKey(a => a.UpdatedById)
                 .OnDelete(DeleteBehavior.SetNull);
+
+            builder.Entity<ScholarshipTypeRequirement>()
+                .HasKey(str => new { str.ScholarshipTypeId, str.RequirementId });
+
+            builder.Entity<ScholarshipTypeRequirement>()
+                .HasOne(str => str.ScholarshipType)
+                .WithMany(st => st.Requirements)
+                .HasForeignKey(str => str.ScholarshipTypeId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Entity<ScholarshipTypeRequirement>()
+                .HasOne(str => str.Requirement)
+                .WithMany(dr => dr.ScholarshipTypes)
+                .HasForeignKey(str => str.RequirementId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Entity<DocumentStatusHistory>()
+                .HasOne(h => h.Submission)
+                .WithMany(ds => ds.StatusHistory)
+                .HasForeignKey(h => h.SubmissionId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Entity<DocumentStatusHistory>()
+                .HasOne(h => h.ChangedBy)
+                .WithMany()
+                .HasForeignKey(h => h.ChangedById)
+                .OnDelete(DeleteBehavior.Restrict);
         }
     }
 }

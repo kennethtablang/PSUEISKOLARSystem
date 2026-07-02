@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { getScholars } from '../api/scholars';
-import { useTitle } from '../hooks/useTitle';
+import { getCampuses } from '../api/campuses';
 import { getPrograms, getScholarshipTypes } from '../api/lookups';
+import { useTitle } from '../hooks/useTitle';
 
 const GWA_BADGE = (meets) => {
   if (meets === null || meets === undefined) return 'bg-[#e8edf5] text-[#7a8aaa]';
@@ -13,10 +14,11 @@ const GWA_BADGE = (meets) => {
 
 export default function ScholarsPage() {
   useTitle('Scholars');
-  const { token, user } = useAuth();
+  const { token } = useAuth();
   const navigate = useNavigate();
 
   const [scholars, setScholars] = useState([]);
+  const [campuses, setCampuses] = useState([]);
   const [programs, setPrograms] = useState([]);
   const [scholarshipTypes, setScholarshipTypes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -24,8 +26,10 @@ export default function ScholarsPage() {
 
   const [filters, setFilters] = useState({
     search: '',
+    campusId: '',
     programId: '',
     scholarshipTypeId: '',
+    meetsRequirement: '',
   });
 
   async function loadScholars(f = filters) {
@@ -34,8 +38,10 @@ export default function ScholarsPage() {
     try {
       const data = await getScholars(token, {
         search: f.search || undefined,
+        campusId: f.campusId || undefined,
         programId: f.programId || undefined,
         scholarshipTypeId: f.scholarshipTypeId || undefined,
+        meetsRequirement: f.meetsRequirement !== '' ? f.meetsRequirement : undefined,
       });
       setScholars(data);
     } catch (e) {
@@ -46,8 +52,8 @@ export default function ScholarsPage() {
   }
 
   useEffect(() => {
-    Promise.all([getPrograms(token), getScholarshipTypes(token)])
-      .then(([p, st]) => { setPrograms(p); setScholarshipTypes(st); });
+    Promise.all([getCampuses(token), getPrograms(token), getScholarshipTypes(token)])
+      .then(([c, p, st]) => { setCampuses(c); setPrograms(p); setScholarshipTypes(st); });
     loadScholars();
   }, []);
 
@@ -57,13 +63,19 @@ export default function ScholarsPage() {
     loadScholars(next);
   }
 
+  const subtitle = (() => {
+    const count = `${scholars.length} scholar${scholars.length !== 1 ? 's' : ''}`;
+    const campus = campuses.find(c => String(c.id) === String(filters.campusId));
+    return campus ? `${count} · ${campus.name}` : `${count} · All Campuses`;
+  })();
+
   return (
     <Layout>
       <div className="p-8">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="page-title">Scholars</h1>
-            <p className="page-subtitle">{scholars.length} scholar{scholars.length !== 1 ? 's' : ''} · Lingayen Campus</p>
+            <p className="page-subtitle">{subtitle}</p>
             <span className="page-title-bar" />
           </div>
         </div>
@@ -77,6 +89,10 @@ export default function ScholarsPage() {
             onChange={e => setFilter('search', e.target.value)}
             className={`${inputCls} w-60`}
           />
+          <select value={filters.campusId} onChange={e => setFilter('campusId', e.target.value)} className={inputCls}>
+            <option value="">All Campuses</option>
+            {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
           <select value={filters.programId} onChange={e => setFilter('programId', e.target.value)} className={inputCls}>
             <option value="">All Programs</option>
             {programs.map(p => <option key={p.id} value={p.id}>{p.code}</option>)}
@@ -84,6 +100,11 @@ export default function ScholarsPage() {
           <select value={filters.scholarshipTypeId} onChange={e => setFilter('scholarshipTypeId', e.target.value)} className={inputCls}>
             <option value="">All Scholarships</option>
             {scholarshipTypes.map(st => <option key={st.id} value={st.id}>{st.name}</option>)}
+          </select>
+          <select value={filters.meetsRequirement} onChange={e => setFilter('meetsRequirement', e.target.value)} className={inputCls}>
+            <option value="">All Compliance</option>
+            <option value="true">GWA Compliant</option>
+            <option value="false">Below Threshold</option>
           </select>
         </div>
 
@@ -98,21 +119,22 @@ export default function ScholarsPage() {
             <table className="w-full text-sm">
               <thead className="clay-table-head">
                 <tr>
-                  {['Scholar', 'Student ID', 'Program', 'Scholarship', 'GWA', ''].map(h => (
+                  {['Scholar', 'Student ID', 'Campus', 'Program', 'Scholarship', 'GWA', ''].map(h => (
                     <th key={h} className="text-left px-5 py-3 text-xs font-bold uppercase tracking-wider" style={{ color: '#7a8aaa' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {scholars.map((s, i) => (
+                {scholars.map(s => (
                   <tr key={s.id} className="clay-table-row">
                     <td className="px-5 py-3.5">
                       <p className="font-semibold" style={{ color: '#0d1a33' }}>{s.fullName}</p>
                       <p className="text-xs" style={{ color: '#7a8aaa' }}>{s.email}</p>
                     </td>
                     <td className="px-5 py-3.5 font-mono" style={{ color: '#2a3a5a' }}>{s.studentId}</td>
+                    <td className="px-5 py-3.5 text-xs" style={{ color: '#4a5a7a' }}>{s.campusName ?? '—'}</td>
                     <td className="px-5 py-3.5" style={{ color: '#4a5a7a' }}>{s.programCode ?? '—'}</td>
-                    <td className="px-5 py-3.5 max-w-[160px] truncate" style={{ color: '#4a5a7a' }}>{s.scholarshipTypeName ?? '—'}</td>
+                    <td className="px-5 py-3.5 max-w-[140px] truncate" style={{ color: '#4a5a7a' }}>{s.scholarshipTypeName ?? '—'}</td>
                     <td className="px-5 py-3.5">
                       {s.latestGwa != null ? (
                         <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${GWA_BADGE(s.meetsRequirement)}`}>

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PSUEISKOLARSystem.Server.Data;
+using PSUEISKOLARSystem.Server.Interfaces;
 using PSUEISKOLARSystem.Server.Models;
 using PSUEISKOLARSystem.Server.Models.Enums;
 
@@ -11,7 +12,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
     [ApiController]
     [Route("api/[controller]")]
     [Authorize]
-    public class AnnouncementsController(ApplicationDbContext db) : ControllerBase
+    public class AnnouncementsController(ApplicationDbContext db, IEmailService emailService) : ControllerBase
     {
         [HttpGet]
         public async Task<IActionResult> GetAll()
@@ -23,31 +24,60 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
             var now = DateTime.UtcNow;
 
-            var announcements = await db.Announcements
+            // Admins and coordinators see all active announcements for management.
+            // Scholars see only what is targeted at them.
+            var isManager = role == UserRoles.Administrator || role == UserRoles.ScholarshipCoordinator;
+
+            int? scholarshipTypeId = null;
+            int? programId = null;
+
+            if (!isManager)
+            {
+                var profile = await db.ScholarProfiles
+                    .Where(sp => sp.UserId == userId)
+                    .Select(sp => new { sp.ScholarshipTypeId, sp.ProgramId })
+                    .FirstOrDefaultAsync();
+                scholarshipTypeId = profile?.ScholarshipTypeId;
+                programId = profile?.ProgramId;
+            }
+
+            var query = db.Announcements
                 .Include(a => a.CreatedBy)
                 .Include(a => a.TargetCampus)
+                .Include(a => a.TargetScholarshipType)
+                .Include(a => a.TargetProgram)
                 .Where(a =>
                     a.IsActive &&
-                    (a.ExpiresAt == null || a.ExpiresAt > now) &&
+                    (a.ExpiresAt == null || a.ExpiresAt > now));
+
+            if (!isManager)
+            {
+                query = query.Where(a =>
                     (a.TargetRole == null || a.TargetRole == role) &&
-                    (a.TargetCampusId == null || a.TargetCampusId == campusId))
+                    (a.TargetCampusId == null || a.TargetCampusId == campusId) &&
+                    (a.TargetScholarshipTypeId == null || a.TargetScholarshipTypeId == scholarshipTypeId) &&
+                    (a.TargetProgramId == null || a.TargetProgramId == programId));
+            }
+
+            var announcements = await query
                 .OrderByDescending(a => a.CreatedAt)
-                .Select(a => new
-                {
-                    a.Id,
-                    a.Title,
-                    a.Content,
-                    a.TargetRole,
-                    TargetCampus = a.TargetCampus != null ? a.TargetCampus.Name : null,
-                    a.ExpiresAt,
-                    a.CreatedAt,
-                    CreatedBy = a.CreatedBy.MiddleName != null
-                        ? a.CreatedBy.FirstName + " " + a.CreatedBy.MiddleName + " " + a.CreatedBy.LastName
-                        : a.CreatedBy.FirstName + " " + a.CreatedBy.LastName,
-                })
                 .ToListAsync();
 
-            return Ok(announcements);
+            return Ok(announcements.Select(a => new
+            {
+                a.Id,
+                a.Title,
+                a.Content,
+                a.TargetRole,
+                TargetCampus = a.TargetCampus?.Name,
+                TargetScholarshipType = a.TargetScholarshipType?.Name,
+                TargetProgram = a.TargetProgram?.Name,
+                a.ExpiresAt,
+                a.CreatedAt,
+                CreatedBy = a.CreatedBy.MiddleName != null
+                    ? a.CreatedBy.FirstName + " " + a.CreatedBy.MiddleName + " " + a.CreatedBy.LastName
+                    : a.CreatedBy.FirstName + " " + a.CreatedBy.LastName,
+            }));
         }
 
         [HttpPost]
@@ -60,13 +90,69 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 Content = dto.Content,
                 TargetRole = string.IsNullOrEmpty(dto.TargetRole) ? null : dto.TargetRole,
                 TargetCampusId = dto.TargetCampusId,
+                TargetScholarshipTypeId = dto.TargetScholarshipTypeId,
+                TargetProgramId = dto.TargetProgramId,
                 ExpiresAt = dto.ExpiresAt,
                 CreatedById = User.FindFirstValue(ClaimTypes.NameIdentifier)!,
             };
 
             db.Announcements.Add(announcement);
             await db.SaveChangesAsync();
+
+            // Email targeted scholars (fire-and-forget)
+            _ = NotifyScholarsByEmailAsync(announcement);
+
             return Ok(new { announcement.Id });
+        }
+
+        private async Task NotifyScholarsByEmailAsync(Announcement a)
+        {
+            try
+            {
+                var query = db.Users
+                    .Join(db.UserRoles, u => u.Id, ur => ur.UserId, (u, ur) => new { u, ur })
+                    .Join(db.Roles, x => x.ur.RoleId, r => r.Id, (x, r) => new { x.u, RoleName = r.Name })
+                    .Where(x => x.RoleName == UserRoles.Scholar && x.u.IsActive && x.u.Email != null)
+                    .Select(x => x.u)
+                    .AsQueryable();
+
+                // Role filter — if announcement targets a non-scholar role, no scholars to email
+                if (!string.IsNullOrEmpty(a.TargetRole) && a.TargetRole != UserRoles.Scholar)
+                    return;
+
+                // Campus filter
+                if (a.TargetCampusId.HasValue)
+                    query = query.Where(u => u.CampusId == a.TargetCampusId);
+
+                var scholars = await query.ToListAsync();
+
+                // Scholarship type / program filter requires joining ScholarProfiles
+                if (a.TargetScholarshipTypeId.HasValue || a.TargetProgramId.HasValue)
+                {
+                    var profileQuery = db.ScholarProfiles.AsQueryable();
+                    if (a.TargetScholarshipTypeId.HasValue)
+                        profileQuery = profileQuery.Where(sp => sp.ScholarshipTypeId == a.TargetScholarshipTypeId);
+                    if (a.TargetProgramId.HasValue)
+                        profileQuery = profileQuery.Where(sp => sp.ProgramId == a.TargetProgramId);
+
+                    var matchedUserIds = await profileQuery.Select(sp => sp.UserId).ToListAsync();
+                    scholars = scholars.Where(u => matchedUserIds.Contains(u.Id)).ToList();
+                }
+
+                foreach (var scholar in scholars)
+                {
+                    try
+                    {
+                        await emailService.SendAnnouncementEmailAsync(
+                            scholar.Email!,
+                            scholar.FullName,
+                            a.Title,
+                            a.Content);
+                    }
+                    catch { /* don't let one failed email abort the rest */ }
+                }
+            }
+            catch { /* fire-and-forget — never throw */ }
         }
 
         [HttpPut("{id}")]
@@ -80,6 +166,8 @@ namespace PSUEISKOLARSystem.Server.Controllers
             announcement.Content = dto.Content;
             announcement.TargetRole = string.IsNullOrEmpty(dto.TargetRole) ? null : dto.TargetRole;
             announcement.TargetCampusId = dto.TargetCampusId;
+            announcement.TargetScholarshipTypeId = dto.TargetScholarshipTypeId;
+            announcement.TargetProgramId = dto.TargetProgramId;
             announcement.ExpiresAt = dto.ExpiresAt;
 
             await db.SaveChangesAsync();
@@ -104,5 +192,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
         string Content,
         string? TargetRole,
         int? TargetCampusId,
+        int? TargetScholarshipTypeId,
+        int? TargetProgramId,
         DateTime? ExpiresAt);
 }

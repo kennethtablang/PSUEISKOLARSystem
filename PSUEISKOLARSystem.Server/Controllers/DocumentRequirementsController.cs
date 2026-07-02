@@ -16,12 +16,21 @@ namespace PSUEISKOLARSystem.Server.Controllers
         public async Task<IActionResult> GetAll([FromQuery] int? scholarshipTypeId)
         {
             var query = db.DocumentRequirements
-                .Include(dr => dr.ScholarshipType)
                 .Where(dr => dr.IsActive)
                 .AsQueryable();
 
             if (scholarshipTypeId.HasValue)
-                query = query.Where(dr => dr.ScholarshipTypeId == null || dr.ScholarshipTypeId == scholarshipTypeId);
+            {
+                // Use the junction table: only show requirements linked to this scholarship type.
+                // If the type has no requirements configured yet, fall back to showing all.
+                var linkedIds = await db.ScholarshipTypeRequirements
+                    .Where(str => str.ScholarshipTypeId == scholarshipTypeId)
+                    .Select(str => str.RequirementId)
+                    .ToListAsync();
+
+                if (linkedIds.Count > 0)
+                    query = query.Where(dr => linkedIds.Contains(dr.Id));
+            }
 
             var result = await query
                 .OrderBy(dr => dr.IsRequired ? 0 : 1)
@@ -32,8 +41,6 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     dr.Name,
                     dr.Description,
                     dr.IsRequired,
-                    dr.ScholarshipTypeId,
-                    ScholarshipTypeName = dr.ScholarshipType != null ? dr.ScholarshipType.Name : null,
                 })
                 .ToListAsync();
 
@@ -46,10 +53,9 @@ namespace PSUEISKOLARSystem.Server.Controllers
         {
             var req = new DocumentRequirement
             {
-                Name = dto.Name,
-                Description = dto.Description,
+                Name = dto.Name.Trim(),
+                Description = dto.Description?.Trim(),
                 IsRequired = dto.IsRequired,
-                ScholarshipTypeId = dto.ScholarshipTypeId,
             };
             db.DocumentRequirements.Add(req);
             await db.SaveChangesAsync();
@@ -62,10 +68,9 @@ namespace PSUEISKOLARSystem.Server.Controllers
         {
             var req = await db.DocumentRequirements.FindAsync(id);
             if (req is null) return NotFound();
-            req.Name = dto.Name;
-            req.Description = dto.Description;
+            req.Name = dto.Name.Trim();
+            req.Description = dto.Description?.Trim();
             req.IsRequired = dto.IsRequired;
-            req.ScholarshipTypeId = dto.ScholarshipTypeId;
             await db.SaveChangesAsync();
             return NoContent();
         }
@@ -85,6 +90,5 @@ namespace PSUEISKOLARSystem.Server.Controllers
     public record DocumentRequirementRequest(
         string Name,
         string? Description,
-        bool IsRequired,
-        int? ScholarshipTypeId);
+        bool IsRequired);
 }

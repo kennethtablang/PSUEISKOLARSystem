@@ -20,7 +20,8 @@ namespace PSUEISKOLARSystem.Server.Controllers
             [FromQuery] int? campusId,
             [FromQuery] int? programId,
             [FromQuery] int? scholarshipTypeId,
-            [FromQuery] string? search)
+            [FromQuery] string? search,
+            [FromQuery] bool? meetsRequirement)
         {
             var query = db.ScholarProfiles
                 .Include(sp => sp.User).ThenInclude(u => u.Campus)
@@ -44,7 +45,17 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     (sp.User.Email != null && sp.User.Email.Contains(search)));
 
             var profiles = await query.OrderBy(sp => sp.User.LastName).ThenBy(sp => sp.User.FirstName).ToListAsync();
-            return Ok(profiles.Select(Map));
+
+            // Apply in-memory compliance filter after loading (latest grade is already included)
+            IEnumerable<ScholarProfile> result = profiles;
+            if (meetsRequirement.HasValue)
+                result = result.Where(sp =>
+                {
+                    var latest = sp.Grades.OrderByDescending(g => g.AcademicYear).ThenByDescending(g => g.Semester).FirstOrDefault();
+                    return latest?.MeetsRequirement == meetsRequirement.Value;
+                });
+
+            return Ok(result.Select(Map));
         }
 
         [HttpGet("{userId}")]

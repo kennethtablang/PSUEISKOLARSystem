@@ -20,5 +20,6 @@ namespace PSUEISKOLARSystem.Server.Models
         public bool IsActive { get; set; } = true;
 
         public ICollection<DocumentSubmission> Submissions { get; set; } = [];
+        public ICollection<ScholarshipTypeRequirement> ScholarshipTypes { get; set; } = [];
     }
 }

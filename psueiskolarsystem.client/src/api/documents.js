@@ -78,6 +78,14 @@ export async function reviewDocument(id, status, feedbackNote, token) {
   if (!res.ok) throw new Error('Review failed.');
 }
 
+export async function getSubmissionHistory(id, token) {
+  const res = await fetch(`${API}/${id}/history`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error('Failed to load history.');
+  return res.json();
+}
+
 export async function deleteSubmission(id, token) {
   const res = await fetch(`${API}/${id}`, {
     method: 'DELETE',

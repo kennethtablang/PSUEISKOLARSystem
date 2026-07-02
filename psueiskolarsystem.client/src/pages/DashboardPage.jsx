@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { getAnnouncements } from '../api/announcements';
-import { getScholars } from '../api/scholars';
+import { getScholars, getScholarProfile } from '../api/scholars';
 import { getUsers } from '../api/users';
 import { getSubmissions, getRequirements } from '../api/documents';
 import { getActiveSemester } from '../api/settings';
-import { getScholarProfile } from '../api/scholars';
-import { GraduationCap, ClipboardList, AlertTriangle, BarChart2, Inbox, Clock, FileCheck } from 'lucide-react';
+import { GraduationCap, ClipboardList, AlertTriangle, BarChart2, Inbox, Clock, FileCheck, ArrowRight } from 'lucide-react';
 import { useTitle } from '../hooks/useTitle';
 
 export default function DashboardPage() {
@@ -15,12 +15,16 @@ export default function DashboardPage() {
   const { user, token } = useAuth();
   const [announcements, setAnnouncements] = useState([]);
   const [stats, setStats] = useState(null);
-  const [compliance, setCompliance] = useState(null); // scholar-only
+  const [compliance, setCompliance] = useState(null);
+  const [scholarGwa, setScholarGwa] = useState(null); // { latestGwa, minimumGwa, scholarshipTypeName, meetsRequirement }
 
   useEffect(() => {
     getAnnouncements(token).then(setAnnouncements).catch(() => {});
     loadStats();
-    if (user?.role === 'Scholar') loadScholarCompliance();
+    if (user?.role === 'Scholar') {
+      loadScholarCompliance();
+      loadScholarGwa();
+    }
   }, []);
 
   async function loadStats() {
@@ -52,6 +56,20 @@ export default function DashboardPage() {
     } catch { /* stats are optional */ }
   }
 
+  async function loadScholarGwa() {
+    try {
+      const profile = await getScholarProfile(user.id, token).catch(() => null);
+      if (profile?.latestGwa != null) {
+        setScholarGwa({
+          latestGwa: profile.latestGwa,
+          minimumGwa: profile.minimumGwa,
+          scholarshipTypeName: profile.scholarshipTypeName,
+          meetsRequirement: profile.meetsRequirement,
+        });
+      }
+    } catch { /* optional */ }
+  }
+
   async function loadScholarCompliance() {
     try {
       const [profile, period] = await Promise.all([
@@ -78,6 +96,7 @@ export default function DashboardPage() {
         pendingCount: pending.length,
         incompleteItems: incomplete.map(r => r.name),
         scholarshipTypeName: profile?.scholarshipTypeName ?? null,
+        academicYear: CURRENT_YEAR,
       });
     } catch { /* compliance is optional */ }
   }
@@ -91,7 +110,7 @@ export default function DashboardPage() {
             Welcome back, {user?.fullName?.split(' ')[0]}
           </h1>
           <p className="page-subtitle">
-            PSU Lingayen Campus · {user?.role === 'ScholarshipCoordinator' ? 'Coordinator' : user?.role}
+            {user?.campusName ?? 'PSU'} · {user?.role === 'ScholarshipCoordinator' ? 'Coordinator' : user?.role}
           </p>
           <span className="page-title-bar" />
         </div>
@@ -118,6 +137,43 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {/* Scholar GWA status card */}
+        {user?.role === 'Scholar' && scholarGwa && (
+          <div className="mb-6">
+            <div className="rounded-3xl p-5 flex items-center gap-4"
+              style={{
+                background: scholarGwa.meetsRequirement === false ? '#fff2ec' : '#d4f5e2',
+                boxShadow: '6px 6px 16px rgba(163,177,198,0.5), -4px -4px 12px rgba(255,255,255,0.85)',
+              }}>
+              <div className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0"
+                style={{
+                  background: 'rgba(255,255,255,0.55)',
+                  boxShadow: '3px 3px 8px rgba(163,177,198,0.35), -2px -2px 5px rgba(255,255,255,0.9)',
+                }}>
+                {scholarGwa.meetsRequirement === false
+                  ? <AlertTriangle size={22} strokeWidth={2} style={{ color: '#c05000' }} />
+                  : <FileCheck size={22} strokeWidth={2} style={{ color: '#108050' }} />
+                }
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold uppercase tracking-wider mb-0.5"
+                  style={{ color: scholarGwa.meetsRequirement === false ? 'rgba(192,80,0,0.6)' : 'rgba(16,128,80,0.6)' }}>
+                  GWA Status · {scholarGwa.scholarshipTypeName ?? 'Scholarship'}
+                </p>
+                <p className="text-3xl font-black" style={{ color: '#0d1a33' }}>
+                  {scholarGwa.latestGwa.toFixed(2)}
+                </p>
+                <p className="text-xs mt-0.5"
+                  style={{ color: scholarGwa.meetsRequirement === false ? '#7a3010' : '#0a5a3a' }}>
+                  {scholarGwa.meetsRequirement === false
+                    ? `Below threshold — minimum required: ${scholarGwa.minimumGwa?.toFixed(2)}`
+                    : 'Meeting scholarship GWA requirement'}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Scholar compliance section */}
         {user?.role === 'Scholar' && compliance && (
           <div className="mb-8 space-y-4">
@@ -128,7 +184,7 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between mb-2">
                 <div>
                   <p className="text-sm font-bold" style={{ color: '#0d1a33' }}>
-                    {compliance.scholarshipTypeName ?? 'Required Documents'} · 2025–2026
+                    {compliance.scholarshipTypeName ?? 'Required Documents'} · {compliance.academicYear ?? ''}
                   </p>
                   <p className="text-xs mt-0.5" style={{ color: '#4a5a7a' }}>
                     {compliance.verifiedCount} of {compliance.totalRequired} required documents verified
@@ -187,6 +243,23 @@ export default function DashboardPage() {
                 </ul>
               </div>
             )}
+
+            {/* CTA to My Documents */}
+            {(compliance.pendingCount > 0 || compliance.incompleteItems.length > 0 || compliance.verifiedCount < compliance.totalRequired) && (
+              <Link to="/my-documents"
+                className="flex items-center justify-between p-4 rounded-2xl"
+                style={{ background: '#002570', color: '#ffffff', textDecoration: 'none' }}>
+                <div>
+                  <p className="text-sm font-bold">Go to My Documents</p>
+                  <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.65)' }}>
+                    {compliance.incompleteItems.length > 0
+                      ? `${compliance.incompleteItems.length} document${compliance.incompleteItems.length !== 1 ? 's' : ''} need resubmission`
+                      : `${compliance.totalRequired - compliance.verifiedCount} document${compliance.totalRequired - compliance.verifiedCount !== 1 ? 's' : ''} still to verify`}
+                  </p>
+                </div>
+                <ArrowRight size={20} strokeWidth={2} />
+              </Link>
+            )}
           </div>
         )}
 
@@ -237,17 +310,27 @@ function Pill({ label, bg, color, Icon }) {
 
 function AnnouncementItem({ a }) {
   const date = new Date(a.createdAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
+  const daysLeft = a.expiresAt
+    ? Math.ceil((new Date(a.expiresAt) - Date.now()) / (1000 * 60 * 60 * 24))
+    : null;
+  const isUrgent = daysLeft !== null && daysLeft <= 7;
   return (
-    <div className="clay-card p-5">
+    <div className="clay-card p-5" style={isUrgent ? { border: '1.5px solid #f0a860' } : undefined}>
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1">
           <p className="font-bold text-sm" style={{ color: '#0d1a33' }}>{a.title}</p>
           <p className="text-sm mt-1 leading-relaxed whitespace-pre-line" style={{ color: '#2a3a5a' }}>{a.content}</p>
         </div>
         {a.expiresAt && (
-          <span className="clay-badge shrink-0 text-xs" style={{ background: '#fff3cd', color: '#7d5a00', border: '1.5px solid #f0d060' }}>
-            Expires {new Date(a.expiresAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}
-          </span>
+          isUrgent ? (
+            <span className="clay-badge shrink-0 text-xs" style={{ background: '#ffe4d1', color: '#8a3d00', border: '1.5px solid #f0a860' }}>
+              {daysLeft <= 0 ? 'Deadline today' : daysLeft === 1 ? 'Deadline tomorrow' : `Deadline in ${daysLeft} days`}
+            </span>
+          ) : (
+            <span className="clay-badge shrink-0 text-xs" style={{ background: '#fff3cd', color: '#7d5a00', border: '1.5px solid #f0d060' }}>
+              Expires {new Date(a.expiresAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}
+            </span>
+          )
         )}
       </div>
       <div className="flex items-center gap-2 mt-3 flex-wrap">

@@ -18,6 +18,12 @@ namespace PSUEISKOLARSystem.Server.Models
         public int? TargetCampusId { get; set; }
         public Campus? TargetCampus { get; set; }
 
+        public int? TargetScholarshipTypeId { get; set; }
+        public ScholarshipType? TargetScholarshipType { get; set; }
+
+        public int? TargetProgramId { get; set; }
+        public AcademicProgram? TargetProgram { get; set; }
+
         public DateTime? ExpiresAt { get; set; }
 
         public bool IsActive { get; set; } = true;

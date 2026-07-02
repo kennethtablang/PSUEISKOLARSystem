@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { getRequirements, createRequirement, updateRequirement, deleteRequirement } from '../api/documents';
-import { getScholarshipTypes } from '../api/lookups';
 import { useTitle } from '../hooks/useTitle';
 import { ClayModal, ErrorBox, Field, ModalButtons } from './UsersPage';
 
@@ -10,7 +9,6 @@ export default function RequirementsPage() {
   useTitle('Document Requirements');
   const { token } = useAuth();
   const [requirements, setRequirements] = useState([]);
-  const [scholarshipTypes, setScholarshipTypes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -18,12 +16,7 @@ export default function RequirementsPage() {
   async function load() {
     setLoading(true);
     try {
-      const [reqs, types] = await Promise.all([
-        getRequirements(token),
-        getScholarshipTypes(token),
-      ]);
-      setRequirements(reqs);
-      setScholarshipTypes(types);
+      setRequirements(await getRequirements(token));
     } finally {
       setLoading(false);
     }
@@ -32,7 +25,7 @@ export default function RequirementsPage() {
   useEffect(() => { load(); }, []);
 
   async function handleDelete(id) {
-    if (!confirm('Remove this requirement? Scholars will no longer see it.')) return;
+    if (!confirm('Remove this requirement? Scholars with this requirement assigned will no longer see it.')) return;
     try {
       await deleteRequirement(id, token);
       setRequirements(prev => prev.filter(r => r.id !== id));
@@ -51,7 +44,7 @@ export default function RequirementsPage() {
           <div>
             <h1 className="page-title">Document Requirements</h1>
             <p className="page-subtitle">
-              {requirements.length} active requirement{requirements.length !== 1 ? 's' : ''}
+              {requirements.length} active requirement{requirements.length !== 1 ? 's' : ''} — assign them to scholarship types on the Scholarship Types page.
             </p>
             <span className="page-title-bar" />
           </div>
@@ -69,7 +62,7 @@ export default function RequirementsPage() {
             <table className="w-full text-sm">
               <thead className="clay-table-head">
                 <tr>
-                  {['Requirement', 'Applies To', 'Status', ''].map(h => (
+                  {['Requirement', 'Status', ''].map(h => (
                     <th key={h} className="text-left px-5 py-3 text-xs font-bold uppercase tracking-wider" style={{ color: '#7a8aaa' }}>{h}</th>
                   ))}
                 </tr>
@@ -82,11 +75,6 @@ export default function RequirementsPage() {
                       {r.description && (
                         <p className="text-xs mt-0.5" style={{ color: '#7a8aaa' }}>{r.description}</p>
                       )}
-                    </td>
-                    <td className="px-5 py-3.5 text-sm" style={{ color: '#4a5a7a' }}>
-                      {r.scholarshipTypeName
-                        ? r.scholarshipTypeName
-                        : <span style={{ color: '#b0bdd0', fontStyle: 'italic' }}>All scholars</span>}
                     </td>
                     <td className="px-5 py-3.5">
                       {r.isRequired ? (
@@ -128,7 +116,6 @@ export default function RequirementsPage() {
       {showModal && (
         <RequirementModal
           initial={editing}
-          scholarshipTypes={scholarshipTypes}
           token={token}
           onClose={() => setShowModal(false)}
           onSaved={() => { setShowModal(false); load(); }}
@@ -138,12 +125,11 @@ export default function RequirementsPage() {
   );
 }
 
-function RequirementModal({ initial, scholarshipTypes, token, onClose, onSaved }) {
+function RequirementModal({ initial, token, onClose, onSaved }) {
   const [form, setForm] = useState({
-    name:             initial?.name ?? '',
-    description:      initial?.description ?? '',
-    isRequired:       initial?.isRequired ?? true,
-    scholarshipTypeId: initial?.scholarshipTypeId?.toString() ?? '',
+    name:        initial?.name ?? '',
+    description: initial?.description ?? '',
+    isRequired:  initial?.isRequired ?? true,
   });
   const [error, setError]         = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -156,10 +142,9 @@ function RequirementModal({ initial, scholarshipTypes, token, onClose, onSaved }
     setSubmitting(true);
     try {
       const payload = {
-        name:             form.name.trim(),
-        description:      form.description.trim() || null,
-        isRequired:       form.isRequired,
-        scholarshipTypeId: form.scholarshipTypeId ? parseInt(form.scholarshipTypeId) : null,
+        name:        form.name.trim(),
+        description: form.description.trim() || null,
+        isRequired:  form.isRequired,
       };
       if (initial) {
         await updateRequirement(initial.id, payload, token);
@@ -196,19 +181,6 @@ function RequirementModal({ initial, scholarshipTypes, token, onClose, onSaved }
             className="clay-input"
             placeholder="Brief note on what the scholar should submit…"
           />
-        </Field>
-
-        <Field label="Applies To">
-          <select
-            value={form.scholarshipTypeId}
-            onChange={e => set('scholarshipTypeId', e.target.value)}
-            className="clay-input"
-          >
-            <option value="">All scholars (no restriction)</option>
-            {scholarshipTypes.map(st => (
-              <option key={st.id} value={st.id}>{st.name}</option>
-            ))}
-          </select>
         </Field>
 
         <label className="flex items-center gap-3 cursor-pointer select-none">
