@@ -7,10 +7,13 @@ export async function getScholars(token, filters = {}) {
   if (filters.scholarshipTypeId) params.set('scholarshipTypeId', filters.scholarshipTypeId);
   if (filters.search) params.set('search', filters.search);
   if (filters.meetsRequirement !== undefined && filters.meetsRequirement !== '') params.set('meetsRequirement', filters.meetsRequirement);
+  if (filters.page) params.set('page', filters.page);
+  if (filters.pageSize) params.set('pageSize', filters.pageSize);
   const res = await fetch(`${API}?${params}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error('Failed to load scholars.');
+  // Returns { total, page, pageSize, totalPages, items }
   return res.json();
 }
 

@@ -21,8 +21,13 @@ namespace PSUEISKOLARSystem.Server.Controllers
             [FromQuery] int? programId,
             [FromQuery] int? scholarshipTypeId,
             [FromQuery] string? search,
-            [FromQuery] bool? meetsRequirement)
+            [FromQuery] bool? meetsRequirement,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 20)
         {
+            page = Math.Max(page, 1);
+            pageSize = Math.Clamp(pageSize, 1, 100);
+
             var query = db.ScholarProfiles
                 .Include(sp => sp.User).ThenInclude(u => u.Campus)
                 .Include(sp => sp.Program)
@@ -43,19 +48,29 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     sp.User.LastName.Contains(search) ||
                     sp.StudentId.Contains(search) ||
                     (sp.User.Email != null && sp.User.Email.Contains(search)));
-
-            var profiles = await query.OrderBy(sp => sp.User.LastName).ThenBy(sp => sp.User.FirstName).ToListAsync();
-
-            // Apply in-memory compliance filter after loading (latest grade is already included)
-            IEnumerable<ScholarProfile> result = profiles;
             if (meetsRequirement.HasValue)
-                result = result.Where(sp =>
-                {
-                    var latest = sp.Grades.OrderByDescending(g => g.AcademicYear).ThenByDescending(g => g.Semester).FirstOrDefault();
-                    return latest?.MeetsRequirement == meetsRequirement.Value;
-                });
+                query = query.Where(sp => sp.Grades
+                    .OrderByDescending(g => g.AcademicYear)
+                    .ThenByDescending(g => g.Semester)
+                    .Select(g => (bool?)g.MeetsRequirement)
+                    .FirstOrDefault() == meetsRequirement.Value);
 
-            return Ok(result.Select(Map));
+            var total = await query.CountAsync();
+
+            var profiles = await query
+                .OrderBy(sp => sp.User.LastName).ThenBy(sp => sp.User.FirstName)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            return Ok(new
+            {
+                total,
+                page,
+                pageSize,
+                totalPages = (int)Math.Ceiling(total / (double)pageSize),
+                items = profiles.Select(Map),
+            });
         }
 
         [HttpGet("{userId}")]

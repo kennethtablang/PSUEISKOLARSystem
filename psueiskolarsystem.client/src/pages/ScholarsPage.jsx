@@ -23,6 +23,9 @@ export default function ScholarsPage() {
   const [scholarshipTypes, setScholarshipTypes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [paging, setPaging] = useState({ page: 1, totalPages: 1, total: 0 });
+
+  const PAGE_SIZE = 20;
 
   const [filters, setFilters] = useState({
     search: '',
@@ -32,7 +35,7 @@ export default function ScholarsPage() {
     meetsRequirement: '',
   });
 
-  async function loadScholars(f = filters) {
+  async function loadScholars(f = filters, page = 1) {
     setLoading(true);
     setError('');
     try {
@@ -42,8 +45,11 @@ export default function ScholarsPage() {
         programId: f.programId || undefined,
         scholarshipTypeId: f.scholarshipTypeId || undefined,
         meetsRequirement: f.meetsRequirement !== '' ? f.meetsRequirement : undefined,
+        page,
+        pageSize: PAGE_SIZE,
       });
-      setScholars(data);
+      setScholars(data.items);
+      setPaging({ page: data.page, totalPages: data.totalPages, total: data.total });
     } catch (e) {
       setError(e.message);
     } finally {
@@ -60,11 +66,16 @@ export default function ScholarsPage() {
   function setFilter(key, value) {
     const next = { ...filters, [key]: value };
     setFilters(next);
-    loadScholars(next);
+    loadScholars(next, 1);
+  }
+
+  function goToPage(page) {
+    if (page < 1 || page > paging.totalPages || page === paging.page) return;
+    loadScholars(filters, page);
   }
 
   const subtitle = (() => {
-    const count = `${scholars.length} scholar${scholars.length !== 1 ? 's' : ''}`;
+    const count = `${paging.total} scholar${paging.total !== 1 ? 's' : ''}`;
     const campus = campuses.find(c => String(c.id) === String(filters.campusId));
     return campus ? `${count} · ${campus.name}` : `${count} · All Campuses`;
   })();
@@ -159,6 +170,32 @@ export default function ScholarsPage() {
             </table>
           )}
         </div>
+
+        {!loading && paging.totalPages > 1 && (
+          <div className="flex items-center justify-between mt-4">
+            <p className="text-xs" style={{ color: '#7a8aaa' }}>
+              Page {paging.page} of {paging.totalPages} · {paging.total} scholars
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => goToPage(paging.page - 1)}
+                disabled={paging.page <= 1}
+                className="clay-btn clay-btn-ghost text-xs px-4"
+                style={{ minHeight: '34px', borderRadius: '10px', fontWeight: 700, opacity: paging.page <= 1 ? 0.4 : 1 }}
+              >
+                Previous
+              </button>
+              <button
+                onClick={() => goToPage(paging.page + 1)}
+                disabled={paging.page >= paging.totalPages}
+                className="clay-btn clay-btn-ghost text-xs px-4"
+                style={{ minHeight: '34px', borderRadius: '10px', fontWeight: 700, opacity: paging.page >= paging.totalPages ? 0.4 : 1 }}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </Layout>
   );

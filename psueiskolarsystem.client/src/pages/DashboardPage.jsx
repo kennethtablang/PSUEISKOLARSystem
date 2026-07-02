@@ -3,8 +3,9 @@ import { Link } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { getAnnouncements } from '../api/announcements';
-import { getScholars, getScholarProfile } from '../api/scholars';
+import { getScholarProfile } from '../api/scholars';
 import { getUsers } from '../api/users';
+import { getAnalyticsOverview } from '../api/analytics';
 import { getSubmissions, getRequirements } from '../api/documents';
 import { getActiveSemester } from '../api/settings';
 import { GraduationCap, ClipboardList, AlertTriangle, BarChart2, Inbox, Clock, FileCheck, ArrowRight } from 'lucide-react';
@@ -30,27 +31,23 @@ export default function DashboardPage() {
   async function loadStats() {
     try {
       if (user?.role === 'Administrator') {
-        const [users, scholars, subs] = await Promise.all([
+        const [users, overview] = await Promise.all([
           getUsers(token),
-          getScholars(token),
-          getSubmissions(token, { status: 'Pending' }),
+          getAnalyticsOverview(token),
         ]);
         setStats({
-          totalScholars: scholars.length,
+          totalScholars: overview.totalScholars,
           coordinators: users.filter(u => u.role === 'ScholarshipCoordinator' && u.isActive).length,
-          flagged: scholars.filter(s => s.meetsRequirement === false).length,
-          pendingReview: subs.length,
+          flagged: overview.nonCompliant,
+          pendingReview: overview.submissions.pending,
         });
       } else if (user?.role === 'ScholarshipCoordinator') {
-        const [scholars, subs] = await Promise.all([
-          getScholars(token),
-          getSubmissions(token, { status: 'Pending' }),
-        ]);
+        const overview = await getAnalyticsOverview(token);
         setStats({
-          totalScholars: scholars.length,
-          noGwa: scholars.filter(s => s.latestGwa == null).length,
-          flagged: scholars.filter(s => s.meetsRequirement === false).length,
-          pendingReview: subs.length,
+          totalScholars: overview.totalScholars,
+          noGwa: overview.noGwa,
+          flagged: overview.nonCompliant,
+          pendingReview: overview.submissions.pending,
         });
       }
     } catch { /* stats are optional */ }
