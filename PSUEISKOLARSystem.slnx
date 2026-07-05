@@ -3,5 +3,6 @@
     <Build />
     <Deploy />
   </Project>
+  <Project Path="PSUEISKOLARSystem.Server.Tests/PSUEISKOLARSystem.Server.Tests.csproj" />
   <Project Path="PSUEISKOLARSystem.Server/PSUEISKOLARSystem.Server.csproj" />
 </Solution>
