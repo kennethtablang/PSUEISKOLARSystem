@@ -3,7 +3,8 @@ import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { getActiveSemester, setActiveSemester } from '../api/settings';
 import { useTitle } from '../hooks/useTitle';
-import { CalendarDays, CheckCircle, Archive, AlertTriangle, X, Database } from 'lucide-react';
+import { useTheme } from '../context/ThemeContext';
+import { CalendarDays, CheckCircle, Archive, AlertTriangle, X, Database, Sun, Moon, Monitor } from 'lucide-react';
 
 function yearOptions() {
   const y = new Date().getFullYear();
@@ -15,6 +16,7 @@ function yearOptions() {
 export default function SettingsPage() {
   useTitle('System Settings');
   const { token } = useAuth();
+  const { theme, setTheme } = useTheme();
 
   const [current, setCurrent] = useState(null);
   const [form, setForm]       = useState({ academicYear: '', semester: 1 });
@@ -308,6 +310,30 @@ export default function SettingsPage() {
                   <span>{archiveResult.error}</span>
                 </div>
               )}
+            </div>
+
+            {/* Appearance / theme */}
+            <div className="clay-card p-6">
+              <div className="flex items-center gap-3 mb-5">
+                <div style={{ width: 44, height: 44, borderRadius: 13, flexShrink: 0, background: 'rgba(0,48,135,0.08)', border: '1px solid rgba(0,48,135,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Monitor size={20} color="#003087" strokeWidth={2} />
+                </div>
+                <div>
+                  <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-strong)' }}>Appearance</p>
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Choose light, dark, or match your device.</p>
+                </div>
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                {[['light', Sun, 'Light'], ['dark', Moon, 'Dark'], ['system', Monitor, 'System']].map(([val, Icon, label]) => (
+                  <button key={val} onClick={() => setTheme(val)}
+                    className="clay-btn px-4 py-2.5 text-sm flex items-center gap-2"
+                    style={theme === val
+                      ? { background: 'rgba(0,37,112,0.12)', color: '#003087', border: '1.5px solid rgba(0,37,112,0.3)' }
+                      : { color: 'var(--text)' }}>
+                    <Icon size={15} strokeWidth={2.3} /> {label}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Sample data seeder */}

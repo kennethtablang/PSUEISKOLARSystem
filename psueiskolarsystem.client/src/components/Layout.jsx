@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
+import { useTheme } from '../context/ThemeContext';
 import NotificationBell from './NotificationBell';
 import {
   LayoutDashboard, GraduationCap, FileCheck, Users, Bell,
   FolderOpen, User, LogOut, BarChart2, Search,
   ChevronLeft, Settings, Menu, X, ClipboardList, Activity, Award, CalendarClock, MessageSquare,
+  Sun, Moon, Monitor,
 } from 'lucide-react';
 
 /* ── Responsive hook ─────────────────────────────── */
@@ -100,7 +102,14 @@ function IconBtn({ onClick, title, children, danger }) {
 export default function Layout({ children }) {
   const { user, signOut } = useAuth();
   const { messageUnread } = useNotifications();
+  const { theme, setTheme } = useTheme();
   const navigate   = useNavigate();
+
+  function cycleTheme() {
+    const order = ['light', 'dark', 'system'];
+    setTheme(order[(order.indexOf(theme) + 1) % order.length]);
+  }
+  const ThemeIcon = theme === 'dark' ? Moon : theme === 'light' ? Sun : Monitor;
   const location   = useLocation();
   const isDesktop  = useMediaQuery('(min-width: 1024px)');
 
@@ -481,7 +490,7 @@ export default function Layout({ children }) {
         {/* ── Top navbar (all screens) ── */}
         <header style={{
           position: 'sticky', top: 0, zIndex: 30,
-          background: 'rgba(232,237,245,0.82)',
+          background: 'var(--bg)',
           backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)',
           borderBottom: '1px solid rgba(0,48,135,0.08)',
           display: 'flex', alignItems: 'center', gap: 12,
@@ -533,6 +542,18 @@ export default function Layout({ children }) {
 
           {/* Right cluster */}
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button
+              onClick={cycleTheme}
+              title={`Theme: ${theme} (click to change)`}
+              style={{
+                width: 40, height: 40, borderRadius: 12, border: 'none', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: 'var(--bg)',
+                boxShadow: '4px 4px 10px rgba(163,177,198,0.55), -3px -3px 8px rgba(255,255,255,0.9)',
+              }}
+            >
+              <ThemeIcon size={17} strokeWidth={2.2} color="#003087" />
+            </button>
             <NotificationBell variant="inline" />
             <div
               onClick={() => navigate('/profile')}

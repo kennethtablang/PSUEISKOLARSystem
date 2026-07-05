@@ -316,7 +316,7 @@ function KpiCard({ Icon, label, value, color, iconColor }) {
         <Icon size={18} strokeWidth={2} style={{ color: iconColor }} />
       </div>
       <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'rgba(0,0,0,0.42)' }}>{label}</p>
-      <p className="text-3xl font-black" style={{ color: 'var(--text-strong)' }}>{value}</p>
+      <p className="text-3xl font-black" style={{ color: '#0d1a33' }}>{value}</p>
     </div>
   );
 }

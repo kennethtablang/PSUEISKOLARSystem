@@ -3,11 +3,70 @@
 /* ─── PSU Brand: Blue #003087 · Gold #f5b800 ─── */
 /* ─── Design: Neomorphism (cards/inputs) + Claymorphism (buttons) ─── */
 
+/* ═══ THEME TOKENS ═══ */
+:root {
+  --bg: #e8edf5;
+  --surface: #e8edf5;
+  --surface-modal: #f0f4fa;
+  --surface-inset: #dde3ef;
+  --input-bg: #e8edf5;
+  --text-strong: #0d1a33;
+  --text: #4a5a7a;
+  --text-muted: #7a8aaa;
+  --text-faint: #9aaabb;
+}
+
+:root[data-theme="dark"] {
+  --bg: #0f1826;
+  --surface: #18222f;
+  --surface-modal: #1c2735;
+  --surface-inset: #131b27;
+  --input-bg: #131b27;
+  --text-strong: #eaf0f8;
+  --text: #b3c0d4;
+  --text-muted: #8896aa;
+  --text-faint: #6b7788;
+}
+
 body {
-  background-color: #e8edf5;
+  background-color: var(--bg);
+  color: var(--text);
   margin: 0;
   font-family: 'Inter', system-ui, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.2s ease;
+}
+
+/* ═══ DARK-MODE SURFACE OVERRIDES ═══ */
+:root[data-theme="dark"] .clay-card {
+  background: var(--surface);
+  box-shadow: 8px 8px 20px rgba(0,0,0,0.45), -5px -5px 14px rgba(255,255,255,0.03), inset 0 1px 0 rgba(255,255,255,0.04);
+}
+:root[data-theme="dark"] .clay-card-modal {
+  background: var(--surface-modal);
+  box-shadow: 0 30px 72px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.05);
+}
+:root[data-theme="dark"] .clay-card-inner {
+  background: var(--surface-inset);
+  box-shadow: inset 3px 3px 8px rgba(0,0,0,0.4), inset -2px -2px 6px rgba(255,255,255,0.02);
+}
+:root[data-theme="dark"] .clay-btn-ghost {
+  background: var(--surface);
+  color: var(--text-strong);
+  box-shadow: 4px 4px 10px rgba(0,0,0,0.4), -3px -3px 8px rgba(255,255,255,0.03), inset 0 1px 0 rgba(255,255,255,0.04);
+}
+:root[data-theme="dark"] .clay-input {
+  background: var(--input-bg);
+  color: var(--text-strong);
+  box-shadow: inset 4px 4px 10px rgba(0,0,0,0.42), inset -3px -3px 8px rgba(255,255,255,0.02);
+}
+:root[data-theme="dark"] .clay-input::placeholder { color: rgba(179,192,212,0.4); }
+:root[data-theme="dark"] .clay-table-head { background: rgba(255,255,255,0.05); border-bottom-color: rgba(255,255,255,0.09); }
+:root[data-theme="dark"] .clay-table-row:hover { background: rgba(255,255,255,0.04); }
+:root[data-theme="dark"] .clay-table-row + .clay-table-row { border-top-color: rgba(255,255,255,0.06); }
+:root[data-theme="dark"] .clay-progress-track {
+  background: rgba(0,0,0,0.35);
+  box-shadow: inset 3px 3px 7px rgba(0,0,0,0.5), inset -2px -2px 5px rgba(255,255,255,0.02);
 }
 
 @keyframes fadeUp {
@@ -315,14 +374,14 @@ select.clay-input {
 .page-title {
   font-size: 1.6rem;
   font-weight: 900;
-  color: #0d1a33;
+  color: var(--text-strong);
   letter-spacing: -0.025em;
   line-height: 1.2;
 }
 
 .page-subtitle {
   font-size: 0.8rem;
-  color: #7a8aaa;
+  color: var(--text-muted);
   margin-top: 4px;
   font-weight: 500;
 }

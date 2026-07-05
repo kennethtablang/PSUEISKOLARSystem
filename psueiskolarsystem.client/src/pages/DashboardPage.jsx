@@ -237,7 +237,7 @@ export default function DashboardPage() {
                   style={{ color: scholarGwa.meetsRequirement === false ? 'rgba(192,80,0,0.6)' : 'rgba(16,128,80,0.6)' }}>
                   GWA Status · {scholarGwa.scholarshipTypeName ?? 'Scholarship'}
                 </p>
-                <p className="text-3xl font-black" style={{ color: 'var(--text-strong)' }}>
+                <p className="text-3xl font-black" style={{ color: '#0d1a33' }}>
                   {scholarGwa.latestGwa.toFixed(2)}
                 </p>
                 <p className="text-xs mt-0.5"
@@ -405,7 +405,7 @@ function StatCard({ label, value, Icon, color, iconColor }) {
         <Icon size={18} strokeWidth={2} style={{ color: iconColor }} />
       </div>
       <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'rgba(0,0,0,0.42)' }}>{label}</p>
-      <p className="text-3xl font-black" style={{ color: 'var(--text-strong)' }}>{value}</p>
+      <p className="text-3xl font-black" style={{ color: '#0d1a33' }}>{value}</p>
     </div>
   );
 }

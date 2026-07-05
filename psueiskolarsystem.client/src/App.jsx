@@ -3,6 +3,7 @@ import { AuthProvider } from './context/AuthContext';
 import { useAuth } from './context/AuthContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { TutorialProvider } from './context/TutorialContext';
+import { ThemeProvider } from './context/ThemeContext';
 import ConsentGate from './components/ConsentGate';
 import { Clock } from 'lucide-react';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -34,6 +35,7 @@ const adminCoord = ['Administrator', 'ScholarshipCoordinator'];
 
 export default function App() {
   return (
+    <ThemeProvider>
     <BrowserRouter>
       <AuthProvider>
       <NotificationProvider>
@@ -72,6 +74,7 @@ export default function App() {
       </NotificationProvider>
       </AuthProvider>
     </BrowserRouter>
+    </ThemeProvider>
   );
 }
 
