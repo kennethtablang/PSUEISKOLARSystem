@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
+import { useNotifications } from '../context/NotificationContext';
 import { getAnalyticsOverview } from '../api/analytics';
 import { getCampuses } from '../api/campuses';
 import {
@@ -17,16 +18,29 @@ const PIE_COLORS  = ['#003087', '#f5b800', '#10b981', '#8b5cf6', '#f97316', '#06
 export default function AnalyticsPage() {
   useTitle('Data Visualization');
   const { token } = useAuth();
+  const { subscribeToAnalytics } = useNotifications();
   const [data, setData] = useState(null);
   const [campuses, setCampuses] = useState([]);
   const [campusId, setCampusId] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [exporting, setExporting] = useState(null); // 'scholars' | 'submissions' | null
+  const [lastUpdated, setLastUpdated] = useState(null);
+  const campusRef = useRef(campusId);
 
-  useEffect(() => {
-    getCampuses(token).then(setCampuses).catch(() => {});
-  }, []);
+  const refetch = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    try {
+      const d = await getAnalyticsOverview(token, { campusId: campusRef.current || undefined });
+      setData(d);
+      setLastUpdated(new Date());
+      setError('');
+    } catch (e) {
+      if (!silent) setError(e.message);
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  }, [token]);
 
   async function handleExport(type) {
     setExporting(type);
@@ -41,13 +55,20 @@ export default function AnalyticsPage() {
   }
 
   useEffect(() => {
-    setLoading(true);
-    setError('');
-    getAnalyticsOverview(token, { campusId: campusId || undefined })
-      .then(setData)
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false));
-  }, [campusId]);
+    getCampuses(token).then(setCampuses).catch(() => {});
+  }, []);
+
+  // Refetch when campus filter changes.
+  useEffect(() => { campusRef.current = campusId; refetch(); }, [campusId, refetch]);
+
+  // Real-time: refetch (silently) on server broadcast, plus a periodic fallback.
+  useEffect(() => {
+    let t;
+    const trigger = () => { clearTimeout(t); t = setTimeout(() => refetch(true), 600); };
+    const unsub = subscribeToAnalytics(trigger);
+    const interval = setInterval(() => refetch(true), 30000);
+    return () => { clearTimeout(t); unsub(); clearInterval(interval); };
+  }, [subscribeToAnalytics, refetch]);
 
   if (loading) return (
     <Layout>
@@ -89,6 +110,7 @@ export default function AnalyticsPage() {
             <span className="page-title-bar" />
           </div>
           <div className="flex items-center gap-2 flex-wrap">
+            <LiveBadge lastUpdated={lastUpdated} />
             {campuses.length > 0 && (
               <select
                 value={campusId}
@@ -267,6 +289,19 @@ export default function AnalyticsPage() {
 
       </div>
     </Layout>
+  );
+}
+
+function LiveBadge({ lastUpdated }) {
+  const [, force] = useState(0);
+  useEffect(() => { const i = setInterval(() => force(n => n + 1), 15000); return () => clearInterval(i); }, []);
+  const secs = lastUpdated ? Math.floor((Date.now() - lastUpdated.getTime()) / 1000) : null;
+  const label = secs == null ? '' : secs < 60 ? 'just now' : `${Math.floor(secs / 60)}m ago`;
+  return (
+    <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-bold" style={{ background: '#d4f5e2', color: '#0a5a3a' }}>
+      <span className="animate-pulse" style={{ width: 7, height: 7, borderRadius: '50%', background: '#10a060', display: 'inline-block' }} />
+      Live{label && ` · ${label}`}
+    </span>
   );
 }
 
