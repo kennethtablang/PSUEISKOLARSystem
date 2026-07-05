@@ -16,6 +16,13 @@ export default function RequirementsPage() {
   const [editing, setEditing] = useState(null);
   const [viewSample, setViewSample] = useState(null); // object URL being previewed
   const [busySample, setBusySample] = useState(null); // requirement id uploading
+  const [search, setSearch] = useState('');
+
+  const displayed = search
+    ? requirements.filter(r =>
+        r.name.toLowerCase().includes(search.toLowerCase()) ||
+        (r.description ?? '').toLowerCase().includes(search.toLowerCase()))
+    : requirements;
 
   async function handleUploadSample(id, file) {
     if (!file) return;
@@ -74,11 +81,22 @@ export default function RequirementsPage() {
           </button>
         </div>
 
+        <div className="mb-4">
+          <input
+            type="search"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="clay-input"
+            style={{ height: 36, minHeight: 36, fontSize: 12.5, padding: '0 10px', width: 240 }}
+            placeholder="Search requirements…"
+          />
+        </div>
+
         <div className="clay-card overflow-hidden">
           {loading ? (
             <p className="text-center py-12 text-sm" style={{ color: '#7a8aaa' }}>Loading…</p>
-          ) : requirements.length === 0 ? (
-            <p className="text-center py-12 text-sm" style={{ color: '#7a8aaa' }}>No requirements set up yet.</p>
+          ) : displayed.length === 0 ? (
+            <p className="text-center py-12 text-sm" style={{ color: '#7a8aaa' }}>No requirements found.</p>
           ) : (
             <table className="w-full text-sm">
               <thead className="clay-table-head">
@@ -89,7 +107,7 @@ export default function RequirementsPage() {
                 </tr>
               </thead>
               <tbody>
-                {requirements.map(r => (
+                {displayed.map(r => (
                   <tr key={r.id} className="clay-table-row">
                     <td className="px-5 py-3.5">
                       <p className="font-semibold" style={{ color: '#0d1a33' }}>{r.name}</p>

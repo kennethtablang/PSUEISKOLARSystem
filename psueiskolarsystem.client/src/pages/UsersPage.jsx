@@ -6,7 +6,10 @@ import { register } from '../api/auth';
 import { getCampuses } from '../api/campuses';
 import { downloadImportTemplate, importScholars, triggerDownload } from '../api/userImport';
 import { Upload, Download, CheckCircle2, XCircle } from 'lucide-react';
+import Pagination from '../components/Pagination';
 import { useTitle } from '../hooks/useTitle';
+
+const ctlStyle = { height: 36, minHeight: 36, fontSize: 12.5, padding: '0 10px' };
 
 const ROLES = ['Administrator', 'ScholarshipCoordinator', 'Scholar'];
 
@@ -29,6 +32,8 @@ export default function UsersPage() {
   const [filterRole, setFilterRole] = useState('');
   const [filterCampus, setFilterCampus] = useState('');
   const [search, setSearch]         = useState('');
+  const [page, setPage]             = useState(1);
+  const [pageSize, setPageSize]     = useState(20);
 
   useEffect(() => {
     getCampuses(token).then(setCampuses).catch(() => {});
@@ -57,6 +62,11 @@ export default function UsersPage() {
         u.fullName.toLowerCase().includes(search.toLowerCase()) ||
         u.email.toLowerCase().includes(search.toLowerCase()))
     : users;
+
+  const totalPages = Math.max(1, Math.ceil(displayed.length / pageSize));
+  const paged = displayed.slice((page - 1) * pageSize, page * pageSize);
+
+  useEffect(() => { setPage(1); }, [search, filterRole, filterCampus, pageSize]);
 
   async function handleToggleStatus(user) {
     try {
@@ -95,20 +105,20 @@ export default function UsersPage() {
           </div>
         </div>
 
-        {/* Filters */}
-        <div className="flex flex-wrap gap-3 mb-5">
+        {/* Filters — compact */}
+        <div className="flex flex-wrap gap-2 mb-5 items-center">
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="clay-input flex-1"
-            style={{ minWidth: 180, maxWidth: 280 }}
+            className="clay-input"
+            style={{ ...ctlStyle, width: 220 }}
             placeholder="Search name or email…"
           />
-          <select value={filterRole} onChange={e => setFilterRole(e.target.value)} className="clay-input" style={{ width: 'auto' }}>
+          <select value={filterRole} onChange={e => setFilterRole(e.target.value)} className="clay-input" style={{ ...ctlStyle, width: 'auto' }}>
             <option value="">All Roles</option>
             {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
           </select>
-          <select value={filterCampus} onChange={e => setFilterCampus(e.target.value)} className="clay-input" style={{ width: 'auto' }}>
+          <select value={filterCampus} onChange={e => setFilterCampus(e.target.value)} className="clay-input" style={{ ...ctlStyle, width: 'auto' }}>
             <option value="">All Campuses</option>
             {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
@@ -131,7 +141,7 @@ export default function UsersPage() {
                 </tr>
               </thead>
               <tbody>
-                {displayed.map(u => (
+                {paged.map(u => (
                   <tr key={u.id} className="clay-table-row">
                     <td className="px-5 py-3.5 font-semibold" style={{ color: '#0d1a33' }}>{u.fullName}</td>
                     <td className="px-5 py-3.5" style={{ color: '#4a5a7a' }}>{u.email}</td>
@@ -165,6 +175,18 @@ export default function UsersPage() {
             </table>
           )}
         </div>
+
+        {!loading && displayed.length > 0 && (
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={displayed.length}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+            label="users"
+          />
+        )}
       </div>
 
       {showModal && (

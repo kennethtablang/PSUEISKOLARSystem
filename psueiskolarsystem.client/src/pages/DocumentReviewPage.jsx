@@ -5,6 +5,9 @@ import { getSubmissions, reviewDocument, batchReviewDocuments, downloadFile, get
 import { getActiveSemester } from '../api/settings';
 import { useTitle } from '../hooks/useTitle';
 import { CheckCircle2, XCircle } from 'lucide-react';
+import Pagination from '../components/Pagination';
+
+const ctlStyle = { height: 36, minHeight: 36, fontSize: 12.5, padding: '0 10px' };
 
 const STATUSES = ['', 'Pending', 'Verified', 'Incomplete'];
 const STATUS_STYLE = {
@@ -23,6 +26,9 @@ export default function DocumentReviewPage() {
   const [selected, setSelected] = useState(new Set());
   const [bulkFeedback, setBulkFeedback] = useState('');
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
 
   async function load(f = filters) {
     setLoading(true);
@@ -84,6 +90,17 @@ export default function DocumentReviewPage() {
 
   const pending = submissions.filter(s => s.status === 'Pending').length;
 
+  const filtered = search
+    ? submissions.filter(s =>
+        (s.scholarName ?? '').toLowerCase().includes(search.toLowerCase()) ||
+        (s.requirementName ?? '').toLowerCase().includes(search.toLowerCase()) ||
+        (s.scholarEmail ?? '').toLowerCase().includes(search.toLowerCase()))
+    : submissions;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const paged = filtered.slice((page - 1) * pageSize, page * pageSize);
+
+  useEffect(() => { setPage(1); }, [search, pageSize, filters]);
+
   return (
     <Layout>
       <div className="p-8">
@@ -95,8 +112,16 @@ export default function DocumentReviewPage() {
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-3 mb-5">
-          <select value={filters.status} onChange={e => setFilter('status', e.target.value)} className="clay-input">
+        <div className="flex flex-wrap gap-2 mb-5 items-center">
+          <input
+            type="search"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="clay-input"
+            style={{ ...ctlStyle, width: 220 }}
+            placeholder="Search scholar, document…"
+          />
+          <select value={filters.status} onChange={e => setFilter('status', e.target.value)} className="clay-input" style={{ ...ctlStyle, width: 'auto' }}>
             <option value="">All Statuses</option>
             {STATUSES.filter(Boolean).map(s => <option key={s} value={s}>{s}</option>)}
           </select>
@@ -104,10 +129,11 @@ export default function DocumentReviewPage() {
             type="text"
             value={filters.academicYear}
             onChange={e => setFilter('academicYear', e.target.value)}
-            className="clay-input w-32"
+            className="clay-input"
+            style={{ ...ctlStyle, width: 110 }}
             placeholder="2025-2026"
           />
-          <select value={filters.semester} onChange={e => setFilter('semester', e.target.value)} className="clay-input">
+          <select value={filters.semester} onChange={e => setFilter('semester', e.target.value)} className="clay-input" style={{ ...ctlStyle, width: 'auto' }}>
             <option value="">All Semesters</option>
             <option value="1">Semester 1</option>
             <option value="2">Semester 2</option>
@@ -142,7 +168,7 @@ export default function DocumentReviewPage() {
         <div className="clay-card overflow-hidden">
           {loading ? (
             <p className="text-center py-12 text-sm" style={{ color: '#7a8aaa' }}>Loading…</p>
-          ) : submissions.length === 0 ? (
+          ) : filtered.length === 0 ? (
             <p className="text-center py-12 text-sm" style={{ color: '#7a8aaa' }}>No submissions match the current filters.</p>
           ) : (
             <table className="w-full text-sm">
@@ -158,7 +184,7 @@ export default function DocumentReviewPage() {
                 </tr>
               </thead>
               <tbody>
-                {submissions.map((s, i) => (
+                {paged.map((s, i) => (
                   <tr key={s.id} className="clay-table-row">
                     <td className="px-4 py-3.5">
                       <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggle(s.id)}
@@ -201,6 +227,18 @@ export default function DocumentReviewPage() {
             </table>
           )}
         </div>
+
+        {!loading && filtered.length > 0 && (
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={filtered.length}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+            label="submissions"
+          />
+        )}
       </div>
 
       {reviewing && (

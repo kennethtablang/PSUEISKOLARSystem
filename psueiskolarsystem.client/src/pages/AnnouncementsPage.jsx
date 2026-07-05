@@ -19,6 +19,13 @@ export default function AnnouncementsPage() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [search, setSearch] = useState('');
+
+  const displayed = search
+    ? announcements.filter(a =>
+        a.title.toLowerCase().includes(search.toLowerCase()) ||
+        a.content.toLowerCase().includes(search.toLowerCase()))
+    : announcements;
 
   async function load() {
     setLoading(true);
@@ -61,13 +68,24 @@ export default function AnnouncementsPage() {
           </button>
         </div>
 
+        <div className="mb-4">
+          <input
+            type="search"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="clay-input"
+            style={{ height: 36, minHeight: 36, fontSize: 12.5, padding: '0 10px', width: 240 }}
+            placeholder="Search announcements…"
+          />
+        </div>
+
         {loading ? (
           <p className="text-sm" style={{ color: '#7a8aaa' }}>Loading…</p>
-        ) : announcements.length === 0 ? (
-          <p className="text-sm" style={{ color: '#7a8aaa' }}>No announcements yet.</p>
+        ) : displayed.length === 0 ? (
+          <p className="text-sm" style={{ color: '#7a8aaa' }}>No announcements found.</p>
         ) : (
           <div className="space-y-3">
-            {announcements.map(a => (
+            {displayed.map(a => (
               <AnnouncementCard key={a.id} a={a} onEdit={() => openEdit(a)} onDelete={() => handleDelete(a.id)} />
             ))}
           </div>

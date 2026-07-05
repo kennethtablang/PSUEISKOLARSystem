@@ -3,7 +3,7 @@ import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { getActiveSemester, setActiveSemester } from '../api/settings';
 import { useTitle } from '../hooks/useTitle';
-import { CalendarDays, CheckCircle, Archive, AlertTriangle, X } from 'lucide-react';
+import { CalendarDays, CheckCircle, Archive, AlertTriangle, X, Database } from 'lucide-react';
 
 function yearOptions() {
   const y = new Date().getFullYear();
@@ -26,6 +26,27 @@ export default function SettingsPage() {
   const [archiving, setArchiving]     = useState(false);
   const [archiveResult, setArchiveResult] = useState(null);
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
+  const [seeding, setSeeding]       = useState(false);
+  const [seedResult, setSeedResult] = useState(null);
+
+  async function handleSeed() {
+    if (!confirm('Seed sample coordinators, scholars, grades, and announcements? This is safe to run more than once — it will not duplicate existing sample data.')) return;
+    setSeeding(true);
+    setSeedResult(null);
+    try {
+      const res = await fetch('/api/admin/seed-sample-data', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Seeding failed.');
+      setSeedResult(data);
+    } catch (e) {
+      setSeedResult({ error: e.message });
+    } finally {
+      setSeeding(false);
+    }
+  }
 
   useEffect(() => {
     getActiveSemester(token)
@@ -285,6 +306,47 @@ export default function SettingsPage() {
                   style={{ background: '#fff0f0', color: '#b03030', border: '1.5px solid #f5b0b0' }}>
                   <AlertTriangle size={15} strokeWidth={2.5} className="mt-px shrink-0" />
                   <span>{archiveResult.error}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Sample data seeder */}
+            <div className="clay-card p-6">
+              <div className="flex items-center gap-3 mb-5">
+                <div style={{ width: 44, height: 44, borderRadius: 13, flexShrink: 0, background: 'rgba(0,120,80,0.07)', border: '1px solid rgba(0,120,80,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Database size={20} color="#0a7d43" strokeWidth={2} />
+                </div>
+                <div>
+                  <p style={{ fontSize: 13, fontWeight: 800, color: '#0d1a33' }}>Sample Data</p>
+                  <p style={{ fontSize: 12, color: '#7a8aaa', marginTop: 2 }}>
+                    Populate the system with sample coordinators, scholars (with profiles &amp; grades), and announcements for demos and testing.
+                  </p>
+                </div>
+              </div>
+
+              <button onClick={handleSeed} disabled={seeding}
+                className="clay-btn px-5 py-2.5 text-sm font-bold"
+                style={{ background: '#0a7d43', color: '#fff', opacity: seeding ? 0.65 : 1, boxShadow: '4px 4px 0 rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.12)' }}>
+                <Database size={13} strokeWidth={2.5} className="inline mr-1.5" />
+                {seeding ? 'Seeding…' : 'Seed Sample Data'}
+              </button>
+
+              {seedResult && !seedResult.error && (
+                <div className="mt-4 flex items-start gap-2 p-3.5 rounded-2xl text-sm"
+                  style={{ background: '#f0fdf4', color: '#166534', border: '1.5px solid #bbf7d0' }}>
+                  <CheckCircle size={15} strokeWidth={2.5} className="mt-px shrink-0" />
+                  <span>
+                    {seedResult.alreadySeeded
+                      ? 'Sample data already exists — nothing to add.'
+                      : `Seeded ${seedResult.scholars} scholars, ${seedResult.coordinators} coordinators, ${seedResult.grades} grades, and ${seedResult.announcements} announcements. Sample accounts use the password "Sample123!".`}
+                  </span>
+                </div>
+              )}
+              {seedResult?.error && (
+                <div className="mt-4 flex items-start gap-2 p-3.5 rounded-2xl text-sm"
+                  style={{ background: '#fff0f0', color: '#b03030', border: '1.5px solid #f5b0b0' }}>
+                  <AlertTriangle size={15} strokeWidth={2.5} className="mt-px shrink-0" />
+                  <span>{seedResult.error}</span>
                 </div>
               )}
             </div>

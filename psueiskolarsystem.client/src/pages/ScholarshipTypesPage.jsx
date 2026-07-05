@@ -17,6 +17,14 @@ export default function ScholarshipTypesPage() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [search, setSearch] = useState('');
+
+  const displayed = search
+    ? types.filter(t =>
+        t.name.toLowerCase().includes(search.toLowerCase()) ||
+        (t.category ?? '').toLowerCase().includes(search.toLowerCase()) ||
+        (t.description ?? '').toLowerCase().includes(search.toLowerCase()))
+    : types;
 
   async function load() {
     setLoading(true);
@@ -72,11 +80,22 @@ export default function ScholarshipTypesPage() {
           </button>
         </div>
 
+        <div className="mb-4">
+          <input
+            type="search"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="clay-input"
+            style={{ height: 36, minHeight: 36, fontSize: 12.5, padding: '0 10px', width: 240 }}
+            placeholder="Search scholarship types…"
+          />
+        </div>
+
         <div className="clay-card overflow-hidden">
           {loading ? (
             <p className="text-center py-12 text-sm" style={{ color: '#7a8aaa' }}>Loading…</p>
-          ) : types.length === 0 ? (
-            <p className="text-center py-12 text-sm" style={{ color: '#7a8aaa' }}>No scholarship types yet.</p>
+          ) : displayed.length === 0 ? (
+            <p className="text-center py-12 text-sm" style={{ color: '#7a8aaa' }}>No scholarship types found.</p>
           ) : (
             <table className="w-full text-sm">
               <thead className="clay-table-head">
@@ -87,7 +106,7 @@ export default function ScholarshipTypesPage() {
                 </tr>
               </thead>
               <tbody>
-                {types.map(st => (
+                {displayed.map(st => (
                   <tr key={st.id} className="clay-table-row">
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-2 flex-wrap">
