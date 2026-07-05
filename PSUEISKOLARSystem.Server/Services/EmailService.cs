@@ -433,6 +433,92 @@ namespace PSUEISKOLARSystem.Server.Services
             await client.DisconnectAsync(true);
         }
 
+        public async Task SendScholarWelcomeAsync(string toEmail, string toName, string tempPassword, string verifyLink)
+        {
+            var message = new MimeMessage();
+            message.From.Add(new MailboxAddress(_s.FromName, _s.From));
+            message.To.Add(new MailboxAddress(toName, toEmail));
+            message.Subject = "Welcome to PSU e-Iskolar — Your Account Details";
+
+            message.Body = new BodyBuilder
+            {
+                HtmlBody = $"""
+                    <!DOCTYPE html>
+                    <html>
+                    <body style="margin:0;padding:0;background:#e8edf5;font-family:Arial,sans-serif;">
+                      <table width="100%" cellpadding="0" cellspacing="0">
+                        <tr><td align="center" style="padding:32px 16px;">
+                          <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+                            <tr>
+                              <td style="background:#002570;border-radius:16px 16px 0 0;padding:28px 32px;text-align:center;">
+                                <div style="display:inline-flex;align-items:center;gap:12px;">
+                                  <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(145deg,#ffd030,#e0a000);
+                                              display:inline-flex;align-items:center;justify-content:center;
+                                              font-weight:900;font-size:11px;color:#1a0e00;">PSU</div>
+                                  <div style="text-align:left;">
+                                    <div style="font-weight:900;font-size:18px;color:#fff;letter-spacing:-0.3px;">e-Iskolar</div>
+                                    <div style="font-size:11px;color:rgba(255,255,255,0.45);margin-top:2px;">Scholar Records System</div>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                            <tr>
+                              <td style="background:#fff;padding:36px 32px;">
+                                <h2 style="margin:0 0 8px;font-size:22px;font-weight:900;color:#0d1a33;letter-spacing:-0.5px;">
+                                  Welcome to PSU e-Iskolar
+                                </h2>
+                                <p style="margin:0 0 20px;font-size:14px;color:#4a5a7a;line-height:1.6;">
+                                  Hello <strong>{toName}</strong>,
+                                </p>
+                                <p style="margin:0 0 20px;font-size:14px;color:#4a5a7a;line-height:1.6;">
+                                  An administrator has created a scholar account for you. Use the temporary
+                                  credentials below to sign in, then verify your email to activate your account.
+                                </p>
+                                <div style="padding:16px 20px;background:#f4f6fa;border-radius:12px;border-left:4px solid #002570;margin-bottom:20px;">
+                                  <p style="margin:0 0 6px;font-size:12px;color:#4a5a7a;">Email: <strong>{toEmail}</strong></p>
+                                  <p style="margin:0;font-size:12px;color:#4a5a7a;">Temporary password:
+                                    <strong style="font-family:monospace;font-size:15px;color:#002570;">{tempPassword}</strong>
+                                  </p>
+                                </div>
+                                <div style="text-align:center;margin:28px 0;">
+                                  <a href="{verifyLink}"
+                                     style="display:inline-block;background:#002570;color:#f5b800;
+                                            padding:15px 36px;border-radius:12px;font-weight:900;
+                                            font-size:15px;text-decoration:none;letter-spacing:-0.2px;
+                                            box-shadow:0 4px 0 #001040;">
+                                    Verify My Account
+                                  </a>
+                                </div>
+                                <p style="margin:20px 0 0;font-size:12px;color:#9aaabb;line-height:1.6;">
+                                  For your security, please change your temporary password after signing in.
+                                  If the button doesn't work, paste this link into your browser:<br/>
+                                  <a href="{verifyLink}" style="color:#003087;word-break:break-all;">{verifyLink}</a>
+                                </p>
+                              </td>
+                            </tr>
+                            <tr>
+                              <td style="background:#001040;border-radius:0 0 16px 16px;padding:18px 32px;text-align:center;">
+                                <p style="margin:0;font-size:11px;color:rgba(255,255,255,0.28);">
+                                  PSU e-Iskolar &middot; Scholar Profiling and Records Management System<br/>
+                                  Pangasinan State University
+                                </p>
+                              </td>
+                            </tr>
+                          </table>
+                        </td></tr>
+                      </table>
+                    </body>
+                    </html>
+                    """
+            }.ToMessageBody();
+
+            using var client = new SmtpClient();
+            await client.ConnectAsync(_s.SmtpHost, _s.SmtpPort, SecureSocketOptions.StartTls);
+            await client.AuthenticateAsync(_s.Username, _s.Password);
+            await client.SendAsync(message);
+            await client.DisconnectAsync(true);
+        }
+
         public async Task SendDocumentStatusEmailAsync(string toEmail, string toName, string requirementName, string status, string? feedback)
         {
             bool isVerified = status == "Verified";
