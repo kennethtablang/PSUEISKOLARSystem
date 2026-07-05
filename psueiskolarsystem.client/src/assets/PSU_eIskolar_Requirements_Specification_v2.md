@@ -40,6 +40,14 @@ PSU e-Iskolar is a web-based platform that centralizes scholar profiling, docume
 | 10 | **Advanced Search and Filtering** | Multi-criteria search (campus, course, scholarship type, compliance status) for efficient record retrieval. |
 | 11 | **Responsive Web Interface** | Consistent, user-friendly experience across desktops, tablets, and mobile phones. |
 | 12 | **Academic Performance Tracking** | Monitoring of scholar grades and academic standing as part of scholarship compliance requirements. |
+| 13 | **Real-Time Notification and Live Update Module** | Push-based, instant delivery of notifications and live-refreshing dashboards and status indicators without manual page reload. |
+| 14 | **In-App Notification Center** | Persistent, per-user notification inbox with read/unread state, categorization, and history. |
+| 15 | **Bulk Account Import Module** | Batch creation of scholar accounts from CSV/Excel with per-row validation and error reporting. |
+| 16 | **Submission Deadline and Compliance Window Management** | Coordinator-defined submission deadlines per requirement and period, with on-time/late flagging, countdowns, and automated reminders. |
+| 17 | **Scholar–Coordinator Messaging** | Threaded, document-linked two-way communication between scholars and coordinators beyond one-way feedback. |
+| 18 | **Scholarship Renewal and Lifecycle Management** | Per-period renewal processing and tracking of scholar lifecycle status (active, renewed, lapsed, suspended, graduated). |
+| 19 | **Data Privacy and Consent Management** | Privacy-notice acknowledgement and consent capture per RA 10173, plus data-subject access to personal data. |
+| 20 | **Notification Preferences and Printable Summaries** | Per-user notification-channel preferences and on-demand printable/PDF compliance summaries. |
 
 ---
 
@@ -130,6 +138,8 @@ PSU e-Iskolar is a web-based platform that centralizes scholar profiling, docume
 | FR-8.3 | The system shall maintain an audit trail recording user actions (e.g., logins, record edits, status changes) with user identity and timestamp. |
 | FR-8.4 | The system shall provide a password reset/recovery mechanism for registered users. |
 | FR-8.5 | The system shall automatically terminate a user session after a defined period of inactivity. |
+| FR-8.6 | The system shall restrict Scholarship Coordinator/Staff data access to scholars within their assigned campus. |
+| FR-8.7 | The system shall grant Administrators cross-campus access to all scholar records and system functions. |
 
 ### 4.9 Centralized Multi-Campus Database
 
@@ -164,6 +174,88 @@ PSU e-Iskolar is a web-based platform that centralizes scholar profiling, docume
 | FR-12.3 | The system shall allow coordinators to assess whether a scholar's grades meet the minimum requirements of their scholarship program. |
 | FR-12.4 | The system shall flag scholars whose academic performance falls below the scholarship's grade threshold for coordinator review. |
 
+### 4.13 Real-Time Updates and Live Notifications
+
+| ID | Requirement |
+|---|---|
+| FR-13.1 | The system shall deliver notifications to users in real time (push-based) without requiring a manual page refresh. |
+| FR-13.2 | The system shall update dashboard metrics, status indicators, and lists live as the underlying data changes. |
+| FR-13.3 | The system shall update the unread-notification indicator (badge/count) in real time as new notifications arrive. |
+| FR-13.4 | The system shall reflect document status changes and new announcements to affected connected users in real time. |
+| FR-13.5 | The system shall degrade gracefully to on-refresh updates when a live connection is unavailable, without loss of data. |
+
+### 4.14 In-App Notification Center
+
+| ID | Requirement |
+|---|---|
+| FR-14.1 | The system shall maintain a persistent, per-user notification inbox retaining the user's notification history. |
+| FR-14.2 | The system shall track read/unread state per notification and allow users to mark items as read or mark all as read. |
+| FR-14.3 | The system shall categorize notifications by type (e.g., document status, announcement, deadline, message, account). |
+| FR-14.4 | The system shall allow a notification to deep-link the user to the relevant record (document, announcement, message, or profile). |
+
+### 4.15 Bulk Account Import
+
+| ID | Requirement |
+|---|---|
+| FR-15.1 | The system shall allow administrators to create multiple scholar accounts in a single operation via CSV/Excel upload. |
+| FR-15.2 | The system shall validate each imported row (required fields, duplicate email, valid campus, program, and scholarship type) before creating accounts. |
+| FR-15.3 | The system shall import valid rows, reject invalid rows, and produce a downloadable validation/error report identifying failed rows and reasons. |
+| FR-15.4 | The system shall provide a downloadable import template defining the required columns and format. |
+| FR-15.5 | The system shall issue account credentials and/or email-verification links to successfully created scholars. |
+
+### 4.16 Submission Deadline and Compliance Window Management
+
+| ID | Requirement |
+|---|---|
+| FR-16.1 | The system shall allow coordinators to define a submission deadline for each document requirement per academic period. |
+| FR-16.2 | The system shall display the applicable due date and a countdown to scholars for each pending requirement. |
+| FR-16.3 | The system shall classify each submission as on-time or late by comparing its timestamp against the deadline. |
+| FR-16.4 | The system shall send automated reminders to scholars ahead of a submission deadline. |
+| FR-16.5 | The system shall provide coordinators a report of overdue, missing, or late submissions for a given period. |
+
+### 4.17 Scholar–Coordinator Messaging
+
+| ID | Requirement |
+|---|---|
+| FR-17.1 | The system shall allow scholars and coordinators to exchange threaded messages linked to a specific document or requirement. |
+| FR-17.2 | The system shall allow both parties to post replies within a conversation thread and retain the full message history. |
+| FR-17.3 | The system shall notify the recipient in real time when a new message is posted. |
+| FR-17.4 | The system shall restrict each conversation to the participating scholar and authorized coordinators/administrators. |
+
+### 4.18 Scholarship Renewal and Lifecycle Management
+
+| ID | Requirement |
+|---|---|
+| FR-18.1 | The system shall track each scholar's scholarship lifecycle state (e.g., Active, Renewed, Lapsed, Suspended, Graduated). |
+| FR-18.2 | The system shall allow coordinators to process scholarship renewal for a scholar per academic period. |
+| FR-18.3 | The system shall support evaluating renewal eligibility against document compliance and grade thresholds. |
+| FR-18.4 | The system shall surface scholars due for renewal or with lapsed status on the coordinator dashboard. |
+
+### 4.19 Data Privacy and Consent Management
+
+| ID | Requirement |
+|---|---|
+| FR-19.1 | The system shall present a data privacy notice and capture the user's consent before collecting or processing personal data, in compliance with RA 10173. |
+| FR-19.2 | The system shall record each consent action with a timestamp and the applicable privacy-notice version. |
+| FR-19.3 | The system shall allow scholars to view and download the personal data held about them (data-subject access). |
+| FR-19.4 | The system shall restrict processing and visibility of scholar personal data to authorized roles only. |
+
+### 4.20 Notification and Delivery Preferences
+
+| ID | Requirement |
+|---|---|
+| FR-20.1 | The system shall allow users to configure their notification delivery channels (in-app and/or email) per notification category. |
+| FR-20.2 | The system shall allow users to opt out of non-critical email notifications. |
+| FR-20.3 | The system shall always deliver critical account and security notifications regardless of user preferences. |
+
+### 4.21 Printable Compliance Summary
+
+| ID | Requirement |
+|---|---|
+| FR-21.1 | The system shall generate a per-scholar printable/PDF summary consolidating profile, document compliance, grade history, and scholarship status. |
+| FR-21.2 | The system shall include the generation date/time and the generating user on each summary. |
+| FR-21.3 | The system shall make the summary available to the scholar (their own) and to authorized coordinators/administrators. |
+
 ---
 
 ## 5. Non-Functional Requirements (NFR)
@@ -187,6 +279,7 @@ NFRs are organized according to the **ISO 25010** quality dimensions adopted as 
 | NFR-2.3 | **Recoverability:** The system database shall be backed up on a scheduled basis (e.g., daily) and recoverable within a defined Recovery Time Objective (RTO). |
 | NFR-2.4 | **Referential Integrity:** All relational tables shall enforce primary key/foreign key constraints to prevent orphaned or inconsistent records (e.g., a document submission cannot exist without a valid scholar reference). |
 | NFR-2.5 | **Cross-Campus Consistency:** Data submitted or updated at one campus shall be immediately and consistently reflected for all authorized users across other campuses. |
+| NFR-2.6 | **Real-Time Propagation:** Notifications, status changes, and dashboard updates shall propagate to connected clients in near real time (e.g., within a few seconds) without requiring a manual refresh. |
 
 ### 5.3 Usability
 
@@ -241,5 +334,7 @@ NFRs are organized according to the **ISO 25010** quality dimensions adopted as 
 ## 6. Traceability Note
 
 Each functional module in Section 4 corresponds to one of the **Core System Features** in Section 3 (as enumerated in the study's Scope and Limitation and elaborated across Chapters 1–3), and each NFR category in Section 5 corresponds to one of the six **ISO 25010** acceptability dimensions evaluated through the study's survey instrument (functionality, reliability, usability, efficiency, maintainability, portability), with 50 respondents drawn from three groups: 30 Scholars, 10 Scholarship Coordinators/Administrative Staff, and 10 IT Experts/Faculty.
+
+**Extended features (13–20 / FR-13 through FR-21):** These modules enhance the original scope with real-time delivery, an in-app notification center, bulk onboarding, deadline and renewal lifecycle management, scholar–coordinator messaging, and RA 10173 data-privacy/consent handling. They deepen — and remain within — the descriptive, records-management scope of the study; they introduce no predictive/ML analytics, financial disbursement, or external integrations, and therefore do not cross the boundaries defined below.
 
 **Explicit scope boundaries (from the paper):** The system does not cover enrollment processing, grading system integration, financial disbursement, PhilGEPS/CHED external integration, automated eligibility ranking, biometric authentication, automated document authenticity verification, or machine learning/predictive analytics. These are captured in FR-5.7 and reflected in the NFR boundaries above.

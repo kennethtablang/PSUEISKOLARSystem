@@ -78,6 +78,19 @@ export async function reviewDocument(id, status, feedbackNote, token) {
   if (!res.ok) throw new Error('Review failed.');
 }
 
+export async function batchReviewDocuments(ids, status, feedbackNote, token) {
+  const res = await fetch(`${API}/batch-review`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ ids, status, feedbackNote }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Batch review failed.');
+  }
+  return res.json();
+}
+
 export async function getSubmissionHistory(id, token) {
   const res = await fetch(`${API}/${id}/history`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -95,6 +108,38 @@ export async function deleteSubmission(id, token) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.message || 'Delete failed.');
   }
+}
+
+export async function uploadRequirementSample(id, file, token) {
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetch(`${REQ_API}/${id}/sample`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to upload sample.');
+  }
+  return res.json();
+}
+
+export async function getRequirementSample(id, token) {
+  const res = await fetch(`${REQ_API}/${id}/sample`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error('Sample not available.');
+  const blob = await res.blob();
+  return URL.createObjectURL(blob);
+}
+
+export async function deleteRequirementSample(id, token) {
+  const res = await fetch(`${REQ_API}/${id}/sample`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error('Failed to remove sample.');
 }
 
 export async function createRequirement(data, token) {

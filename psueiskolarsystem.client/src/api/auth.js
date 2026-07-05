@@ -1,3 +1,5 @@
+import { errorMessage } from './_error';
+
 const API = '/api/auth';
 
 export async function login(email, password) {
@@ -34,6 +36,24 @@ export async function updateProfile(data, token) {
   return res.json();
 }
 
+export async function acceptConsent(token) {
+  const res = await fetch(`${API}/accept-consent`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error('Failed to record consent.');
+  return res.json();
+}
+
+export async function updateNotificationPreferences(prefs, token) {
+  const res = await fetch(`${API}/notification-preferences`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(prefs),
+  });
+  if (!res.ok) throw new Error('Failed to save preferences.');
+}
+
 export async function registerScholar(data) {
   const res = await fetch(`${API}/register-scholar`, {
     method: 'POST',
@@ -42,7 +62,7 @@ export async function registerScholar(data) {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || 'Registration failed.');
+    throw new Error(errorMessage(err, 'Registration failed.'));
   }
   return res.json();
 }
@@ -132,7 +152,7 @@ export async function register(data, token) {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || 'Registration failed.');
+    throw new Error(errorMessage(err, 'Registration failed.'));
   }
   return res.json();
 }

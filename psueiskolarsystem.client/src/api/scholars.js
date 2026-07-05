@@ -1,3 +1,5 @@
+import { errorMessage } from './_error';
+
 const API = '/api/scholars';
 
 export async function getScholars(token, filters = {}) {
@@ -7,6 +9,7 @@ export async function getScholars(token, filters = {}) {
   if (filters.scholarshipTypeId) params.set('scholarshipTypeId', filters.scholarshipTypeId);
   if (filters.search) params.set('search', filters.search);
   if (filters.meetsRequirement !== undefined && filters.meetsRequirement !== '') params.set('meetsRequirement', filters.meetsRequirement);
+  if (filters.lifecycleStatus) params.set('lifecycleStatus', filters.lifecycleStatus);
   if (filters.page) params.set('page', filters.page);
   if (filters.pageSize) params.set('pageSize', filters.pageSize);
   const res = await fetch(`${API}?${params}`, {
@@ -34,8 +37,28 @@ export async function upsertScholarProfile(userId, data, token) {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || 'Failed to save profile.');
+    throw new Error(errorMessage(err, 'Failed to save profile.'));
   }
+}
+
+export async function setLifecycleStatus(userId, status, token) {
+  const res = await fetch(`${API}/${userId}/lifecycle`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ status }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to update status.');
+  }
+}
+
+export async function exportScholarData(userId, token) {
+  const res = await fetch(`${API}/${userId}/export`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error('Failed to export data.');
+  return res.json();
 }
 
 export async function getGrades(userId, token) {
@@ -54,7 +77,7 @@ export async function addGrade(userId, data, token) {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || 'Failed to add grade.');
+    throw new Error(errorMessage(err, 'Failed to add grade.'));
   }
   return res.json();
 }

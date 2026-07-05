@@ -1,6 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { useAuth } from './context/AuthContext';
+import { NotificationProvider } from './context/NotificationContext';
+import ConsentGate from './components/ConsentGate';
 import { Clock } from 'lucide-react';
 import ProtectedRoute from './components/ProtectedRoute';
 import LandingPage from './pages/LandingPage';
@@ -17,6 +19,9 @@ import AnalyticsPage from './pages/AnalyticsPage';
 import MyDocumentsPage from './pages/MyDocumentsPage';
 import DocumentReviewPage from './pages/DocumentReviewPage';
 import RequirementsPage from './pages/RequirementsPage';
+import DeadlinesPage from './pages/DeadlinesPage';
+import MessagesPage from './pages/MessagesPage';
+import NotificationsPage from './pages/NotificationsPage';
 import ScholarshipTypesPage from './pages/ScholarshipTypesPage';
 import SettingsPage from './pages/SettingsPage';
 import ActivityLogPage from './pages/ActivityLogPage';
@@ -30,7 +35,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+      <NotificationProvider>
         <SessionExpiredModal />
+        <ConsentGate />
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
@@ -46,16 +53,20 @@ export default function App() {
           <Route path="/my-profile" element={<ProtectedRoute><ScholarDetailPage /></ProtectedRoute>} />
           <Route path="/my-documents" element={<ProtectedRoute roles={['Scholar']}><MyDocumentsPage /></ProtectedRoute>} />
           <Route path="/document-review" element={<ProtectedRoute roles={adminCoord}><DocumentReviewPage /></ProtectedRoute>} />
+          <Route path="/deadlines" element={<ProtectedRoute roles={adminCoord}><DeadlinesPage /></ProtectedRoute>} />
           <Route path="/requirements"       element={<ProtectedRoute roles={admin}><RequirementsPage /></ProtectedRoute>} />
           <Route path="/scholarship-types"  element={<ProtectedRoute roles={admin}><ScholarshipTypesPage /></ProtectedRoute>} />
           <Route path="/settings"      element={<ProtectedRoute roles={admin}><SettingsPage /></ProtectedRoute>} />
           <Route path="/activity-log" element={<ProtectedRoute roles={admin}><ActivityLogPage /></ProtectedRoute>} />
           <Route path="/announcements" element={<ProtectedRoute roles={adminCoord}><AnnouncementsPage /></ProtectedRoute>} />
           <Route path="/analytics"    element={<ProtectedRoute roles={adminCoord}><AnalyticsPage /></ProtectedRoute>} />
+          <Route path="/messages"     element={<ProtectedRoute><MessagesPage /></ProtectedRoute>} />
+          <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
           <Route path="/profile"      element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
 
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
+      </NotificationProvider>
       </AuthProvider>
     </BrowserRouter>
   );

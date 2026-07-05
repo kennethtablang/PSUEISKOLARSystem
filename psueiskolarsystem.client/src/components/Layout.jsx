@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useNotifications } from '../context/NotificationContext';
+import NotificationBell from './NotificationBell';
 import {
   LayoutDashboard, GraduationCap, FileCheck, Users, Bell,
   FolderOpen, User, LogOut, BarChart2, ChevronRight,
-  ChevronLeft, Settings, Menu, X, ClipboardList, Activity, Award,
+  ChevronLeft, Settings, Menu, X, ClipboardList, Activity, Award, CalendarClock, MessageSquare,
 } from 'lucide-react';
 
 /* ── Responsive hook ─────────────────────────────── */
@@ -26,12 +28,14 @@ const navByRole = {
     { section: 'Manage' },
     { to: '/scholars',        label: 'Scholars',         Icon: GraduationCap },
     { to: '/document-review', label: 'Document Review',  Icon: FileCheck },
+    { to: '/deadlines',       label: 'Deadlines',        Icon: CalendarClock },
     { to: '/scholarship-types', label: 'Scholarship Types', Icon: Award },
     { to: '/requirements',    label: 'Requirements',     Icon: ClipboardList },
     { to: '/users',           label: 'Users',            Icon: Users },
     { section: 'Engage' },
     { to: '/announcements',   label: 'Announcements',    Icon: Bell },
-    { to: '/analytics',       label: 'Analytics',        Icon: BarChart2 },
+    { to: '/messages',        label: 'Messages',         Icon: MessageSquare },
+    { to: '/analytics',       label: 'Data Visualization', Icon: BarChart2 },
     { section: 'System' },
     { to: '/settings',      label: 'Settings',      Icon: Settings  },
     { to: '/activity-log',  label: 'Activity Log',  Icon: Activity  },
@@ -41,14 +45,17 @@ const navByRole = {
     { section: 'Manage' },
     { to: '/scholars',        label: 'Scholars',         Icon: GraduationCap },
     { to: '/document-review', label: 'Document Review',  Icon: FileCheck },
+    { to: '/deadlines',       label: 'Deadlines',        Icon: CalendarClock },
     { section: 'Engage' },
     { to: '/announcements',   label: 'Announcements',    Icon: Bell },
-    { to: '/analytics',       label: 'Analytics',        Icon: BarChart2 },
+    { to: '/messages',        label: 'Messages',         Icon: MessageSquare },
+    { to: '/analytics',       label: 'Data Visualization', Icon: BarChart2 },
   ],
   Scholar: [
     { to: '/dashboard',    label: 'Dashboard',    Icon: LayoutDashboard },
     { section: 'My Account' },
     { to: '/my-documents', label: 'My Documents', Icon: FolderOpen },
+    { to: '/messages',     label: 'Messages',     Icon: MessageSquare },
     { to: '/my-profile',   label: 'My Profile',   Icon: User },
   ],
 };
@@ -92,6 +99,7 @@ function IconBtn({ onClick, title, children, danger }) {
 
 export default function Layout({ children }) {
   const { user, signOut } = useAuth();
+  const { messageUnread } = useNotifications();
   const navigate   = useNavigate();
   const location   = useLocation();
   const isDesktop  = useMediaQuery('(min-width: 1024px)');
@@ -315,8 +323,19 @@ export default function Layout({ children }) {
                     {label}
                   </span>
 
+                  {/* Unread messages badge */}
+                  {to === '/messages' && messageUnread > 0 && !isCollapsed && (
+                    <span style={{
+                      minWidth: 18, height: 18, padding: '0 5px', borderRadius: 999,
+                      background: '#d92020', color: '#fff', fontSize: 10, fontWeight: 800,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                    }}>
+                      {messageUnread > 99 ? '99+' : messageUnread}
+                    </span>
+                  )}
+
                   {/* Chevron */}
-                  {isActive && !isCollapsed && (
+                  {isActive && !isCollapsed && to !== '/messages' && (
                     <ChevronRight size={12} strokeWidth={2.5} color="#003087" style={{ opacity: 0.4, flexShrink: 0 }} />
                   )}
                 </div>
@@ -424,6 +443,9 @@ export default function Layout({ children }) {
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: '#e8edf5' }}>
 
+      {/* ── Notifications (desktop, floating top-right) ── */}
+      {isDesktop && <NotificationBell variant="floating" />}
+
       {/* ── Mobile backdrop ── */}
       {!isDesktop && mobileOpen && (
         <div
@@ -501,12 +523,15 @@ export default function Layout({ children }) {
               </span>
             </div>
 
+            {/* Notifications (mobile) */}
+            <NotificationBell variant="inline" />
+
             {/* User avatar */}
             <div
               onClick={() => navigate('/profile')}
               title="My Profile"
               style={{
-                marginLeft: 'auto', width: 36, height: 36, borderRadius: 11, cursor: 'pointer',
+                marginLeft: 10, width: 36, height: 36, borderRadius: 11, cursor: 'pointer',
                 background: 'linear-gradient(145deg, #ffd030, #e0a000)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 11, fontWeight: 900, color: '#1a0e00',
