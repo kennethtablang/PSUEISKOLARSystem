@@ -10,6 +10,7 @@
   --surface-modal: #f0f4fa;
   --surface-inset: #dde3ef;
   --input-bg: #e8edf5;
+  --surface-2: #ffffff;
   --text-strong: #0d1a33;
   --text: #4a5a7a;
   --text-muted: #7a8aaa;
@@ -17,6 +18,7 @@
 }
 
 :root[data-theme="dark"] {
+  --surface-2: #1e2a3b;
   --bg: #0f1826;
   --surface: #18222f;
   --surface-modal: #1c2735;

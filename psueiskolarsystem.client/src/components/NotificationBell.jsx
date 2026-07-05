@@ -84,7 +84,7 @@ export default function NotificationBell({ variant = 'floating' }) {
       {open && (
         <div style={{
           position: 'absolute', top: 48, right: 0, width: 360, maxWidth: 'calc(100vw - 32px)',
-          background: '#fff', borderRadius: 16, overflow: 'hidden',
+          background: 'var(--surface-2)', borderRadius: 16, overflow: 'hidden',
           boxShadow: '0 12px 40px rgba(0,20,60,0.22), 0 2px 8px rgba(0,20,60,0.1)',
           border: '1px solid rgba(0,48,135,0.08)', zIndex: 50,
         }}>
@@ -172,7 +172,7 @@ export default function NotificationBell({ variant = 'floating' }) {
             onClick={() => { setOpen(false); navigate('/notifications'); }}
             style={{
               width: '100%', padding: '11px 16px', border: 'none', cursor: 'pointer',
-              borderTop: '1px solid rgba(0,48,135,0.07)', background: '#fafbfe',
+              borderTop: '1px solid rgba(0,48,135,0.07)', background: 'var(--surface-2)',
               color: '#003087', fontSize: 12.5, fontWeight: 700,
             }}
           >

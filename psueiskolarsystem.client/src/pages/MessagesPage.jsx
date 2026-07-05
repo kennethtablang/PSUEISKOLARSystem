@@ -148,7 +148,7 @@ export default function MessagesPage() {
         </div>
 
         {/* ── Conversation ── */}
-        <div className="flex-1 flex flex-col" style={{ minWidth: 0, background: '#f4f6fa' }}>
+        <div className="flex-1 flex flex-col" style={{ minWidth: 0, background: 'var(--bg)' }}>
           {!selected ? (
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center">
@@ -159,7 +159,7 @@ export default function MessagesPage() {
           ) : (
             <>
               {/* Header */}
-              <div className="px-5 py-3.5 flex items-center gap-3" style={{ background: '#fff', borderBottom: '1.5px solid #d8e2f0' }}>
+              <div className="px-5 py-3.5 flex items-center gap-3" style={{ background: 'var(--surface-2)', borderBottom: '1.5px solid var(--surface-inset)' }}>
                 <button onClick={() => setSelected(null)} className="lg:hidden w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: '#eef2f9' }}>
                   <ArrowLeft size={16} color="#003087" />
                 </button>
@@ -182,7 +182,7 @@ export default function MessagesPage() {
                 ) : messages.map(m => (
                   <div key={m.id} className="flex" style={{ justifyContent: m.mine ? 'flex-end' : 'flex-start' }}>
                     <div className="max-w-md px-3.5 py-2.5 rounded-2xl" style={{
-                      background: m.mine ? '#003087' : '#fff',
+                      background: m.mine ? '#003087' : 'var(--surface-2)',
                       color: m.mine ? '#fff' : 'var(--text-strong)',
                       boxShadow: '0 1px 4px rgba(0,20,60,0.08)',
                       borderBottomRightRadius: m.mine ? 4 : 16,
@@ -200,7 +200,7 @@ export default function MessagesPage() {
               </div>
 
               {/* Composer */}
-              <form onSubmit={handleSend} className="p-4 flex items-end gap-2" style={{ background: '#fff', borderTop: '1.5px solid #d8e2f0' }}>
+              <form onSubmit={handleSend} className="p-4 flex items-end gap-2" style={{ background: 'var(--surface-2)', borderTop: '1.5px solid var(--surface-inset)' }}>
                 <textarea
                   value={body}
                   onChange={e => setBody(e.target.value)}
