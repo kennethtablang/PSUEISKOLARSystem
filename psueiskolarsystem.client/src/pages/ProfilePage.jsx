@@ -3,7 +3,8 @@ import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { updateProfile, enable2fa, disable2fa, updateNotificationPreferences } from '../api/auth';
 import { exportScholarData } from '../api/scholars';
-import { User, Mail, Shield, Lock, KeyRound, CheckCircle, AlertCircle, ShieldCheck, ShieldOff, X, Bell, Download } from 'lucide-react';
+import { useTutorial } from '../context/TutorialContext';
+import { User, Mail, Shield, Lock, KeyRound, CheckCircle, AlertCircle, ShieldCheck, ShieldOff, X, Bell, Download, Sparkles } from 'lucide-react';
 import { useTitle } from '../hooks/useTitle';
 
 const ROLE_BADGE = {
@@ -15,6 +16,7 @@ const ROLE_BADGE = {
 export default function ProfilePage() {
   useTitle('Profile');
   const { user, token, refreshUser } = useAuth();
+  const { openTutorial } = useTutorial();
 
   const [firstName,  setFirstName]  = useState(user?.firstName  ?? '');
   const [middleName, setMiddleName] = useState(user?.middleName ?? '');
@@ -353,6 +355,15 @@ export default function ProfilePage() {
             {savingPrefs ? 'Saving…' : 'Save Preferences'}
           </button>
           {prefsMsg && <StatusMsg msg={prefsMsg} />}
+
+          <div style={{ height: 1, background: 'rgba(0,0,0,0.07)', margin: '20px 0' }} />
+          <h2 style={{ fontSize: '0.85rem', fontWeight: 800, color: '#0d1a33' }} className="mb-1.5">Guided Tour</h2>
+          <p className="text-sm mb-3" style={{ color: '#4a5a7a' }}>
+            New here or need a refresher? Replay the walkthrough of the system's main features.
+          </p>
+          <button onClick={openTutorial} className="clay-btn clay-btn-ghost px-5 py-2.5 text-sm flex items-center gap-2">
+            <Sparkles size={15} strokeWidth={2.4} /> Replay Tutorial
+          </button>
 
           {user?.role === 'Scholar' && (
             <>

@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-route
 import { AuthProvider } from './context/AuthContext';
 import { useAuth } from './context/AuthContext';
 import { NotificationProvider } from './context/NotificationContext';
+import { TutorialProvider } from './context/TutorialContext';
 import ConsentGate from './components/ConsentGate';
 import { Clock } from 'lucide-react';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -36,6 +37,7 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
       <NotificationProvider>
+      <TutorialProvider>
         <SessionExpiredModal />
         <ConsentGate />
         <Routes>
@@ -66,6 +68,7 @@ export default function App() {
 
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
+      </TutorialProvider>
       </NotificationProvider>
       </AuthProvider>
     </BrowserRouter>
