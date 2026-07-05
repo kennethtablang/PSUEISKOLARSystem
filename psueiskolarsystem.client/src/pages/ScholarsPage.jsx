@@ -5,7 +5,10 @@ import { useAuth } from '../context/AuthContext';
 import { getScholars } from '../api/scholars';
 import { getCampuses } from '../api/campuses';
 import { getPrograms, getScholarshipTypes } from '../api/lookups';
+import Pagination from '../components/Pagination';
 import { useTitle } from '../hooks/useTitle';
+
+const ctlStyle = { height: 36, minHeight: 36, fontSize: 12.5, padding: '0 10px' };
 
 const GWA_BADGE = (meets) => {
   if (meets === null || meets === undefined) return 'bg-[#e8edf5] text-[#7a8aaa]';
@@ -27,6 +30,8 @@ export default function ScholarsPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const initialStatus = searchParams.get('status') ?? '';
+  const initialSearch = searchParams.get('search') ?? '';
+  const [pageSize, setPageSize] = useState(20);
 
   const [scholars, setScholars] = useState([]);
   const [campuses, setCampuses] = useState([]);
@@ -36,10 +41,8 @@ export default function ScholarsPage() {
   const [error, setError] = useState('');
   const [paging, setPaging] = useState({ page: 1, totalPages: 1, total: 0 });
 
-  const PAGE_SIZE = 20;
-
   const [filters, setFilters] = useState({
-    search: '',
+    search: initialSearch,
     campusId: '',
     programId: '',
     scholarshipTypeId: '',
@@ -47,7 +50,7 @@ export default function ScholarsPage() {
     lifecycleStatus: initialStatus,
   });
 
-  async function loadScholars(f = filters, page = 1) {
+  async function loadScholars(f = filters, page = 1, size = pageSize) {
     setLoading(true);
     setError('');
     try {
@@ -59,7 +62,7 @@ export default function ScholarsPage() {
         meetsRequirement: f.meetsRequirement !== '' ? f.meetsRequirement : undefined,
         lifecycleStatus: f.lifecycleStatus || undefined,
         page,
-        pageSize: PAGE_SIZE,
+        pageSize: size,
       });
       setScholars(data.items);
       setPaging({ page: data.page, totalPages: data.totalPages, total: data.total });
@@ -87,6 +90,11 @@ export default function ScholarsPage() {
     loadScholars(filters, page);
   }
 
+  function changePageSize(n) {
+    setPageSize(n);
+    loadScholars(filters, 1, n);
+  }
+
   const subtitle = (() => {
     const count = `${paging.total} scholar${paging.total !== 1 ? 's' : ''}`;
     const campus = campuses.find(c => String(c.id) === String(filters.campusId));
@@ -104,33 +112,34 @@ export default function ScholarsPage() {
           </div>
         </div>
 
-        {/* Filters */}
-        <div className="flex flex-wrap gap-3 mb-5">
+        {/* Filters — compact */}
+        <div className="flex flex-wrap gap-2 mb-5 items-center">
           <input
             type="search"
-            placeholder="Search name, student ID, email…"
+            placeholder="Search name, ID, email…"
             value={filters.search}
             onChange={e => setFilter('search', e.target.value)}
-            className={`${inputCls} w-60`}
+            className={inputCls}
+            style={{ ...ctlStyle, width: 220 }}
           />
-          <select value={filters.campusId} onChange={e => setFilter('campusId', e.target.value)} className={inputCls}>
+          <select value={filters.campusId} onChange={e => setFilter('campusId', e.target.value)} className={inputCls} style={{ ...ctlStyle, width: 'auto' }}>
             <option value="">All Campuses</option>
             {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
-          <select value={filters.programId} onChange={e => setFilter('programId', e.target.value)} className={inputCls}>
+          <select value={filters.programId} onChange={e => setFilter('programId', e.target.value)} className={inputCls} style={{ ...ctlStyle, width: 'auto' }}>
             <option value="">All Programs</option>
             {programs.map(p => <option key={p.id} value={p.id}>{p.code}</option>)}
           </select>
-          <select value={filters.scholarshipTypeId} onChange={e => setFilter('scholarshipTypeId', e.target.value)} className={inputCls}>
+          <select value={filters.scholarshipTypeId} onChange={e => setFilter('scholarshipTypeId', e.target.value)} className={inputCls} style={{ ...ctlStyle, width: 'auto' }}>
             <option value="">All Scholarships</option>
             {scholarshipTypes.map(st => <option key={st.id} value={st.id}>{st.name}</option>)}
           </select>
-          <select value={filters.meetsRequirement} onChange={e => setFilter('meetsRequirement', e.target.value)} className={inputCls}>
+          <select value={filters.meetsRequirement} onChange={e => setFilter('meetsRequirement', e.target.value)} className={inputCls} style={{ ...ctlStyle, width: 'auto' }}>
             <option value="">All Compliance</option>
             <option value="true">GWA Compliant</option>
             <option value="false">Below Threshold</option>
           </select>
-          <select value={filters.lifecycleStatus} onChange={e => setFilter('lifecycleStatus', e.target.value)} className={inputCls}>
+          <select value={filters.lifecycleStatus} onChange={e => setFilter('lifecycleStatus', e.target.value)} className={inputCls} style={{ ...ctlStyle, width: 'auto' }}>
             <option value="">All Statuses</option>
             {LIFECYCLE_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
@@ -198,30 +207,16 @@ export default function ScholarsPage() {
           )}
         </div>
 
-        {!loading && paging.totalPages > 1 && (
-          <div className="flex items-center justify-between mt-4">
-            <p className="text-xs" style={{ color: '#7a8aaa' }}>
-              Page {paging.page} of {paging.totalPages} · {paging.total} scholars
-            </p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => goToPage(paging.page - 1)}
-                disabled={paging.page <= 1}
-                className="clay-btn clay-btn-ghost text-xs px-4"
-                style={{ minHeight: '34px', borderRadius: '10px', fontWeight: 700, opacity: paging.page <= 1 ? 0.4 : 1 }}
-              >
-                Previous
-              </button>
-              <button
-                onClick={() => goToPage(paging.page + 1)}
-                disabled={paging.page >= paging.totalPages}
-                className="clay-btn clay-btn-ghost text-xs px-4"
-                style={{ minHeight: '34px', borderRadius: '10px', fontWeight: 700, opacity: paging.page >= paging.totalPages ? 0.4 : 1 }}
-              >
-                Next
-              </button>
-            </div>
-          </div>
+        {!loading && paging.total > 0 && (
+          <Pagination
+            page={paging.page}
+            totalPages={paging.totalPages}
+            total={paging.total}
+            pageSize={pageSize}
+            onPageChange={goToPage}
+            onPageSizeChange={changePageSize}
+            label="scholars"
+          />
         )}
       </div>
     </Layout>

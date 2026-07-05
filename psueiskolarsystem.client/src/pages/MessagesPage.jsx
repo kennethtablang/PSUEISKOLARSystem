@@ -211,9 +211,9 @@ export default function MessagesPage() {
                   style={{ maxHeight: 120 }}
                 />
                 <button type="submit" disabled={!body.trim() || sending}
-                  className="clay-btn clay-btn-primary px-4 py-2.5 flex items-center gap-1.5"
-                  style={{ opacity: (!body.trim() || sending) ? 0.6 : 1 }}>
-                  <Send size={15} strokeWidth={2.4} />
+                  className="clay-btn clay-btn-primary flex items-center justify-center"
+                  style={{ width: 44, height: 44, padding: 0, flexShrink: 0, opacity: (!body.trim() || sending) ? 0.6 : 1 }}>
+                  <Send size={17} strokeWidth={2.4} />
                 </button>
               </form>
             </>

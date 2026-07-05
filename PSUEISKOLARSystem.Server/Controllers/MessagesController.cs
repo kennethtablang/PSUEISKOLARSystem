@@ -18,6 +18,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
     public class MessagesController(
         ApplicationDbContext db,
         INotificationService notifications,
+        IEmailService emailService,
         IHubContext<NotificationHub> hub) : ControllerBase
     {
         private string UserId => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
@@ -153,6 +154,10 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     "Message",
                     "/messages");
 
+                // When a coordinator/admin messages a scholar, also email the scholar (FR add-on).
+                if (IsStaff && scholar.Email is not null)
+                    _ = SendMessageEmailSafeAsync(scholar.Email, scholar.FullName, senderName, preview);
+
                 // Live thread append for anyone with the conversation open (FR-17.3).
                 await hub.Clients.Users(recipientIds).SendAsync("ReceiveMessage", new
                 {
@@ -185,6 +190,12 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 ? await db.Messages.CountAsync(m => !m.ReadByStaff && m.SenderId != UserId)
                 : await db.Messages.CountAsync(m => m.ScholarId == UserId && !m.ReadByScholar && m.SenderId != UserId);
             return Ok(new { count });
+        }
+
+        private async Task SendMessageEmailSafeAsync(string email, string name, string senderName, string preview)
+        {
+            try { await emailService.SendMessageEmailAsync(email, name, senderName, preview); }
+            catch { /* fire-and-forget */ }
         }
 
         public record SendMessageRequest(string? ScholarId, int? RequirementId, string Body);

@@ -49,7 +49,7 @@ export default function NotificationBell({ variant = 'floating' }) {
 
   const wrapperStyle = variant === 'floating'
     ? { position: 'fixed', top: 18, right: 24, zIndex: 35 }
-    : { position: 'relative', marginLeft: 'auto' };
+    : { position: 'relative' };
 
   return (
     <div ref={rootRef} style={wrapperStyle}>

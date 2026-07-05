@@ -5,7 +5,7 @@ import { useNotifications } from '../context/NotificationContext';
 import NotificationBell from './NotificationBell';
 import {
   LayoutDashboard, GraduationCap, FileCheck, Users, Bell,
-  FolderOpen, User, LogOut, BarChart2, ChevronRight,
+  FolderOpen, User, LogOut, BarChart2, Search,
   ChevronLeft, Settings, Menu, X, ClipboardList, Activity, Award, CalendarClock, MessageSquare,
 } from 'lucide-react';
 
@@ -108,6 +108,7 @@ export default function Layout({ children }) {
     () => localStorage.getItem('sidebar-collapsed') === 'true'
   );
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [navSearch, setNavSearch] = useState('');
 
   /* Persist desktop collapsed state */
   useEffect(() => {
@@ -292,29 +293,27 @@ export default function Layout({ children }) {
                     cursor: 'pointer',
                     transition: 'background 0.12s, box-shadow 0.12s, border-color 0.12s',
                     ...(isActive ? {
-                      background: 'rgba(255,255,255,0.96)',
-                      boxShadow: '0 3px 14px rgba(0,0,0,0.22)',
-                      borderLeft: isCollapsed ? 'none' : '3px solid #f5b800',
-                      paddingLeft: isCollapsed ? 9 : 9,
+                      background: 'rgba(255,255,255,0.09)',
+                      boxShadow: isCollapsed ? 'none' : 'inset 3px 0 0 #f5b800',
                     } : {}),
                   }}
-                  onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; }}
+                  onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'rgba(255,255,255,0.055)'; }}
                   onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
                 >
                   {/* Icon box */}
                   <div style={{
                     width: 30, height: 30, borderRadius: 9, flexShrink: 0,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    background: isActive ? 'rgba(0,48,135,0.1)' : 'rgba(255,255,255,0.07)',
+                    background: isActive ? 'rgba(245,184,0,0.16)' : 'rgba(255,255,255,0.06)',
                     transition: 'background 0.12s',
                   }}>
-                    <Icon size={14} strokeWidth={2.2} color={isActive ? '#003087' : 'rgba(255,255,255,0.6)'} />
+                    <Icon size={14} strokeWidth={2.2} color={isActive ? '#ffd23f' : 'rgba(255,255,255,0.58)'} />
                   </div>
 
                   {/* Label */}
                   <span style={{
                     flex: 1, fontSize: 13, fontWeight: isActive ? 700 : 500,
-                    color: isActive ? '#001f6e' : 'rgba(255,255,255,0.62)',
+                    color: isActive ? '#ffffff' : 'rgba(255,255,255,0.6)',
                     whiteSpace: 'nowrap', overflow: 'hidden',
                     maxWidth: isCollapsed ? 0 : 160,
                     opacity: isCollapsed ? 0 : 1,
@@ -334,10 +333,6 @@ export default function Layout({ children }) {
                     </span>
                   )}
 
-                  {/* Chevron */}
-                  {isActive && !isCollapsed && to !== '/messages' && (
-                    <ChevronRight size={12} strokeWidth={2.5} color="#003087" style={{ opacity: 0.4, flexShrink: 0 }} />
-                  )}
                 </div>
               )}
             </NavLink>
@@ -443,9 +438,6 @@ export default function Layout({ children }) {
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: '#e8edf5' }}>
 
-      {/* ── Notifications (desktop, floating top-right) ── */}
-      {isDesktop && <NotificationBell variant="floating" />}
-
       {/* ── Mobile backdrop ── */}
       {!isDesktop && mobileOpen && (
         <div
@@ -486,52 +478,67 @@ export default function Layout({ children }) {
       {/* ── Main content ── */}
       <main style={{ flex: 1, overflow: 'auto', minWidth: 0 }}>
 
-        {/* Mobile top bar */}
-        {!isDesktop && (
-          <div style={{
-            position: 'sticky', top: 0, zIndex: 30,
-            background: '#e8edf5',
-            display: 'flex', alignItems: 'center', gap: 10,
-            padding: '10px 16px',
-            boxShadow: '0 2px 16px rgba(0,0,0,0.07)',
-            borderBottom: '1px solid rgba(0,48,135,0.07)',
-          }}>
-            {/* Hamburger */}
-            <button
-              onClick={() => setMobileOpen(true)}
-              style={{
-                width: 38, height: 38, borderRadius: 12, border: 'none', cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: '#e8edf5',
-                boxShadow: '4px 4px 10px rgba(163,177,198,0.55), -3px -3px 8px rgba(255,255,255,0.9)',
-              }}
-            >
-              <Menu size={17} strokeWidth={2.5} color="#003087" />
-            </button>
-
-            {/* Brand */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+        {/* ── Top navbar (all screens) ── */}
+        <header style={{
+          position: 'sticky', top: 0, zIndex: 30,
+          background: 'rgba(232,237,245,0.82)',
+          backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)',
+          borderBottom: '1px solid rgba(0,48,135,0.08)',
+          display: 'flex', alignItems: 'center', gap: 12,
+          padding: '9px 20px', minHeight: 58,
+        }}>
+          {/* Mobile: hamburger + brand */}
+          {!isDesktop && (
+            <>
+              <button
+                onClick={() => setMobileOpen(true)}
+                style={{
+                  width: 38, height: 38, borderRadius: 12, border: 'none', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: '#e8edf5',
+                  boxShadow: '4px 4px 10px rgba(163,177,198,0.55), -3px -3px 8px rgba(255,255,255,0.9)',
+                }}
+              >
+                <Menu size={17} strokeWidth={2.5} color="#003087" />
+              </button>
               <div style={{
-                width: 32, height: 32, borderRadius: 10,
+                width: 30, height: 30, borderRadius: 9,
                 background: 'linear-gradient(145deg, #ffd030, #e0a000)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 9.5, fontWeight: 900, color: '#1a0e00',
-                boxShadow: '0 2px 0 rgba(0,0,0,0.15)',
+                fontSize: 9, fontWeight: 900, color: '#1a0e00',
               }}>PSU</div>
-              <span style={{ fontWeight: 800, fontSize: 14, color: '#0d1a33', letterSpacing: '-0.2px' }}>
-                e-Iskolar
-              </span>
-            </div>
+            </>
+          )}
 
-            {/* Notifications (mobile) */}
+          {/* Global search — coordinators/admins search scholars */}
+          {(user?.role === 'Administrator' || user?.role === 'ScholarshipCoordinator') && (
+            <form
+              onSubmit={e => { e.preventDefault(); const q = navSearch.trim(); navigate(q ? `/scholars?search=${encodeURIComponent(q)}` : '/scholars'); }}
+              style={{ position: 'relative', flex: isDesktop ? '0 1 340px' : 1, maxWidth: 340 }}
+            >
+              <Search size={15} strokeWidth={2.2} color="#7a8aaa"
+                style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+              <input
+                value={navSearch}
+                onChange={e => setNavSearch(e.target.value)}
+                placeholder="Search scholars…"
+                style={{
+                  width: '100%', height: 38, paddingLeft: 34, paddingRight: 12,
+                  borderRadius: 11, border: '1px solid rgba(0,48,135,0.1)',
+                  background: 'rgba(255,255,255,0.7)', fontSize: 13, color: '#0d1a33', outline: 'none',
+                }}
+              />
+            </form>
+          )}
+
+          {/* Right cluster */}
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
             <NotificationBell variant="inline" />
-
-            {/* User avatar */}
             <div
               onClick={() => navigate('/profile')}
               title="My Profile"
               style={{
-                marginLeft: 10, width: 36, height: 36, borderRadius: 11, cursor: 'pointer',
+                width: 36, height: 36, borderRadius: 11, cursor: 'pointer',
                 background: 'linear-gradient(145deg, #ffd030, #e0a000)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 11, fontWeight: 900, color: '#1a0e00',
@@ -541,7 +548,7 @@ export default function Layout({ children }) {
               {initials}
             </div>
           </div>
-        )}
+        </header>
 
         {children}
       </main>
