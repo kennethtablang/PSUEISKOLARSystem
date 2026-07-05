@@ -22,6 +22,7 @@ namespace PSUEISKOLARSystem.Server
             // Add services to the container.
 
             builder.Services.AddControllers();
+            builder.Services.AddSignalR();
             builder.Services.AddOpenApi();
 
             builder.Services.AddDbContext<ApplicationDbContext>(options =>
@@ -63,6 +64,20 @@ namespace PSUEISKOLARSystem.Server
                         ValidAudience = jwtSettings.Audience,
                         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.Key))
                     };
+
+                    // SignalR clients pass the JWT via the access_token query string
+                    // (WebSockets can't set Authorization headers). Accept it for hub paths.
+                    options.Events = new JwtBearerEvents
+                    {
+                        OnMessageReceived = context =>
+                        {
+                            var accessToken = context.Request.Query["access_token"];
+                            var path = context.HttpContext.Request.Path;
+                            if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
+                                context.Token = accessToken;
+                            return Task.CompletedTask;
+                        }
+                    };
                 });
 
             builder.Services.AddAuthorization();
@@ -71,6 +86,8 @@ namespace PSUEISKOLARSystem.Server
 
             builder.Services.AddScoped<IAuthService, AuthService>();
             builder.Services.AddScoped<IEmailService, EmailService>();
+            builder.Services.AddScoped<INotificationService, NotificationService>();
+            builder.Services.AddHostedService<DeadlineReminderService>();
             builder.Services.AddSingleton<IFileStorageService, LocalFileStorageService>();
 
             builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
@@ -126,6 +143,7 @@ namespace PSUEISKOLARSystem.Server
             app.UseAuthorization();
 
             app.MapControllers();
+            app.MapHub<PSUEISKOLARSystem.Server.Hubs.NotificationHub>("/hubs/notifications");
 
             app.MapFallbackToFile("/index.html");
 
