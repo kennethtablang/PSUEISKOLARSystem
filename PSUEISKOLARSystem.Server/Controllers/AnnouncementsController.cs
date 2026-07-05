@@ -12,7 +12,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
     [ApiController]
     [Route("api/[controller]")]
     [Authorize]
-    public class AnnouncementsController(ApplicationDbContext db, IEmailService emailService) : ControllerBase
+    public class AnnouncementsController(ApplicationDbContext db, IEmailService emailService, INotificationService notifications) : ControllerBase
     {
         [HttpGet]
         public async Task<IActionResult> GetAll()
@@ -99,61 +99,76 @@ namespace PSUEISKOLARSystem.Server.Controllers
             db.Announcements.Add(announcement);
             await db.SaveChangesAsync();
 
-            // Email targeted scholars (fire-and-forget)
-            _ = NotifyScholarsByEmailAsync(announcement);
+            // Resolve targeted scholars once, then deliver via both channels.
+            var scholars = await GetTargetedScholarsAsync(announcement);
+            if (scholars.Count > 0)
+            {
+                // Real-time in-app notification (FR-13/FR-14/FR-6.4) — awaited so it persists.
+                var preview = announcement.Content.Length > 200
+                    ? announcement.Content[..200] + "…"
+                    : announcement.Content;
+                await notifications.CreateForManyAsync(
+                    scholars.Select(s => s.Id),
+                    announcement.Title,
+                    preview,
+                    "Announcement",
+                    "/dashboard");
+
+                // Email only scholars who opted in to announcement emails (FR-20).
+                _ = SendAnnouncementEmailsAsync(
+                    scholars.Where(s => s.EmailOptIn).ToList(), announcement.Title, announcement.Content);
+            }
 
             return Ok(new { announcement.Id });
         }
 
-        private async Task NotifyScholarsByEmailAsync(Announcement a)
+        // Returns the scholars an announcement targets (campus/type/program/role scoped).
+        private async Task<List<TargetedScholar>> GetTargetedScholarsAsync(Announcement a)
         {
-            try
+            // If the announcement targets a non-scholar role, there are no scholars to reach.
+            if (!string.IsNullOrEmpty(a.TargetRole) && a.TargetRole != UserRoles.Scholar)
+                return [];
+
+            var query = db.Users
+                .Join(db.UserRoles, u => u.Id, ur => ur.UserId, (u, ur) => new { u, ur })
+                .Join(db.Roles, x => x.ur.RoleId, r => r.Id, (x, r) => new { x.u, RoleName = r.Name })
+                .Where(x => x.RoleName == UserRoles.Scholar && x.u.IsActive && x.u.Email != null)
+                .Select(x => x.u)
+                .AsQueryable();
+
+            if (a.TargetCampusId.HasValue)
+                query = query.Where(u => u.CampusId == a.TargetCampusId);
+
+            var scholars = await query.ToListAsync();
+
+            if (a.TargetScholarshipTypeId.HasValue || a.TargetProgramId.HasValue)
             {
-                var query = db.Users
-                    .Join(db.UserRoles, u => u.Id, ur => ur.UserId, (u, ur) => new { u, ur })
-                    .Join(db.Roles, x => x.ur.RoleId, r => r.Id, (x, r) => new { x.u, RoleName = r.Name })
-                    .Where(x => x.RoleName == UserRoles.Scholar && x.u.IsActive && x.u.Email != null)
-                    .Select(x => x.u)
-                    .AsQueryable();
+                var profileQuery = db.ScholarProfiles.AsQueryable();
+                if (a.TargetScholarshipTypeId.HasValue)
+                    profileQuery = profileQuery.Where(sp => sp.ScholarshipTypeId == a.TargetScholarshipTypeId);
+                if (a.TargetProgramId.HasValue)
+                    profileQuery = profileQuery.Where(sp => sp.ProgramId == a.TargetProgramId);
 
-                // Role filter — if announcement targets a non-scholar role, no scholars to email
-                if (!string.IsNullOrEmpty(a.TargetRole) && a.TargetRole != UserRoles.Scholar)
-                    return;
-
-                // Campus filter
-                if (a.TargetCampusId.HasValue)
-                    query = query.Where(u => u.CampusId == a.TargetCampusId);
-
-                var scholars = await query.ToListAsync();
-
-                // Scholarship type / program filter requires joining ScholarProfiles
-                if (a.TargetScholarshipTypeId.HasValue || a.TargetProgramId.HasValue)
-                {
-                    var profileQuery = db.ScholarProfiles.AsQueryable();
-                    if (a.TargetScholarshipTypeId.HasValue)
-                        profileQuery = profileQuery.Where(sp => sp.ScholarshipTypeId == a.TargetScholarshipTypeId);
-                    if (a.TargetProgramId.HasValue)
-                        profileQuery = profileQuery.Where(sp => sp.ProgramId == a.TargetProgramId);
-
-                    var matchedUserIds = await profileQuery.Select(sp => sp.UserId).ToListAsync();
-                    scholars = scholars.Where(u => matchedUserIds.Contains(u.Id)).ToList();
-                }
-
-                foreach (var scholar in scholars)
-                {
-                    try
-                    {
-                        await emailService.SendAnnouncementEmailAsync(
-                            scholar.Email!,
-                            scholar.FullName,
-                            a.Title,
-                            a.Content);
-                    }
-                    catch { /* don't let one failed email abort the rest */ }
-                }
+                var matchedUserIds = await profileQuery.Select(sp => sp.UserId).ToListAsync();
+                scholars = scholars.Where(u => matchedUserIds.Contains(u.Id)).ToList();
             }
-            catch { /* fire-and-forget — never throw */ }
+
+            return scholars.Select(u => new TargetedScholar(u.Id, u.Email!, u.FullName, u.EmailAnnouncements)).ToList();
         }
+
+        private async Task SendAnnouncementEmailsAsync(List<TargetedScholar> scholars, string title, string content)
+        {
+            foreach (var scholar in scholars)
+            {
+                try
+                {
+                    await emailService.SendAnnouncementEmailAsync(scholar.Email, scholar.FullName, title, content);
+                }
+                catch { /* don't let one failed email abort the rest */ }
+            }
+        }
+
+        private record TargetedScholar(string Id, string Email, string FullName, bool EmailOptIn);
 
         [HttpPut("{id}")]
         [Authorize(Roles = $"{UserRoles.Administrator},{UserRoles.ScholarshipCoordinator}")]

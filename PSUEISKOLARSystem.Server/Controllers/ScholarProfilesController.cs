@@ -14,6 +14,16 @@ namespace PSUEISKOLARSystem.Server.Controllers
     [Authorize]
     public class ScholarProfilesController(ApplicationDbContext db) : ControllerBase
     {
+        // Coordinators are scoped to their assigned campus; admins see all (FR-8.6/8.7).
+        private int? CoordinatorCampusScope()
+        {
+            if (User.IsInRole(UserRoles.Administrator)) return null; // no restriction
+            if (User.IsInRole(UserRoles.ScholarshipCoordinator)
+                && int.TryParse(User.FindFirstValue("campusId"), out var c))
+                return c;
+            return null;
+        }
+
         [HttpGet]
         [Authorize(Roles = $"{UserRoles.Administrator},{UserRoles.ScholarshipCoordinator}")]
         public async Task<IActionResult> GetAll(
@@ -22,6 +32,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             [FromQuery] int? scholarshipTypeId,
             [FromQuery] string? search,
             [FromQuery] bool? meetsRequirement,
+            [FromQuery] string? lifecycleStatus,
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 20)
         {
@@ -35,8 +46,15 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 .Include(sp => sp.Grades.OrderByDescending(g => g.AcademicYear).ThenByDescending(g => g.Semester).Take(1))
                 .AsQueryable();
 
+            // Campus scoping for coordinators (FR-8.6).
+            var scope = CoordinatorCampusScope();
+            if (scope.HasValue)
+                query = query.Where(sp => sp.User.CampusId == scope);
+
             if (campusId.HasValue)
                 query = query.Where(sp => sp.User.CampusId == campusId);
+            if (!string.IsNullOrWhiteSpace(lifecycleStatus))
+                query = query.Where(sp => sp.LifecycleStatus == lifecycleStatus);
             if (programId.HasValue)
                 query = query.Where(sp => sp.ProgramId == programId);
             if (scholarshipTypeId.HasValue)
@@ -90,7 +108,94 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 .FirstOrDefaultAsync(sp => sp.UserId == userId);
 
             if (profile is null) return NotFound(new { message = "Scholar profile not found." });
+
+            // Coordinators may only view scholars in their campus (FR-8.6).
+            var scope = CoordinatorCampusScope();
+            if (scope.HasValue && profile.User.CampusId != scope) return Forbid();
+
             return Ok(Map(profile));
+        }
+
+        // PATCH /api/scholars/{userId}/lifecycle  — set scholarship lifecycle status (FR-18)
+        [HttpPatch("{userId}/lifecycle")]
+        [Authorize(Roles = $"{UserRoles.Administrator},{UserRoles.ScholarshipCoordinator}")]
+        public async Task<IActionResult> SetLifecycle(string userId, LifecycleRequest dto)
+        {
+            var allowed = new[] { "Active", "Renewed", "Lapsed", "Suspended", "Graduated" };
+            if (!allowed.Contains(dto.Status))
+                return BadRequest(new { message = "Invalid lifecycle status." });
+
+            var profile = await db.ScholarProfiles.Include(sp => sp.User)
+                .FirstOrDefaultAsync(sp => sp.UserId == userId);
+            if (profile is null) return NotFound(new { message = "Scholar profile not found." });
+
+            var scope = CoordinatorCampusScope();
+            if (scope.HasValue && profile.User.CampusId != scope) return Forbid();
+
+            profile.LifecycleStatus = dto.Status;
+            db.AuditLogs.Add(new AuditLog
+            {
+                UserId = User.FindFirstValue(ClaimTypes.NameIdentifier)!,
+                Action = "SetLifecycleStatus",
+                Details = $"Set {profile.User.FullName} scholarship status to {dto.Status}.",
+            });
+            await db.SaveChangesAsync();
+            return NoContent();
+        }
+
+        // GET /api/scholars/{userId}/export  — data-subject access: download own personal data (FR-19.3)
+        [HttpGet("{userId}/export")]
+        public async Task<IActionResult> ExportData(string userId)
+        {
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            var isAdminOrCoord = User.IsInRole(UserRoles.Administrator) || User.IsInRole(UserRoles.ScholarshipCoordinator);
+            if (!isAdminOrCoord && currentUserId != userId) return Forbid();
+
+            var profile = await db.ScholarProfiles
+                .Include(sp => sp.User).ThenInclude(u => u.Campus)
+                .Include(sp => sp.Program)
+                .Include(sp => sp.ScholarshipType)
+                .Include(sp => sp.Grades)
+                .FirstOrDefaultAsync(sp => sp.UserId == userId);
+            if (profile is null) return NotFound(new { message = "Scholar profile not found." });
+
+            // Coordinators may only export scholars in their campus (FR-8.6).
+            var scope = CoordinatorCampusScope();
+            if (scope.HasValue && profile.User.CampusId != scope) return Forbid();
+
+            var documents = await db.DocumentSubmissions
+                .Include(d => d.Requirement)
+                .Where(d => d.ScholarId == userId)
+                .Select(d => new { d.FileName, Requirement = d.Requirement.Name, Status = d.Status.ToString(), d.SubmittedAt, d.AcademicYear, d.Semester })
+                .ToListAsync();
+
+            var export = new
+            {
+                GeneratedAt = DateTime.UtcNow,
+                Account = new
+                {
+                    profile.User.FullName,
+                    profile.User.Email,
+                    Campus = profile.User.Campus?.Name,
+                    profile.User.CreatedAt,
+                    profile.User.LastLoginAt,
+                },
+                Profile = new
+                {
+                    profile.StudentId,
+                    Program = profile.Program?.Name,
+                    ScholarshipType = profile.ScholarshipType?.Name,
+                    profile.YearLevel,
+                    profile.LifecycleStatus,
+                    profile.ContactNumber,
+                    profile.BirthDate,
+                    profile.Address,
+                },
+                Grades = profile.Grades.Select(g => new { g.AcademicYear, g.Semester, g.Gwa, g.MeetsRequirement, g.Remarks }),
+                Documents = documents,
+            };
+
+            return Ok(export);
         }
 
         [HttpPut("{userId}")]
@@ -104,6 +209,10 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
             var user = await db.Users.FindAsync(userId);
             if (user is null) return NotFound(new { message = "User not found." });
+
+            // Coordinators may only edit scholars in their campus (FR-8.6).
+            var scope = CoordinatorCampusScope();
+            if (scope.HasValue && user.CampusId != scope) return Forbid();
 
             var profile = await db.ScholarProfiles.FirstOrDefaultAsync(sp => sp.UserId == userId);
             if (profile is null)
@@ -133,8 +242,14 @@ namespace PSUEISKOLARSystem.Server.Controllers
             if (!isAdminOrCoord && currentUserId != userId)
                 return Forbid();
 
-            var profile = await db.ScholarProfiles.FirstOrDefaultAsync(sp => sp.UserId == userId);
+            var profile = await db.ScholarProfiles
+                .Include(sp => sp.User)
+                .FirstOrDefaultAsync(sp => sp.UserId == userId);
             if (profile is null) return NotFound(new { message = "Scholar profile not found." });
+
+            // Coordinators may only view grades for scholars in their campus (FR-8.6).
+            var scope = CoordinatorCampusScope();
+            if (scope.HasValue && profile.User.CampusId != scope) return Forbid();
 
             var grades = await db.AcademicGrades
                 .Where(g => g.ScholarProfileId == profile.Id)
@@ -161,9 +276,14 @@ namespace PSUEISKOLARSystem.Server.Controllers
         {
             var profile = await db.ScholarProfiles
                 .Include(sp => sp.ScholarshipType)
+                .Include(sp => sp.User)
                 .FirstOrDefaultAsync(sp => sp.UserId == userId);
 
             if (profile is null) return NotFound(new { message = "Scholar profile not found." });
+
+            // Coordinators may only record grades for scholars in their campus (FR-8.6).
+            var scope = CoordinatorCampusScope();
+            if (scope.HasValue && profile.User.CampusId != scope) return Forbid();
 
             var meetsRequirement = profile.ScholarshipType is null || dto.Gwa <= profile.ScholarshipType.MinimumGwa;
 
@@ -200,8 +320,10 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 ProgramCode = sp.Program?.Code,
                 ScholarshipTypeId = sp.ScholarshipTypeId,
                 ScholarshipTypeName = sp.ScholarshipType?.Name,
+                ScholarshipTypeCategory = sp.ScholarshipType?.Category,
                 MinimumGwa = sp.ScholarshipType?.MinimumGwa,
                 YearLevel = sp.YearLevel,
+                LifecycleStatus = sp.LifecycleStatus,
                 ContactNumber = sp.ContactNumber,
                 BirthDate = sp.BirthDate,
                 Address = sp.Address,
@@ -210,5 +332,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 MeetsRequirement = latest?.MeetsRequirement,
             };
         }
+
+        public record LifecycleRequest(string Status);
     }
 }

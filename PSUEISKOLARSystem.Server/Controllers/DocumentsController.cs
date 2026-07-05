@@ -13,7 +13,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
     [ApiController]
     [Route("api/documents")]
     [Authorize]
-    public class DocumentsController(ApplicationDbContext db, IFileStorageService storage, IEmailService emailService) : ControllerBase
+    public class DocumentsController(ApplicationDbContext db, IFileStorageService storage, IEmailService emailService, INotificationService notifications) : ControllerBase
     {
         // Only these types may be rendered inline; everything else is forced to download.
         private static readonly HashSet<string> PreviewableTypes = new(StringComparer.OrdinalIgnoreCase)
@@ -89,6 +89,18 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     ds.SubmittedAt,
                     ds.AcademicYear,
                     ds.Semester,
+                    // On-time / late vs the requirement's deadline for this period (FR-16.3)
+                    DueDate = db.SubmissionDeadlines
+                        .Where(dl => dl.RequirementId == ds.RequirementId &&
+                                     dl.AcademicYear == ds.AcademicYear &&
+                                     dl.Semester == ds.Semester)
+                        .Select(dl => (DateTime?)dl.DueDate)
+                        .FirstOrDefault(),
+                    IsLate = db.SubmissionDeadlines
+                        .Any(dl => dl.RequirementId == ds.RequirementId &&
+                                   dl.AcademicYear == ds.AcademicYear &&
+                                   dl.Semester == ds.Semester &&
+                                   ds.SubmittedAt > dl.DueDate),
                 })
                 .ToListAsync();
 
@@ -259,18 +271,85 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
             await db.SaveChangesAsync();
 
-            // Notify scholar by email (fire-and-forget — don't fail the request if email fails)
-            if (submission.Scholar?.Email is not null)
+            var requirementName = submission.Requirement?.Name ?? "Document";
+
+            // Real-time in-app notification (FR-13/FR-14)
+            await notifications.CreateAsync(
+                submission.ScholarId,
+                $"Document {status}",
+                $"Your \"{requirementName}\" submission was marked {status}." +
+                    (string.IsNullOrWhiteSpace(dto.FeedbackNote) ? "" : $" Note: {dto.FeedbackNote}"),
+                "DocumentStatus",
+                "/my-documents");
+
+            // Notify scholar by email (fire-and-forget — respects their email preference, FR-20)
+            if (submission.Scholar?.Email is not null && submission.Scholar.EmailDocumentStatus)
             {
                 _ = emailService.SendDocumentStatusEmailAsync(
                     submission.Scholar.Email,
                     submission.Scholar.FullName,
-                    submission.Requirement?.Name ?? "Document",
+                    requirementName,
                     status.ToString(),
                     dto.FeedbackNote);
             }
 
             return NoContent();
+        }
+
+        // POST /api/documents/batch-review  — review many submissions at once
+        [HttpPost("batch-review")]
+        [Authorize(Roles = $"{UserRoles.Administrator},{UserRoles.ScholarshipCoordinator}")]
+        public async Task<IActionResult> BatchReview(BatchReviewRequest dto)
+        {
+            if (!Enum.TryParse<DocumentStatus>(dto.Status, out var status) || status == DocumentStatus.Pending)
+                return BadRequest(new { message = "Status must be 'Verified' or 'Incomplete'." });
+            if (dto.Ids is null || dto.Ids.Count == 0)
+                return BadRequest(new { message = "No submissions selected." });
+
+            var reviewerId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            var now = DateTime.UtcNow;
+
+            var submissions = await db.DocumentSubmissions
+                .Include(s => s.Scholar)
+                .Include(s => s.Requirement)
+                .Where(s => dto.Ids.Contains(s.Id))
+                .ToListAsync();
+
+            foreach (var submission in submissions)
+            {
+                submission.Status = status;
+                submission.FeedbackNote = dto.FeedbackNote;
+                submission.ReviewedById = reviewerId;
+                submission.ReviewedAt = now;
+                db.DocumentStatusHistories.Add(new DocumentStatusHistory
+                {
+                    SubmissionId = submission.Id,
+                    Status = status.ToString(),
+                    Note = dto.FeedbackNote,
+                    ChangedById = reviewerId,
+                    ChangedAt = now,
+                });
+            }
+            await db.SaveChangesAsync();
+
+            foreach (var submission in submissions)
+            {
+                var requirementName = submission.Requirement?.Name ?? "Document";
+                await notifications.CreateAsync(
+                    submission.ScholarId,
+                    $"Document {status}",
+                    $"Your \"{requirementName}\" submission was marked {status}." +
+                        (string.IsNullOrWhiteSpace(dto.FeedbackNote) ? "" : $" Note: {dto.FeedbackNote}"),
+                    "DocumentStatus",
+                    "/my-documents");
+
+                if (submission.Scholar?.Email is not null && submission.Scholar.EmailDocumentStatus)
+                    _ = emailService.SendDocumentStatusEmailAsync(
+                        submission.Scholar.Email, submission.Scholar.FullName,
+                        requirementName, status.ToString(), dto.FeedbackNote);
+            }
+
+            return Ok(new { reviewed = submissions.Count });
         }
 
         // GET /api/documents/{id}/history
@@ -329,4 +408,5 @@ namespace PSUEISKOLARSystem.Server.Controllers
     }
 
     public record ReviewRequest(string Status, string? FeedbackNote);
+    public record BatchReviewRequest(List<int> Ids, string Status, string? FeedbackNote);
 }

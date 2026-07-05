@@ -168,6 +168,37 @@ namespace PSUEISKOLARSystem.Server.Controllers
             }
         }
 
+        // FR-19: capture Data Privacy Act (RA 10173) consent.
+        [HttpPost("accept-consent")]
+        [Authorize]
+        public async Task<IActionResult> AcceptConsent()
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            var user = await db.Users.FindAsync(userId);
+            if (user is null) return NotFound();
+
+            user.ConsentAcceptedAt = DateTime.UtcNow;
+            user.ConsentVersion = "1.0";
+            await db.SaveChangesAsync();
+            return Ok(new { user.ConsentAcceptedAt });
+        }
+
+        // FR-20: per-category email notification preferences.
+        [HttpPut("notification-preferences")]
+        [Authorize]
+        public async Task<IActionResult> UpdateNotificationPreferences(NotificationPrefsDto dto)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            var user = await db.Users.FindAsync(userId);
+            if (user is null) return NotFound();
+
+            user.EmailAnnouncements = dto.EmailAnnouncements;
+            user.EmailDocumentStatus = dto.EmailDocumentStatus;
+            user.EmailDeadlines = dto.EmailDeadlines;
+            await db.SaveChangesAsync();
+            return NoContent();
+        }
+
         [HttpPut("profile")]
         [Authorize]
         public async Task<ActionResult<UserDto>> UpdateProfile(UpdateProfileDto dto)
@@ -188,5 +219,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 return BadRequest(new { message = ex.Message });
             }
         }
+
+        public record NotificationPrefsDto(bool EmailAnnouncements, bool EmailDocumentStatus, bool EmailDeadlines);
     }
 }

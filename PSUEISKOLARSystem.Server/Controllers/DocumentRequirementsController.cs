@@ -4,14 +4,24 @@ using Microsoft.EntityFrameworkCore;
 using PSUEISKOLARSystem.Server.Data;
 using PSUEISKOLARSystem.Server.Models;
 using PSUEISKOLARSystem.Server.Models.Enums;
+using PSUEISKOLARSystem.Server.Services;
 
 namespace PSUEISKOLARSystem.Server.Controllers
 {
     [ApiController]
     [Route("api/document-requirements")]
     [Authorize]
-    public class DocumentRequirementsController(ApplicationDbContext db) : ControllerBase
+    public class DocumentRequirementsController(ApplicationDbContext db, IFileStorageService storage) : ControllerBase
     {
+        private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
+        { ".png", ".jpg", ".jpeg", ".webp" };
+
+        private static string ContentTypeFor(string fileName) => Path.GetExtension(fileName).ToLowerInvariant() switch
+        {
+            ".png" => "image/png",
+            ".webp" => "image/webp",
+            _ => "image/jpeg",
+        };
         [HttpGet]
         public async Task<IActionResult> GetAll([FromQuery] int? scholarshipTypeId)
         {
@@ -41,10 +51,75 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     dr.Name,
                     dr.Description,
                     dr.IsRequired,
+                    HasSample = dr.SampleImagePath != null,
                 })
                 .ToListAsync();
 
             return Ok(result);
+        }
+
+        // POST /api/document-requirements/{id}/sample  — upload an example image (admin)
+        [HttpPost("{id}/sample")]
+        [Authorize(Roles = UserRoles.Administrator)]
+        public async Task<IActionResult> UploadSample(int id, IFormFile file)
+        {
+            var req = await db.DocumentRequirements.FindAsync(id);
+            if (req is null) return NotFound();
+
+            if (file is null || file.Length == 0)
+                return BadRequest(new { message = "No image uploaded." });
+            var ext = Path.GetExtension(file.FileName);
+            if (!ImageExtensions.Contains(ext))
+                return BadRequest(new { message = "Sample must be an image (PNG, JPG, or WEBP)." });
+
+            try
+            {
+                var (stored, _) = await storage.SaveAsync(file);
+                if (req.SampleImagePath is not null)
+                    await storage.DeleteAsync(req.SampleImagePath);
+                req.SampleImagePath = stored;
+                await db.SaveChangesAsync();
+                return Ok(new { hasSample = true });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        // GET /api/document-requirements/{id}/sample  — serve the example image (any authenticated user)
+        [HttpGet("{id}/sample")]
+        public async Task<IActionResult> GetSample(int id)
+        {
+            var req = await db.DocumentRequirements.FindAsync(id);
+            if (req?.SampleImagePath is null) return NotFound();
+
+            try
+            {
+                var (stream, contentType) = await storage.GetAsync(req.SampleImagePath, ContentTypeFor(req.SampleImagePath));
+                Response.Headers["X-Content-Type-Options"] = "nosniff";
+                return File(stream, contentType, enableRangeProcessing: true);
+            }
+            catch (FileNotFoundException)
+            {
+                return NotFound();
+            }
+        }
+
+        // DELETE /api/document-requirements/{id}/sample  (admin)
+        [HttpDelete("{id}/sample")]
+        [Authorize(Roles = UserRoles.Administrator)]
+        public async Task<IActionResult> DeleteSample(int id)
+        {
+            var req = await db.DocumentRequirements.FindAsync(id);
+            if (req is null) return NotFound();
+            if (req.SampleImagePath is not null)
+            {
+                await storage.DeleteAsync(req.SampleImagePath);
+                req.SampleImagePath = null;
+                await db.SaveChangesAsync();
+            }
+            return NoContent();
         }
 
         [HttpPost]

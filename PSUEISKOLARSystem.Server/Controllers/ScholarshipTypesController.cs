@@ -27,6 +27,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 st.Id,
                 st.Name,
                 st.Description,
+                st.Category,
                 st.MinimumGwa,
                 st.IsActive,
                 RequirementIds = st.Requirements.Select(r => r.RequirementId).ToList(),
@@ -48,6 +49,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             {
                 Name = dto.Name.Trim(),
                 Description = dto.Description?.Trim(),
+                Category = string.IsNullOrWhiteSpace(dto.Category) ? null : dto.Category.Trim(),
                 MinimumGwa = dto.MinimumGwa,
             };
             db.ScholarshipTypes.Add(st);
@@ -68,6 +70,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
             st.Name = dto.Name.Trim();
             st.Description = dto.Description?.Trim();
+            st.Category = string.IsNullOrWhiteSpace(dto.Category) ? null : dto.Category.Trim();
             st.MinimumGwa = dto.MinimumGwa;
 
             await SetRequirements(id, dto.RequirementIds);
@@ -133,6 +136,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
     public record ScholarshipTypeRequest(
         string Name,
         string? Description,
+        string? Category,
         decimal MinimumGwa,
         List<int> RequirementIds);
 }
