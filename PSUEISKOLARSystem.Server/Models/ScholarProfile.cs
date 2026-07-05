@@ -21,6 +21,10 @@ namespace PSUEISKOLARSystem.Server.Models
 
         public int YearLevel { get; set; } = 1;
 
+        // Scholarship lifecycle state (FR-18): Active, Renewed, Lapsed, Suspended, Graduated.
+        [MaxLength(20)]
+        public string LifecycleStatus { get; set; } = "Active";
+
         [MaxLength(20)]
         public string? ContactNumber { get; set; }
 

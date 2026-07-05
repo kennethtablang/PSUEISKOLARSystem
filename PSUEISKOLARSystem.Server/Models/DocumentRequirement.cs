@@ -14,6 +14,10 @@ namespace PSUEISKOLARSystem.Server.Models
 
         public bool IsRequired { get; set; } = true;
 
+        // Stored file name of an example/sample image shown to scholars (add-on).
+        [MaxLength(260)]
+        public string? SampleImagePath { get; set; }
+
         public int? ScholarshipTypeId { get; set; }
         public ScholarshipType? ScholarshipType { get; set; }
 

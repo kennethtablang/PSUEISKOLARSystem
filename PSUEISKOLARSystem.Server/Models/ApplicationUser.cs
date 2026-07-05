@@ -20,5 +20,16 @@ namespace PSUEISKOLARSystem.Server.Models
         public bool IsActive { get; set; } = true;
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? LastLoginAt { get; set; }
+
+        // Data Privacy Act (RA 10173) consent capture (FR-19).
+        public DateTime? ConsentAcceptedAt { get; set; }
+        [System.ComponentModel.DataAnnotations.MaxLength(20)]
+        public string? ConsentVersion { get; set; }
+
+        // Per-category email notification preferences (FR-20). Critical account/security
+        // emails are always sent regardless of these flags.
+        public bool EmailAnnouncements { get; set; } = true;
+        public bool EmailDocumentStatus { get; set; } = true;
+        public bool EmailDeadlines { get; set; } = true;
     }
 }

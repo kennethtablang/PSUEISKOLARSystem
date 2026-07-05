@@ -12,6 +12,10 @@ namespace PSUEISKOLARSystem.Server.Models
         [MaxLength(500)]
         public string? Description { get; set; }
 
+        // High-level categorization, e.g. Government, Private, Institutional, Local (FR add-on).
+        [MaxLength(50)]
+        public string? Category { get; set; }
+
         public decimal MinimumGwa { get; set; } = 2.50m;
 
         public bool IsActive { get; set; } = true;
