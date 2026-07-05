@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
-import { getSubmissions, reviewDocument, downloadFile, getSubmissionHistory } from '../api/documents';
+import { getSubmissions, reviewDocument, batchReviewDocuments, downloadFile, getSubmissionHistory } from '../api/documents';
 import { getActiveSemester } from '../api/settings';
 import { useTitle } from '../hooks/useTitle';
+import { CheckCircle2, XCircle } from 'lucide-react';
 
 const STATUSES = ['', 'Pending', 'Verified', 'Incomplete'];
 const STATUS_STYLE = {
@@ -19,6 +20,9 @@ export default function DocumentReviewPage() {
   const [loading, setLoading] = useState(true);
   const [reviewing, setReviewing] = useState(null);
   const [filters, setFilters] = useState({ status: 'Pending', academicYear: '', semester: '' });
+  const [selected, setSelected] = useState(new Set());
+  const [bulkFeedback, setBulkFeedback] = useState('');
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   async function load(f = filters) {
     setLoading(true);
@@ -29,9 +33,37 @@ export default function DocumentReviewPage() {
         semester: f.semester || undefined,
       });
       setSubmissions(data);
+      setSelected(new Set());
     } finally {
       setLoading(false);
     }
+  }
+
+  function toggle(id) {
+    setSelected(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+  function toggleAll() {
+    setSelected(prev => prev.size === submissions.length ? new Set() : new Set(submissions.map(s => s.id)));
+  }
+
+  async function handleBatch(status) {
+    if (selected.size === 0) return;
+    if (status === 'Incomplete' && !bulkFeedback.trim()) {
+      alert('Please add feedback explaining what needs correcting before marking incomplete.');
+      return;
+    }
+    if (!confirm(`Mark ${selected.size} submission(s) as ${status}?`)) return;
+    setBulkBusy(true);
+    try {
+      await batchReviewDocuments([...selected], status, bulkFeedback.trim() || null, token);
+      setBulkFeedback('');
+      await load();
+    } catch (e) { alert(e.message); }
+    finally { setBulkBusy(false); }
   }
 
   useEffect(() => {
@@ -82,6 +114,31 @@ export default function DocumentReviewPage() {
           </select>
         </div>
 
+        {/* Bulk action bar */}
+        {selected.size > 0 && (
+          <div className="clay-card p-3 mb-4 flex items-center gap-3 flex-wrap" style={{ background: '#f0f5ff', border: '1.5px solid #80aaee' }}>
+            <span className="text-sm font-bold px-2" style={{ color: '#003087' }}>{selected.size} selected</span>
+            <input
+              value={bulkFeedback}
+              onChange={e => setBulkFeedback(e.target.value)}
+              placeholder="Feedback (required to mark incomplete)"
+              className="clay-input flex-1"
+              style={{ minWidth: 200 }}
+            />
+            <button onClick={() => handleBatch('Verified')} disabled={bulkBusy}
+              className="clay-btn px-4 py-2 text-sm flex items-center gap-1.5 font-bold"
+              style={{ background: '#d4f4e2', color: '#166534', opacity: bulkBusy ? 0.6 : 1 }}>
+              <CheckCircle2 size={15} strokeWidth={2.4} /> Verify Selected
+            </button>
+            <button onClick={() => handleBatch('Incomplete')} disabled={bulkBusy}
+              className="clay-btn px-4 py-2 text-sm flex items-center gap-1.5 font-bold"
+              style={{ background: '#fee2e2', color: '#991b1b', opacity: bulkBusy ? 0.6 : 1 }}>
+              <XCircle size={15} strokeWidth={2.4} /> Mark Incomplete
+            </button>
+            <button onClick={() => setSelected(new Set())} className="text-xs hover:underline" style={{ color: '#7a8aaa' }}>Clear</button>
+          </div>
+        )}
+
         <div className="clay-card overflow-hidden">
           {loading ? (
             <p className="text-center py-12 text-sm" style={{ color: '#7a8aaa' }}>Loading…</p>
@@ -91,6 +148,10 @@ export default function DocumentReviewPage() {
             <table className="w-full text-sm">
               <thead className="clay-table-head">
                 <tr>
+                  <th className="px-4 py-3">
+                    <input type="checkbox" checked={selected.size === submissions.length && submissions.length > 0}
+                      onChange={toggleAll} style={{ width: 16, height: 16, accentColor: '#003087' }} />
+                  </th>
                   {['Scholar', 'Document', 'File', 'Period', 'Status', ''].map(h => (
                     <th key={h} className="text-left px-5 py-3 text-xs font-bold uppercase tracking-wider" style={{ color: '#7a8aaa' }}>{h}</th>
                   ))}
@@ -99,6 +160,10 @@ export default function DocumentReviewPage() {
               <tbody>
                 {submissions.map((s, i) => (
                   <tr key={s.id} className="clay-table-row">
+                    <td className="px-4 py-3.5">
+                      <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggle(s.id)}
+                        style={{ width: 16, height: 16, accentColor: '#003087' }} />
+                    </td>
                     <td className="px-5 py-3.5">
                       <p className="font-semibold" style={{ color: '#0d1a33' }}>{s.scholarName}</p>
                       <p className="text-xs" style={{ color: '#7a8aaa' }}>{s.campusName ?? s.scholarEmail}</p>

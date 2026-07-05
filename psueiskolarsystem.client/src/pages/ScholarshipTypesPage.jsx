@@ -90,7 +90,15 @@ export default function ScholarshipTypesPage() {
                 {types.map(st => (
                   <tr key={st.id} className="clay-table-row">
                     <td className="px-5 py-3.5">
-                      <p className="font-semibold" style={{ color: '#0d1a33' }}>{st.name}</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-semibold" style={{ color: '#0d1a33' }}>{st.name}</p>
+                        {st.category && (
+                          <span className="text-xs px-1.5 py-0.5 rounded-xl font-medium"
+                            style={{ background: '#ede9fe', color: '#6d28d9', border: '1px solid #c4b5fd' }}>
+                            {st.category}
+                          </span>
+                        )}
+                      </div>
                       {st.description && (
                         <p className="text-xs mt-0.5" style={{ color: '#7a8aaa' }}>{st.description}</p>
                       )}
@@ -179,6 +187,7 @@ function ScholarshipTypeModal({ initial, allRequirements, token, onClose, onSave
   const [form, setForm] = useState({
     name:           initial?.name ?? '',
     description:    initial?.description ?? '',
+    category:       initial?.category ?? '',
     minimumGwa:     initial?.minimumGwa?.toString() ?? '2.50',
     requirementIds: initial?.requirementIds ?? [],
   });
@@ -209,6 +218,7 @@ function ScholarshipTypeModal({ initial, allRequirements, token, onClose, onSave
       const payload = {
         name:           form.name.trim(),
         description:    form.description.trim() || null,
+        category:       form.category || null,
         minimumGwa:     gwa,
         requirementIds: form.requirementIds,
       };
@@ -256,6 +266,15 @@ function ScholarshipTypeModal({ initial, allRequirements, token, onClose, onSave
             className="clay-input"
             placeholder="Brief description of this scholarship program…"
           />
+        </Field>
+
+        <Field label="Category">
+          <select value={form.category} onChange={e => set('category', e.target.value)} className="clay-input">
+            <option value="">— Uncategorized —</option>
+            {['Government', 'Private', 'Institutional', 'Local (LGU)', 'International', 'Other'].map(c => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
         </Field>
 
         <Field label="Minimum GWA Requirement">

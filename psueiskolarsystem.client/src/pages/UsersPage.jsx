@@ -4,6 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import { getUsers, updateUser, setUserStatus, deleteUser } from '../api/users';
 import { register } from '../api/auth';
 import { getCampuses } from '../api/campuses';
+import { downloadImportTemplate, importScholars, triggerDownload } from '../api/userImport';
+import { Upload, Download, CheckCircle2, XCircle } from 'lucide-react';
 import { useTitle } from '../hooks/useTitle';
 
 const ROLES = ['Administrator', 'ScholarshipCoordinator', 'Scholar'];
@@ -23,6 +25,7 @@ export default function UsersPage() {
   const [error, setError]           = useState('');
   const [showModal, setShowModal]   = useState(false);
   const [editing, setEditing]       = useState(null);     // null = create, object = edit
+  const [showImport, setShowImport] = useState(false);
   const [filterRole, setFilterRole] = useState('');
   const [filterCampus, setFilterCampus] = useState('');
   const [search, setSearch]         = useState('');
@@ -82,9 +85,14 @@ export default function UsersPage() {
             <p className="page-subtitle">{displayed.length} user{displayed.length !== 1 ? 's' : ''}</p>
             <span className="page-title-bar" />
           </div>
-          <button onClick={openCreate} className="clay-btn clay-btn-primary px-4 py-2.5 text-sm">
-            + Add User
-          </button>
+          <div className="flex items-center gap-3">
+            <button onClick={() => setShowImport(true)} className="clay-btn clay-btn-ghost px-4 py-2.5 text-sm flex items-center gap-2">
+              <Upload size={15} strokeWidth={2.4} /> Import Scholars
+            </button>
+            <button onClick={openCreate} className="clay-btn clay-btn-primary px-4 py-2.5 text-sm">
+              + Add User
+            </button>
+          </div>
         </div>
 
         {/* Filters */}
@@ -177,7 +185,148 @@ export default function UsersPage() {
           />
         )
       )}
+
+      {showImport && (
+        <ImportScholarsModal
+          token={token}
+          onClose={() => setShowImport(false)}
+          onDone={() => load()}
+        />
+      )}
     </Layout>
+  );
+}
+
+/* ── Bulk Import Modal (FR-15) ──────────────────────── */
+function ImportScholarsModal({ token, onClose, onDone }) {
+  const [file, setFile]           = useState(null);
+  const [busy, setBusy]           = useState(false);
+  const [error, setError]         = useState('');
+  const [result, setResult]       = useState(null);   // ImportSummary
+
+  async function handleTemplate() {
+    try { await downloadImportTemplate(token); }
+    catch (e) { setError(e.message); }
+  }
+
+  async function handleImport() {
+    if (!file) return;
+    setError(''); setBusy(true); setResult(null);
+    try {
+      const summary = await importScholars(file, token);
+      setResult(summary);
+      onDone();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function downloadErrorReport() {
+    if (!result) return;
+    const failed = result.results.filter(r => !r.success);
+    const rows = [['Row', 'Email', 'Error'], ...failed.map(r => [r.row, r.email, r.message])];
+    const csv = rows.map(r => r.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+    triggerDownload(new Blob([csv], { type: 'text/csv' }), 'import_errors.csv');
+  }
+
+  return (
+    <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{ background: 'rgba(0,20,60,0.45)' }}>
+      <div className="clay-card-modal w-full p-7" style={{ maxWidth: 620, maxHeight: '88vh', overflowY: 'auto' }}>
+        <h2 className="text-base font-black mb-1.5" style={{ color: '#0d1a33' }}>Import Scholars</h2>
+        <p className="text-sm mb-5" style={{ color: '#5a6a85' }}>
+          Upload a CSV or Excel file to create many scholar accounts at once. Each created scholar is
+          emailed a temporary password and a verification link.
+        </p>
+
+        {error && <ErrorBox>{error}</ErrorBox>}
+
+        {!result && (
+          <>
+            <button onClick={handleTemplate} className="clay-btn clay-btn-ghost px-4 py-2.5 text-sm flex items-center gap-2 mb-4">
+              <Download size={15} strokeWidth={2.4} /> Download template
+            </button>
+
+            <label className="block text-xs font-bold mb-1.5 uppercase tracking-wider" style={{ color: '#4a5a7a' }}>
+              Import file (.xlsx or .csv)
+            </label>
+            <input
+              type="file"
+              accept=".xlsx,.csv"
+              onChange={e => setFile(e.target.files?.[0] ?? null)}
+              className="clay-input mb-5"
+            />
+
+            <div className="flex gap-3">
+              <button onClick={onClose} className="clay-btn clay-btn-ghost flex-1 py-2.5 text-sm">Cancel</button>
+              <button
+                onClick={handleImport}
+                disabled={!file || busy}
+                className="clay-btn clay-btn-primary flex-1 py-2.5 text-sm"
+                style={{ opacity: (!file || busy) ? 0.6 : 1 }}
+              >
+                {busy ? 'Importing…' : 'Import'}
+              </button>
+            </div>
+          </>
+        )}
+
+        {result && (
+          <>
+            <div className="flex gap-3 mb-4">
+              <SummaryStat label="Total rows" value={result.total} color="#003087" />
+              <SummaryStat label="Created" value={result.created} color="#0a7d43" />
+              <SummaryStat label="Failed" value={result.failed} color="#c0342c" />
+            </div>
+
+            <div className="clay-card overflow-hidden mb-4" style={{ maxHeight: 300, overflowY: 'auto' }}>
+              <table className="w-full text-xs">
+                <thead className="clay-table-head">
+                  <tr>
+                    {['#', 'Email', 'Result'].map(h => (
+                      <th key={h} className="text-left px-3 py-2 font-bold uppercase tracking-wider" style={{ color: '#7a8aaa' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {result.results.map(r => (
+                    <tr key={r.row} className="clay-table-row">
+                      <td className="px-3 py-2" style={{ color: '#7a8aaa' }}>{r.row}</td>
+                      <td className="px-3 py-2" style={{ color: '#0d1a33' }}>{r.email || '—'}</td>
+                      <td className="px-3 py-2">
+                        <span className="inline-flex items-center gap-1.5" style={{ color: r.success ? '#0a7d43' : '#c0342c' }}>
+                          {r.success ? <CheckCircle2 size={13} /> : <XCircle size={13} />}
+                          {r.message}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex gap-3">
+              {result.failed > 0 && (
+                <button onClick={downloadErrorReport} className="clay-btn clay-btn-ghost flex-1 py-2.5 text-sm flex items-center justify-center gap-2">
+                  <Download size={14} strokeWidth={2.4} /> Error report
+                </button>
+              )}
+              <button onClick={onClose} className="clay-btn clay-btn-primary flex-1 py-2.5 text-sm">Done</button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SummaryStat({ label, value, color }) {
+  return (
+    <div className="clay-card flex-1 px-4 py-3 text-center">
+      <p className="text-2xl font-black" style={{ color }}>{value}</p>
+      <p className="text-xs font-semibold uppercase tracking-wider mt-0.5" style={{ color: '#7a8aaa' }}>{label}</p>
+    </div>
   );
 }
 

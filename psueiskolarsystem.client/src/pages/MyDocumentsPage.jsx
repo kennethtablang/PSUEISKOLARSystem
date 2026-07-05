@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
-import { getRequirements, getSubmissions, uploadDocument, deleteSubmission, downloadFile, previewFile, getSubmissionHistory } from '../api/documents';
+import { getRequirements, getSubmissions, uploadDocument, deleteSubmission, downloadFile, previewFile, getSubmissionHistory, getRequirementSample } from '../api/documents';
 import { getScholarProfile, upsertScholarProfile } from '../api/scholars';
 import { getScholarshipTypes } from '../api/lookups';
 import { getActiveSemester } from '../api/settings';
+import { getDeadlines } from '../api/deadlines';
 import { useTitle } from '../hooks/useTitle';
-import { Eye, X, Download, FileText, Image, FileX, Loader, BookOpen, ChevronDown, ChevronUp } from 'lucide-react';
+import { Eye, X, Download, FileText, Image, FileX, Loader, BookOpen, ChevronDown, ChevronUp, CalendarClock } from 'lucide-react';
 
 const STATUS_STYLE = {
   Pending:    'bg-amber-100 text-amber-700',
@@ -20,6 +21,7 @@ export default function MyDocumentsPage() {
 
   const [requirements,    setRequirements]    = useState([]);
   const [submissions,     setSubmissions]     = useState([]);
+  const [deadlineByReq,   setDeadlineByReq]   = useState({});
   const [profile,         setProfile]         = useState(null);
   const [scholarshipTypes, setScholarshipTypes] = useState([]);
   const [loading,         setLoading]         = useState(true);
@@ -31,6 +33,12 @@ export default function MyDocumentsPage() {
 
   const [period,      setPeriod]      = useState({ academicYear: '', semester: 1 });
   const [periodReady, setPeriodReady] = useState(false);
+  const [sampleUrl,   setSampleUrl]   = useState(null);
+
+  async function handleViewSample(reqId) {
+    try { setSampleUrl(await getRequirementSample(reqId, token)); }
+    catch (e) { alert(e.message); }
+  }
 
   // preview state
   const [preview,        setPreview]        = useState(null);   // { url, contentType, fileName, submissionId }
@@ -80,12 +88,16 @@ export default function MyDocumentsPage() {
       setProfile(p);
       setScholarshipTypes(types);
       setPickingType(p?.scholarshipTypeId?.toString() ?? '');
-      const [reqs, subs] = await Promise.all([
+      const [reqs, subs, deadlines] = await Promise.all([
         getRequirements(token, { scholarshipTypeId: p?.scholarshipTypeId }),
         getSubmissions(token, { academicYear: period.academicYear, semester: period.semester }),
+        getDeadlines(token, { academicYear: period.academicYear, semester: period.semester }).catch(() => []),
       ]);
       setRequirements(reqs);
       setSubmissions(subs);
+      const map = {};
+      deadlines.forEach(d => { map[d.requirementId] = d; });
+      setDeadlineByReq(map);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -288,12 +300,14 @@ export default function MyDocumentsPage() {
                       key={req.id}
                       requirement={req}
                       submission={sub}
+                      deadline={deadlineByReq[req.id]}
                       uploading={uploading === req.id}
                       loadingPreview={loadingPreview === sub?.id}
                       isPreviewing={preview?.submissionId === sub?.id}
                       onUpload={file => handleUpload(req.id, file)}
                       onDelete={() => handleDelete(sub.id)}
                       onPreview={() => handlePreview(sub)}
+                      onViewSample={() => handleViewSample(req.id)}
                       token={token}
                     />
                   );
@@ -348,6 +362,20 @@ export default function MyDocumentsPage() {
           </div>
         )}
       </div>
+
+      {sampleUrl && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 p-6" style={{ background: 'rgba(0,20,60,0.6)' }}
+          onClick={() => { URL.revokeObjectURL(sampleUrl); setSampleUrl(null); }}>
+          <div className="relative" onClick={e => e.stopPropagation()}>
+            <button onClick={() => { URL.revokeObjectURL(sampleUrl); setSampleUrl(null); }}
+              className="absolute -top-3 -right-3 w-8 h-8 rounded-full flex items-center justify-center" style={{ background: '#fff', boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
+              <X size={16} color="#0d1a33" strokeWidth={2.5} />
+            </button>
+            <p className="text-white text-sm font-semibold mb-2 text-center">Example of a valid document</p>
+            <img src={sampleUrl} alt="Document sample" style={{ maxWidth: '90vw', maxHeight: '80vh', borderRadius: 12, boxShadow: '0 8px 40px rgba(0,0,0,0.4)' }} />
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }
@@ -400,7 +428,37 @@ function PreviewContent({ preview }) {
 
 const STATUS_DOT = { Pending: '#c07800', Verified: '#0a7a50', Incomplete: '#c03010' };
 
-function RequirementRow({ requirement, submission, uploading, loadingPreview, isPreviewing, onUpload, onDelete, onPreview, token }) {
+function DeadlineBadge({ deadline, submission }) {
+  if (!deadline) return null;
+  const due = new Date(deadline.dueDate);
+
+  // If already submitted, reflect on-time vs late against the deadline.
+  if (submission) {
+    if (submission.isLate)
+      return <Badge color="#c2410c" bg="#ffedd5">Submitted late</Badge>;
+    return <Badge color="#0a7d43" bg="#d1fae5">On time</Badge>;
+  }
+
+  const msPerDay = 86400000;
+  const days = Math.ceil((due - new Date()) / msPerDay);
+  const dueLabel = due.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+
+  if (days < 0) return <Badge color="#c0342c" bg="#fee2e2">Overdue · was due {dueLabel}</Badge>;
+  if (days === 0) return <Badge color="#c0342c" bg="#fee2e2">Due today</Badge>;
+  if (days <= 3) return <Badge color="#c2410c" bg="#ffedd5">Due in {days} day{days > 1 ? 's' : ''}</Badge>;
+  return <Badge color="#4a5a7a" bg="#eef2f9">Due {dueLabel}</Badge>;
+}
+
+function Badge({ color, bg, children }) {
+  return (
+    <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium"
+      style={{ color, background: bg }}>
+      <CalendarClock size={11} strokeWidth={2.4} /> {children}
+    </span>
+  );
+}
+
+function RequirementRow({ requirement, submission, deadline, uploading, loadingPreview, isPreviewing, onUpload, onDelete, onPreview, onViewSample, token }) {
   const inputId  = `file-${requirement.id}`;
   const canUpload = !submission || submission.status === 'Incomplete';
   const [showHistory, setShowHistory] = useState(false);
@@ -431,6 +489,14 @@ function RequirementRow({ requirement, submission, uploading, loadingPreview, is
           {requirement.description && (
             <p className="text-xs mt-0.5" style={{ color: '#7a8aaa' }}>{requirement.description}</p>
           )}
+          <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+            <DeadlineBadge deadline={deadline} submission={submission} />
+            {requirement.hasSample && (
+              <button onClick={onViewSample} className="inline-flex items-center gap-1 text-xs font-medium hover:underline" style={{ color: '#003087' }}>
+                <Image size={11} strokeWidth={2.4} /> View sample
+              </button>
+            )}
+          </div>
         </div>
 
         {submission ? (

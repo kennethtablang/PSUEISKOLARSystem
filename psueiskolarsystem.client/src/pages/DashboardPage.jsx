@@ -3,12 +3,12 @@ import { Link } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { getAnnouncements } from '../api/announcements';
-import { getScholarProfile } from '../api/scholars';
+import { getScholarProfile, getScholars } from '../api/scholars';
 import { getUsers } from '../api/users';
 import { getAnalyticsOverview } from '../api/analytics';
 import { getSubmissions, getRequirements } from '../api/documents';
 import { getActiveSemester } from '../api/settings';
-import { GraduationCap, ClipboardList, AlertTriangle, BarChart2, Inbox, Clock, FileCheck, ArrowRight } from 'lucide-react';
+import { GraduationCap, ClipboardList, AlertTriangle, BarChart2, Inbox, Clock, FileCheck, ArrowRight, RefreshCw } from 'lucide-react';
 import { useTitle } from '../hooks/useTitle';
 
 export default function DashboardPage() {
@@ -18,6 +18,7 @@ export default function DashboardPage() {
   const [stats, setStats] = useState(null);
   const [compliance, setCompliance] = useState(null);
   const [scholarGwa, setScholarGwa] = useState(null); // { latestGwa, minimumGwa, scholarshipTypeName, meetsRequirement }
+  const [renewal, setRenewal] = useState(null); // { count } of lapsed/suspended scholars
 
   useEffect(() => {
     getAnnouncements(token).then(setAnnouncements).catch(() => {});
@@ -25,8 +26,20 @@ export default function DashboardPage() {
     if (user?.role === 'Scholar') {
       loadScholarCompliance();
       loadScholarGwa();
+    } else {
+      loadRenewal();
     }
   }, []);
+
+  async function loadRenewal() {
+    try {
+      const [lapsed, suspended] = await Promise.all([
+        getScholars(token, { lifecycleStatus: 'Lapsed', pageSize: 1 }),
+        getScholars(token, { lifecycleStatus: 'Suspended', pageSize: 1 }),
+      ]);
+      setRenewal({ count: (lapsed.total ?? 0) + (suspended.total ?? 0) });
+    } catch { /* optional */ }
+  }
 
   async function loadStats() {
     try {
@@ -132,6 +145,28 @@ export default function DashboardPage() {
               </>
             )}
           </div>
+        )}
+
+        {/* Renewal / lifecycle attention (FR-18.4) */}
+        {user?.role !== 'Scholar' && renewal?.count > 0 && (
+          <Link to="/scholars?status=Lapsed" className="block mb-8">
+            <div className="rounded-3xl p-5 flex items-center gap-4"
+              style={{ background: '#fff2ec', boxShadow: '6px 6px 16px rgba(163,177,198,0.5), -4px -4px 12px rgba(255,255,255,0.85)' }}>
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0"
+                style={{ background: 'rgba(255,255,255,0.6)' }}>
+                <RefreshCw size={20} strokeWidth={2} style={{ color: '#c05000' }} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-black" style={{ color: '#0d1a33' }}>
+                  {renewal.count} scholar{renewal.count !== 1 ? 's' : ''} need renewal attention
+                </p>
+                <p className="text-xs mt-0.5" style={{ color: '#7a3010' }}>
+                  Scholars marked Lapsed or Suspended — review their standing.
+                </p>
+              </div>
+              <ArrowRight size={18} strokeWidth={2.5} style={{ color: '#c05000' }} />
+            </div>
+          </Link>
         )}
 
         {/* Scholar GWA status card */}

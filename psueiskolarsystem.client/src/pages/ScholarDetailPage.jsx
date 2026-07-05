@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Printer } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
-import { getScholarProfile, upsertScholarProfile, getGrades, addGrade } from '../api/scholars';
+import { getScholarProfile, upsertScholarProfile, getGrades, addGrade, setLifecycleStatus } from '../api/scholars';
 import { getPrograms, getScholarshipTypes } from '../api/lookups';
 import { useTitle } from '../hooks/useTitle';
 
@@ -21,6 +22,47 @@ export default function ScholarDetailPage() {
   const [error, setError] = useState('');
   const [editing, setEditing] = useState(false);
   const [showAddGrade, setShowAddGrade] = useState(false);
+  const [savingStatus, setSavingStatus] = useState(false);
+
+  async function handleStatusChange(status) {
+    setSavingStatus(true);
+    try { await setLifecycleStatus(targetUserId, status, token); await load(); }
+    catch (e) { alert(e.message); }
+    finally { setSavingStatus(false); }
+  }
+
+  function handlePrint() {
+    if (!profile) return;
+    const esc = s => String(s ?? '—').replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
+    const field = (k, v) => `<div><div class="k">${k}</div><div class="v">${esc(v)}</div></div>`;
+    const rows = grades.map(g =>
+      `<tr><td>${esc(g.academicYear)}</td><td>Sem ${g.semester}</td><td>${g.gwa.toFixed(2)}</td><td>${g.meetsRequirement ? 'Compliant' : 'Flagged'}</td><td>${esc(g.remarks)}</td></tr>`).join('');
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Scholar Summary — ${esc(profile.fullName)}</title>
+      <style>body{font-family:Arial,Helvetica,sans-serif;color:#0d1a33;padding:36px;max-width:800px;margin:auto;}
+      h1{color:#002570;font-size:20px;margin:0;} .sub{color:#667;font-size:12px;margin:4px 0 20px;}
+      .grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px 20px;margin-bottom:24px;}
+      .k{color:#889;font-size:10px;text-transform:uppercase;letter-spacing:.05em;} .v{font-weight:bold;font-size:14px;margin-top:2px;}
+      h3{color:#002570;font-size:14px;border-bottom:2px solid #002570;padding-bottom:4px;} table{width:100%;border-collapse:collapse;}
+      th,td{border:1px solid #ccd;padding:6px 8px;text-align:left;font-size:12px;} th{background:#eef2fb;}
+      .foot{margin-top:28px;color:#99a;font-size:10px;border-top:1px solid #ddd;padding-top:8px;}</style></head><body>
+      <h1>PSU e-Iskolar — Scholar Compliance Summary</h1>
+      <div class="sub">Generated ${new Date().toLocaleString()} · by ${esc(currentUser?.fullName)}</div>
+      <div class="grid">
+        ${field('Full Name', profile.fullName)}${field('Student ID', profile.studentId)}${field('Status', profile.lifecycleStatus)}
+        ${field('Program', profile.programName)}${field('Campus', profile.campusName)}${field('Scholarship', profile.scholarshipTypeName)}
+        ${field('Year Level', 'Year ' + profile.yearLevel)}${field('Latest GWA', profile.latestGwa?.toFixed(2))}${field('Min. GWA', profile.minimumGwa?.toFixed(2))}
+        ${field('Compliance', profile.meetsRequirement == null ? 'No GWA' : profile.meetsRequirement ? 'Compliant' : 'Below threshold')}${field('Contact', profile.contactNumber)}${field('Email', profile.email)}
+      </div>
+      <h3>Academic Grades</h3>
+      <table><thead><tr><th>Academic Year</th><th>Sem</th><th>GWA</th><th>Status</th><th>Remarks</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="5">No grades recorded.</td></tr>'}</tbody></table>
+      <div class="foot">PSU e-Iskolar · Scholar Profiling and Records Management System · Confidential (RA 10173)</div>
+      </body></html>`;
+    const w = window.open('', '_blank');
+    if (!w) return;
+    w.document.write(html); w.document.close(); w.focus();
+    setTimeout(() => w.print(), 300);
+  }
 
   const isAdminOrCoord = currentUser?.role === 'Administrator' || currentUser?.role === 'ScholarshipCoordinator';
   const targetUserId   = userId ?? currentUser?.id;
@@ -64,11 +106,18 @@ export default function ScholarDetailPage() {
             <p className="page-subtitle">{profile?.email}</p>
             <span className="page-title-bar" />
           </div>
-          {(isAdminOrCoord || isOwnProfile) && (
-            <button onClick={() => setEditing(true)} className="clay-btn clay-btn-ghost px-4 py-2 text-sm">
-              {isOwnProfile ? 'Edit My Info' : 'Edit Profile'}
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {profile && (
+              <button onClick={handlePrint} className="clay-btn clay-btn-ghost px-4 py-2 text-sm flex items-center gap-1.5">
+                <Printer size={14} strokeWidth={2.4} /> Print Summary
+              </button>
+            )}
+            {(isAdminOrCoord || isOwnProfile) && (
+              <button onClick={() => setEditing(true)} className="clay-btn clay-btn-ghost px-4 py-2 text-sm">
+                {isOwnProfile ? 'Edit My Info' : 'Edit Profile'}
+              </button>
+            )}
+          </div>
         </div>
 
         {!profile ? (
@@ -99,6 +148,25 @@ export default function ScholarDetailPage() {
               </div>
             )}
 
+            {/* Scholarship lifecycle status (FR-18) */}
+            <div className="clay-card p-4 mb-5 flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center gap-2.5">
+                <span className="text-xs font-bold uppercase tracking-wider" style={{ color: '#7a8aaa' }}>Scholarship Status</span>
+                <LifecycleBadge status={profile.lifecycleStatus} />
+              </div>
+              {isAdminOrCoord && (
+                <select
+                  value={profile.lifecycleStatus}
+                  disabled={savingStatus}
+                  onChange={e => handleStatusChange(e.target.value)}
+                  className="clay-input"
+                  style={{ width: 'auto' }}
+                >
+                  {['Active', 'Renewed', 'Lapsed', 'Suspended', 'Graduated'].map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              )}
+            </div>
+
             <div className="clay-card p-6 mb-5">
               <h2 className="text-xs font-bold uppercase tracking-wider mb-4" style={{ color: '#7a8aaa' }}>Scholar Information</h2>
               <dl className="grid grid-cols-2 gap-x-8 gap-y-4">
@@ -107,12 +175,17 @@ export default function ScholarDetailPage() {
                 <Detail label="Program" value={profile.programName ?? '—'} />
                 <Detail label="Campus" value={profile.campusName ?? '—'} />
                 <Detail label="Scholarship Type" value={profile.scholarshipTypeName ?? '—'} />
+                <Detail label="Type Category" value={profile.scholarshipTypeCategory ?? '—'} />
                 <Detail label="Min. GWA Required" value={profile.minimumGwa?.toFixed(2) ?? '—'} />
                 <Detail label="Contact Number" value={profile.contactNumber ?? '—'} />
                 <Detail label="Birth Date" value={profile.birthDate ? new Date(profile.birthDate).toLocaleDateString('en-PH') : '—'} />
                 {profile.address && <Detail label="Address" value={profile.address} />}
               </dl>
             </div>
+
+            {grades.length >= 2 && (
+              <GradeTrendChart grades={grades} minimumGwa={profile.minimumGwa} />
+            )}
 
             <div className="clay-card p-6">
               <div className="flex items-center justify-between mb-4">
@@ -193,6 +266,52 @@ export default function ScholarDetailPage() {
   );
 }
 
+function GradeTrendChart({ grades, minimumGwa }) {
+  // GWA: lower is better (1.0 best, 5.0 worst). Reverse the Y axis so "up = better".
+  const data = [...grades]
+    .sort((a, b) => a.academicYear.localeCompare(b.academicYear) || a.semester - b.semester)
+    .map(g => ({ period: `${g.academicYear.split('-')[0]} S${g.semester}`, gwa: g.gwa }));
+
+  return (
+    <div className="clay-card p-6 mb-5">
+      <h2 className="text-xs font-bold uppercase tracking-wider mb-4" style={{ color: '#7a8aaa' }}>GWA Trend</h2>
+      <ResponsiveContainer width="100%" height={220}>
+        <LineChart data={data} margin={{ top: 5, right: 12, left: -8, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+          <XAxis dataKey="period" tick={{ fontSize: 11, fill: '#7a8aaa' }} />
+          <YAxis domain={[1, 5]} reversed tick={{ fontSize: 11, fill: '#7a8aaa' }} />
+          <Tooltip formatter={v => [Number(v).toFixed(2), 'GWA']} />
+          {minimumGwa != null && (
+            <ReferenceLine y={minimumGwa} stroke="#d05010" strokeDasharray="5 4"
+              label={{ value: `Max ${minimumGwa.toFixed(2)}`, fontSize: 10, fill: '#d05010', position: 'insideTopRight' }} />
+          )}
+          <Line type="monotone" dataKey="gwa" stroke="#003087" strokeWidth={2.5} dot={{ r: 4, fill: '#003087' }} activeDot={{ r: 6 }} />
+        </LineChart>
+      </ResponsiveContainer>
+      <p className="text-xs mt-2" style={{ color: '#9aaabb' }}>
+        Higher on the chart is better (lower GWA). The dashed line is the scholarship's maximum allowed GWA.
+      </p>
+    </div>
+  );
+}
+
+const LIFECYCLE_STYLE = {
+  Active:    { bg: '#d4f4e2', color: '#166534' },
+  Renewed:   { bg: '#dbeafe', color: '#1e40af' },
+  Lapsed:    { bg: '#fee2e2', color: '#991b1b' },
+  Suspended: { bg: '#ffedd5', color: '#9a3412' },
+  Graduated: { bg: '#e5e7eb', color: '#374151' },
+};
+
+function LifecycleBadge({ status }) {
+  const s = LIFECYCLE_STYLE[status] ?? LIFECYCLE_STYLE.Active;
+  return (
+    <span className="inline-flex px-2.5 py-0.5 rounded-full text-xs font-bold" style={{ background: s.bg, color: s.color }}>
+      {status}
+    </span>
+  );
+}
+
 function Detail({ label, value }) {
   return (
     <div>
@@ -220,6 +339,22 @@ function EditProfileModal({ profile, userId, programs, scholarshipTypes, token, 
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
+
+    // Client-side validation for immediate feedback.
+    const sid = form.studentId.trim();
+    if (!/^[A-Za-z0-9-]{3,30}$/.test(sid)) {
+      setError('Student ID may only contain letters, numbers, and hyphens (3–30 characters).');
+      return;
+    }
+    if (form.contactNumber && !/^(09\d{9}|\+639\d{9})$/.test(form.contactNumber.trim())) {
+      setError('Contact number must be a valid PH mobile number (e.g. 09171234567).');
+      return;
+    }
+    if (form.birthDate && new Date(form.birthDate) > new Date()) {
+      setError('Birth date cannot be in the future.');
+      return;
+    }
+
     setSubmitting(true);
     try {
       await upsertScholarProfile(userId, {
@@ -295,6 +430,17 @@ function AddGradeModal({ userId, token, onClose, onSaved }) {
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
+
+    if (!/^\d{4}-\d{4}$/.test(form.academicYear.trim())) {
+      setError('Academic year must be in the format YYYY-YYYY (e.g. 2025-2026).');
+      return;
+    }
+    const gwaVal = parseFloat(form.gwa);
+    if (Number.isNaN(gwaVal) || gwaVal < 1 || gwaVal > 5) {
+      setError('GWA must be between 1.00 and 5.00.');
+      return;
+    }
+
     setSubmitting(true);
     try {
       await addGrade(userId, {

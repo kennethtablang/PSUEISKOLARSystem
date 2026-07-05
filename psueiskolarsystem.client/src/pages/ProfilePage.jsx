@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
-import { updateProfile, enable2fa, disable2fa } from '../api/auth';
-import { User, Mail, Shield, Lock, KeyRound, CheckCircle, AlertCircle, ShieldCheck, ShieldOff, X } from 'lucide-react';
+import { updateProfile, enable2fa, disable2fa, updateNotificationPreferences } from '../api/auth';
+import { exportScholarData } from '../api/scholars';
+import { User, Mail, Shield, Lock, KeyRound, CheckCircle, AlertCircle, ShieldCheck, ShieldOff, X, Bell, Download } from 'lucide-react';
 import { useTitle } from '../hooks/useTitle';
 
 const ROLE_BADGE = {
@@ -30,6 +31,36 @@ export default function ProfilePage() {
   const [enabling2fa, setEnabling2fa]       = useState(false);
   const [twoFaMsg, setTwoFaMsg]             = useState(null);
   const [showDisable2fa, setShowDisable2fa] = useState(false);
+
+  const [prefs, setPrefs] = useState({
+    emailAnnouncements:  user?.emailAnnouncements  ?? true,
+    emailDocumentStatus: user?.emailDocumentStatus ?? true,
+    emailDeadlines:      user?.emailDeadlines      ?? true,
+  });
+  const [savingPrefs, setSavingPrefs] = useState(false);
+  const [prefsMsg, setPrefsMsg]       = useState(null);
+
+  async function handleSavePrefs() {
+    setSavingPrefs(true); setPrefsMsg(null);
+    try {
+      await updateNotificationPreferences(prefs, token);
+      await refreshUser();
+      setPrefsMsg({ ok: true, text: 'Preferences saved.' });
+    } catch (err) {
+      setPrefsMsg({ ok: false, text: err.message });
+    } finally { setSavingPrefs(false); }
+  }
+
+  async function handleDownloadData() {
+    try {
+      const data = await exportScholarData(user.id, token);
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'my-eiskolar-data.json';
+      a.click(); URL.revokeObjectURL(url);
+    } catch (err) { alert(err.message); }
+  }
 
   const initials  = ((user?.firstName?.[0] ?? '') + (user?.lastName?.[0] ?? '')).toUpperCase() || '?';
   const roleBadge = ROLE_BADGE[user?.role] ?? { cls: 'badge-inactive', label: user?.role };
@@ -285,6 +316,55 @@ export default function ProfilePage() {
             <div className="mt-4">
               <StatusMsg msg={twoFaMsg} />
             </div>
+          )}
+        </div>
+
+        {/* Notifications & Privacy (FR-19 / FR-20) */}
+        <div className="clay-card p-6 mt-5">
+          <div className="flex items-center gap-2 mb-5">
+            <div style={{ width: 32, height: 32, borderRadius: 10, background: 'rgba(0,48,135,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Bell size={15} color="#003087" strokeWidth={2} />
+            </div>
+            <h2 style={{ fontSize: '0.85rem', fontWeight: 800, color: '#0d1a33' }}>Email Notification Preferences</h2>
+          </div>
+          <p className="text-sm mb-4" style={{ color: '#4a5a7a' }}>
+            Choose which emails you receive. Account and security emails are always sent.
+          </p>
+
+          <div className="space-y-2 mb-4">
+            {[
+              { key: 'emailAnnouncements',  label: 'Announcements' },
+              { key: 'emailDocumentStatus', label: 'Document status updates' },
+              { key: 'emailDeadlines',      label: 'Submission deadline reminders' },
+            ].map(({ key, label }) => (
+              <label key={key} className="flex items-center justify-between clay-card-inner px-4 py-3 cursor-pointer">
+                <span className="text-sm font-semibold" style={{ color: '#0d1a33' }}>{label}</span>
+                <input
+                  type="checkbox"
+                  checked={prefs[key]}
+                  onChange={e => setPrefs(p => ({ ...p, [key]: e.target.checked }))}
+                  style={{ width: 18, height: 18, accentColor: '#003087' }}
+                />
+              </label>
+            ))}
+          </div>
+
+          <button onClick={handleSavePrefs} disabled={savingPrefs} className="clay-btn clay-btn-primary px-5 py-2.5 text-sm">
+            {savingPrefs ? 'Saving…' : 'Save Preferences'}
+          </button>
+          {prefsMsg && <StatusMsg msg={prefsMsg} />}
+
+          {user?.role === 'Scholar' && (
+            <>
+              <div style={{ height: 1, background: 'rgba(0,0,0,0.07)', margin: '20px 0' }} />
+              <h2 style={{ fontSize: '0.85rem', fontWeight: 800, color: '#0d1a33' }} className="mb-1.5">Your Data (RA 10173)</h2>
+              <p className="text-sm mb-3" style={{ color: '#4a5a7a' }}>
+                Download a copy of the personal data PSU e-Iskolar holds about you.
+              </p>
+              <button onClick={handleDownloadData} className="clay-btn clay-btn-ghost px-5 py-2.5 text-sm flex items-center gap-2">
+                <Download size={15} strokeWidth={2.4} /> Download my data
+              </button>
+            </>
           )}
         </div>
 

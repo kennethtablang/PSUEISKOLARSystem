@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { getScholars } from '../api/scholars';
@@ -12,10 +12,21 @@ const GWA_BADGE = (meets) => {
   return meets ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700';
 };
 
+const LIFECYCLE_STYLE = {
+  Active:    { bg: '#d4f4e2', color: '#166534' },
+  Renewed:   { bg: '#dbeafe', color: '#1e40af' },
+  Lapsed:    { bg: '#fee2e2', color: '#991b1b' },
+  Suspended: { bg: '#ffedd5', color: '#9a3412' },
+  Graduated: { bg: '#e5e7eb', color: '#374151' },
+};
+const LIFECYCLE_OPTIONS = ['Active', 'Renewed', 'Lapsed', 'Suspended', 'Graduated'];
+
 export default function ScholarsPage() {
   useTitle('Scholars');
   const { token } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const initialStatus = searchParams.get('status') ?? '';
 
   const [scholars, setScholars] = useState([]);
   const [campuses, setCampuses] = useState([]);
@@ -33,6 +44,7 @@ export default function ScholarsPage() {
     programId: '',
     scholarshipTypeId: '',
     meetsRequirement: '',
+    lifecycleStatus: initialStatus,
   });
 
   async function loadScholars(f = filters, page = 1) {
@@ -45,6 +57,7 @@ export default function ScholarsPage() {
         programId: f.programId || undefined,
         scholarshipTypeId: f.scholarshipTypeId || undefined,
         meetsRequirement: f.meetsRequirement !== '' ? f.meetsRequirement : undefined,
+        lifecycleStatus: f.lifecycleStatus || undefined,
         page,
         pageSize: PAGE_SIZE,
       });
@@ -117,6 +130,10 @@ export default function ScholarsPage() {
             <option value="true">GWA Compliant</option>
             <option value="false">Below Threshold</option>
           </select>
+          <select value={filters.lifecycleStatus} onChange={e => setFilter('lifecycleStatus', e.target.value)} className={inputCls}>
+            <option value="">All Statuses</option>
+            {LIFECYCLE_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
         </div>
 
         {error && <p className="text-sm mb-4" style={{ color: '#e03030' }}>{error}</p>}
@@ -130,7 +147,7 @@ export default function ScholarsPage() {
             <table className="w-full text-sm">
               <thead className="clay-table-head">
                 <tr>
-                  {['Scholar', 'Student ID', 'Campus', 'Program', 'Scholarship', 'GWA', ''].map(h => (
+                  {['Scholar', 'Student ID', 'Campus', 'Program', 'Scholarship', 'GWA', 'Status', ''].map(h => (
                     <th key={h} className="text-left px-5 py-3 text-xs font-bold uppercase tracking-wider" style={{ color: '#7a8aaa' }}>{h}</th>
                   ))}
                 </tr>
@@ -154,6 +171,16 @@ export default function ScholarsPage() {
                       ) : (
                         <span className="text-xs" style={{ color: '#7a8aaa' }}>—</span>
                       )}
+                    </td>
+                    <td className="px-5 py-3.5">
+                      {(() => {
+                        const st = LIFECYCLE_STYLE[s.lifecycleStatus] ?? LIFECYCLE_STYLE.Active;
+                        return (
+                          <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-bold" style={{ background: st.bg, color: st.color }}>
+                            {s.lifecycleStatus ?? 'Active'}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="px-5 py-3 text-right">
                       <button

@@ -15,7 +15,7 @@ const BLUE_SHADES = ['#003087', '#1a4fa0', '#3368b8', '#4d80d0', '#6699e8', '#80
 const PIE_COLORS  = ['#003087', '#f5b800', '#10b981', '#8b5cf6', '#f97316', '#06b6d4'];
 
 export default function AnalyticsPage() {
-  useTitle('Analytics');
+  useTitle('Data Visualization');
   const { token } = useAuth();
   const [data, setData] = useState(null);
   const [campuses, setCampuses] = useState([]);
@@ -80,7 +80,7 @@ export default function AnalyticsPage() {
         {/* Header */}
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="page-title">Analytics &amp; Reports</h1>
+            <h1 className="page-title">Data Visualization &amp; Reports</h1>
             <p className="page-subtitle">
               Descriptive analytics — {campusId
                 ? (campuses.find(c => String(c.id) === String(campusId))?.name ?? 'Selected Campus')
