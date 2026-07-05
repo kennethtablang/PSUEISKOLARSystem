@@ -13,5 +13,9 @@ namespace PSUEISKOLARSystem.Server.DTOs.Auth
         public string? CampusName { get; set; }
         public bool IsActive { get; set; }
         public bool TwoFactorEnabled { get; set; }
+        public DateTime? ConsentAcceptedAt { get; set; }
+        public bool EmailAnnouncements { get; set; }
+        public bool EmailDocumentStatus { get; set; }
+        public bool EmailDeadlines { get; set; }
     }
 }

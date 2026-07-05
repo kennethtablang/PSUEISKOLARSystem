@@ -15,9 +15,11 @@ namespace PSUEISKOLARSystem.Server.DTOs.Scholars
         public string? ProgramCode { get; set; }
         public int? ScholarshipTypeId { get; set; }
         public string? ScholarshipTypeName { get; set; }
+        public string? ScholarshipTypeCategory { get; set; }
         public decimal? MinimumGwa { get; set; }
 
         public int YearLevel { get; set; }
+        public string LifecycleStatus { get; set; } = "Active";
         public string? ContactNumber { get; set; }
         public DateTime? BirthDate { get; set; }
         public string? Address { get; set; }
