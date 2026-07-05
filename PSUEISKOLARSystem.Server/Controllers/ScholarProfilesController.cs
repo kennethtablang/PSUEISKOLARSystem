@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PSUEISKOLARSystem.Server.Data;
 using PSUEISKOLARSystem.Server.DTOs.Scholars;
+using PSUEISKOLARSystem.Server.Interfaces;
 using PSUEISKOLARSystem.Server.Models;
 using PSUEISKOLARSystem.Server.Models.Enums;
 
@@ -12,7 +13,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
     [ApiController]
     [Route("api/scholars")]
     [Authorize]
-    public class ScholarProfilesController(ApplicationDbContext db) : ControllerBase
+    public class ScholarProfilesController(ApplicationDbContext db, INotificationService notifications) : ControllerBase
     {
         // Coordinators are scoped to their assigned campus; admins see all (FR-8.6/8.7).
         private int? CoordinatorCampusScope()
@@ -302,6 +303,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             db.AcademicGrades.Add(grade);
             db.Audit(this, "AddGrade", $"Recorded GWA {dto.Gwa} for {profile.User.FullName} ({dto.AcademicYear} Sem {dto.Semester})");
             await db.SaveChangesAsync();
+            _ = notifications.BroadcastAsync("AnalyticsChanged");
             return Ok(new { grade.Id, grade.MeetsRequirement });
         }
 

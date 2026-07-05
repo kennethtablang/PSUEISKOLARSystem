@@ -47,6 +47,8 @@ namespace PSUEISKOLARSystem.Server.Services
                 await PushAsync(notification);
         }
 
+        public Task BroadcastAsync(string eventName) => hub.Clients.All.SendAsync(eventName);
+
         private Task PushAsync(Notification n) =>
             hub.Clients.User(n.RecipientId).SendAsync("ReceiveNotification", new
             {

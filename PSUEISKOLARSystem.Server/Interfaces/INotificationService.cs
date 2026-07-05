@@ -7,5 +7,8 @@ namespace PSUEISKOLARSystem.Server.Interfaces
 
         // Persist notifications for many users and push each in real time.
         Task CreateForManyAsync(IEnumerable<string> recipientIds, string title, string message, string category, string? linkUrl = null);
+
+        // Broadcast a signal to all connected clients (e.g. to trigger a live analytics refresh).
+        Task BroadcastAsync(string eventName);
     }
 }

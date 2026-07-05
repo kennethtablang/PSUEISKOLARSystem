@@ -9,7 +9,9 @@ import { getUsers } from '../api/users';
 import { getAnalyticsOverview } from '../api/analytics';
 import { getSubmissions, getRequirements } from '../api/documents';
 import { getActiveSemester } from '../api/settings';
-import { GraduationCap, ClipboardList, AlertTriangle, BarChart2, Inbox, Clock, FileCheck, ArrowRight, RefreshCw } from 'lucide-react';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { getDeadlines } from '../api/deadlines';
+import { GraduationCap, ClipboardList, AlertTriangle, BarChart2, Inbox, Clock, FileCheck, ArrowRight, RefreshCw, CalendarClock, MessageSquare, Megaphone, FolderOpen, User } from 'lucide-react';
 import { useTitle } from '../hooks/useTitle';
 
 export default function DashboardPage() {
@@ -20,6 +22,8 @@ export default function DashboardPage() {
   const [compliance, setCompliance] = useState(null);
   const [scholarGwa, setScholarGwa] = useState(null); // { latestGwa, minimumGwa, scholarshipTypeName, meetsRequirement }
   const [renewal, setRenewal] = useState(null); // { count } of lapsed/suspended scholars
+  const [overview, setOverview] = useState(null); // full analytics overview (admin/coord)
+  const [deadlines, setDeadlines] = useState([]); // upcoming deadlines (scholar)
 
   useEffect(() => {
     getAnnouncements(token).then(setAnnouncements).catch(() => {});
@@ -45,23 +49,25 @@ export default function DashboardPage() {
   async function loadStats() {
     try {
       if (user?.role === 'Administrator') {
-        const [users, overview] = await Promise.all([
+        const [users, ov] = await Promise.all([
           getUsers(token),
           getAnalyticsOverview(token),
         ]);
+        setOverview(ov);
         setStats({
-          totalScholars: overview.totalScholars,
+          totalScholars: ov.totalScholars,
           coordinators: users.filter(u => u.role === 'ScholarshipCoordinator' && u.isActive).length,
-          flagged: overview.nonCompliant,
-          pendingReview: overview.submissions.pending,
+          flagged: ov.nonCompliant,
+          pendingReview: ov.submissions.pending,
         });
       } else if (user?.role === 'ScholarshipCoordinator') {
-        const overview = await getAnalyticsOverview(token);
+        const ov = await getAnalyticsOverview(token);
+        setOverview(ov);
         setStats({
-          totalScholars: overview.totalScholars,
-          noGwa: overview.noGwa,
-          flagged: overview.nonCompliant,
-          pendingReview: overview.submissions.pending,
+          totalScholars: ov.totalScholars,
+          noGwa: ov.noGwa,
+          flagged: ov.nonCompliant,
+          pendingReview: ov.submissions.pending,
         });
       }
     } catch { /* stats are optional */ }
@@ -91,10 +97,22 @@ export default function DashboardPage() {
         const m = new Date().getMonth() + 1, y = new Date().getFullYear(), s = m >= 8 ? y : y - 1;
         return `${s}-${s + 1}`;
       })();
-      const [reqs, subs] = await Promise.all([
+      const semester = period?.semester ?? 1;
+      const [reqs, subs, dls] = await Promise.all([
         getRequirements(token, { scholarshipTypeId: profile?.scholarshipTypeId }),
         getSubmissions(token, { academicYear: CURRENT_YEAR }),
+        getDeadlines(token, { academicYear: CURRENT_YEAR, semester }).catch(() => []),
       ]);
+
+      // Upcoming deadlines for requirements not yet verified, due in the future.
+      const reqIds = new Set(reqs.map(r => r.id));
+      const submittedVerified = new Set(subs.filter(s => s.status === 'Verified').map(s => s.requirementId));
+      const upcoming = dls
+        .filter(d => reqIds.has(d.requirementId) && !submittedVerified.has(d.requirementId) && new Date(d.dueDate) > new Date())
+        .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
+        .slice(0, 3);
+      setDeadlines(upcoming);
+
       const required = reqs.filter(r => r.isRequired);
       const verified = subs.filter(s => s.status === 'Verified');
       const pending = subs.filter(s => s.status === 'Pending');
@@ -145,6 +163,32 @@ export default function DashboardPage() {
                 <StatCard label="Pending Review" value={stats.pendingReview} Icon={Clock}        color={stats.pendingReview > 0 ? '#fff3cd' : '#d4f5e2'} iconColor={stats.pendingReview > 0 ? '#c07800' : '#108050'} />
               </>
             )}
+          </div>
+        )}
+
+        {/* Quick actions (admin / coordinator) */}
+        {user?.role !== 'Scholar' && (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
+            <QuickAction to="/document-review" Icon={FileCheck} label="Review Documents" />
+            <QuickAction to="/scholars" Icon={GraduationCap} label="Scholars" />
+            <QuickAction to="/announcements" Icon={Megaphone} label="Announcements" />
+            <QuickAction to="/analytics" Icon={BarChart2} label="Data Visualization" />
+          </div>
+        )}
+
+        {/* Visual breakdown (admin / coordinator) */}
+        {overview && user?.role !== 'Scholar' && (
+          <div className="grid gap-4 mb-8" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
+            <DonutCard title="GWA Compliance" data={[
+              { name: 'Compliant', value: overview.compliant, color: '#10a060' },
+              { name: 'Flagged', value: overview.nonCompliant, color: '#e0603a' },
+              { name: 'No GWA', value: overview.noGwa, color: '#b0bdd0' },
+            ]} />
+            <DonutCard title="Document Submissions" data={[
+              { name: 'Verified', value: overview.submissions.verified, color: '#10a060' },
+              { name: 'Pending', value: overview.submissions.pending, color: '#e0a000' },
+              { name: 'Incomplete', value: overview.submissions.incomplete, color: '#e0603a' },
+            ]} />
           </div>
         )}
 
@@ -203,6 +247,32 @@ export default function DashboardPage() {
                     : 'Meeting scholarship GWA requirement'}
                 </p>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Upcoming deadlines (scholar) */}
+        {user?.role === 'Scholar' && deadlines.length > 0 && (
+          <div className="mb-8">
+            <h2 className="text-base font-black mb-4" style={{ color: '#0d1a33' }}>Upcoming Deadlines</h2>
+            <div className="space-y-2">
+              {deadlines.map(d => {
+                const days = Math.ceil((new Date(d.dueDate) - Date.now()) / 86400000);
+                return (
+                  <Link key={d.id} to="/my-documents" className="clay-card p-4 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(234,88,12,0.1)' }}>
+                      <CalendarClock size={18} color="#c2410c" strokeWidth={2} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold" style={{ color: '#0d1a33' }}>{d.requirementName}</p>
+                      <p className="text-xs" style={{ color: days <= 3 ? '#c2410c' : '#7a8aaa' }}>
+                        Due {new Date(d.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} · {days <= 0 ? 'today' : `in ${days} day${days > 1 ? 's' : ''}`}
+                      </p>
+                    </div>
+                    <ArrowRight size={16} color="#c2410c" strokeWidth={2.5} />
+                  </Link>
+                );
+              })}
             </div>
           </div>
         )}
@@ -296,6 +366,15 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {/* Quick actions (scholar) */}
+        {user?.role === 'Scholar' && (
+          <div className="grid grid-cols-3 gap-3 mb-8">
+            <QuickAction to="/my-documents" Icon={FolderOpen} label="My Documents" />
+            <QuickAction to="/messages" Icon={MessageSquare} label="Messages" />
+            <QuickAction to="/my-profile" Icon={User} label="My Profile" />
+          </div>
+        )}
+
         {/* Announcements */}
         <div>
           <h2 className="text-base font-black mb-4" style={{ color: '#0d1a33' }}>Announcements</h2>
@@ -338,6 +417,52 @@ function Pill({ label, bg, color, Icon }) {
       <Icon size={11} strokeWidth={2.5} />
       {label}
     </span>
+  );
+}
+
+function QuickAction({ to, Icon, label }) {
+  return (
+    <Link to={to} className="clay-card p-4 flex flex-col items-center gap-2 text-center transition-opacity hover:opacity-90">
+      <div className="w-11 h-11 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(0,48,135,0.08)' }}>
+        <Icon size={20} color="#003087" strokeWidth={2} />
+      </div>
+      <span className="text-xs font-bold" style={{ color: '#0d1a33' }}>{label}</span>
+    </Link>
+  );
+}
+
+function DonutCard({ title, data }) {
+  const items = data.filter(d => d.value > 0);
+  const total = data.reduce((s, d) => s + d.value, 0);
+  return (
+    <div className="clay-card p-5">
+      <h3 className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: '#7a8aaa' }}>{title}</h3>
+      {total === 0 ? (
+        <p className="text-sm text-center py-8" style={{ color: '#9aaabb' }}>No data yet.</p>
+      ) : (
+        <div className="flex items-center gap-4">
+          <div style={{ width: 118, height: 118, flexShrink: 0 }}>
+            <ResponsiveContainer>
+              <PieChart>
+                <Pie data={items} dataKey="value" nameKey="name" innerRadius={34} outerRadius={54} paddingAngle={2}>
+                  {items.map((d, i) => <Cell key={i} fill={d.color} />)}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="flex-1 space-y-1.5">
+            {data.map(d => (
+              <div key={d.name} className="flex items-center gap-2 text-sm">
+                <span style={{ width: 10, height: 10, borderRadius: 3, background: d.color, flexShrink: 0 }} />
+                <span style={{ color: '#4a5a7a' }}>{d.name}</span>
+                <span className="ml-auto font-bold" style={{ color: '#0d1a33' }}>{d.value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

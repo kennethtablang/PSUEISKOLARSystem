@@ -14,11 +14,18 @@ export function NotificationProvider({ children }) {
   const [connected, setConnected] = useState(false);
   const connectionRef = useRef(null);
   const messageListeners = useRef(new Set());
+  const analyticsListeners = useRef(new Set());
 
   // Let messaging screens subscribe to real-time "ReceiveMessage" events (FR-17.3).
   const subscribeToMessages = useCallback((fn) => {
     messageListeners.current.add(fn);
     return () => messageListeners.current.delete(fn);
+  }, []);
+
+  // Let the analytics screen subscribe to real-time "AnalyticsChanged" broadcasts.
+  const subscribeToAnalytics = useCallback((fn) => {
+    analyticsListeners.current.add(fn);
+    return () => analyticsListeners.current.delete(fn);
   }, []);
 
   const refreshMessageUnread = useCallback(async () => {
@@ -75,6 +82,10 @@ export function NotificationProvider({ children }) {
       messageListeners.current.forEach(fn => { try { fn(m); } catch { /* listener error */ } });
     });
 
+    connection.on('AnalyticsChanged', () => {
+      analyticsListeners.current.forEach(fn => { try { fn(); } catch { /* listener error */ } });
+    });
+
     connection.onreconnected(() => { setConnected(true); refresh(); });
     connection.onreconnecting(() => setConnected(false));
     connection.onclose(() => setConnected(false));
@@ -104,7 +115,7 @@ export function NotificationProvider({ children }) {
   }, [token]);
 
   return (
-    <NotificationContext.Provider value={{ items, unreadCount, messageUnread, connected, refresh, refreshMessageUnread, markOneRead, markEverythingRead, subscribeToMessages }}>
+    <NotificationContext.Provider value={{ items, unreadCount, messageUnread, connected, refresh, refreshMessageUnread, markOneRead, markEverythingRead, subscribeToMessages, subscribeToAnalytics }}>
       {children}
     </NotificationContext.Provider>
   );

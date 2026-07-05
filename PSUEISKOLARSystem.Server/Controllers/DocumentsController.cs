@@ -175,6 +175,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                         semester);
                 }
 
+                _ = notifications.BroadcastAsync("AnalyticsChanged");
                 return Ok(new { submission.Id });
             }
             catch (InvalidOperationException ex)
@@ -284,6 +285,8 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 "DocumentStatus",
                 "/my-documents");
 
+            _ = notifications.BroadcastAsync("AnalyticsChanged");
+
             // Notify scholar by email (fire-and-forget — respects their email preference, FR-20)
             if (submission.Scholar?.Email is not null && submission.Scholar.EmailDocumentStatus)
             {
@@ -352,6 +355,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                         requirementName, status.ToString(), dto.FeedbackNote);
             }
 
+            _ = notifications.BroadcastAsync("AnalyticsChanged");
             return Ok(new { reviewed = submissions.Count });
         }
 
