@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using PSUEISKOLARSystem.Server.Data;
 
@@ -11,9 +12,11 @@ using PSUEISKOLARSystem.Server.Data;
 namespace PSUEISKOLARSystem.Server.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260705003200_AddNotifications")]
+    partial class AddNotifications
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -322,13 +325,6 @@ namespace PSUEISKOLARSystem.Server.Migrations
                         .IsConcurrencyToken()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<DateTime?>("ConsentAcceptedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("ConsentVersion")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -336,16 +332,7 @@ namespace PSUEISKOLARSystem.Server.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
 
-                    b.Property<bool>("EmailAnnouncements")
-                        .HasColumnType("bit");
-
                     b.Property<bool>("EmailConfirmed")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("EmailDeadlines")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("EmailDocumentStatus")
                         .HasColumnType("bit");
 
                     b.Property<string>("FirstName")
@@ -489,10 +476,6 @@ namespace PSUEISKOLARSystem.Server.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
-                    b.Property<string>("SampleImagePath")
-                        .HasMaxLength(260)
-                        .HasColumnType("nvarchar(260)");
-
                     b.Property<int?>("ScholarshipTypeId")
                         .HasColumnType("int");
 
@@ -607,50 +590,6 @@ namespace PSUEISKOLARSystem.Server.Migrations
                     b.ToTable("DocumentSubmissions");
                 });
 
-            modelBuilder.Entity("PSUEISKOLARSystem.Server.Models.Message", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Body")
-                        .IsRequired()
-                        .HasMaxLength(2000)
-                        .HasColumnType("nvarchar(2000)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool>("ReadByScholar")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("ReadByStaff")
-                        .HasColumnType("bit");
-
-                    b.Property<int?>("RequirementId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("ScholarId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<string>("SenderId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("RequirementId");
-
-                    b.HasIndex("SenderId");
-
-                    b.HasIndex("ScholarId", "RequirementId");
-
-                    b.ToTable("Messages");
-                });
-
             modelBuilder.Entity("PSUEISKOLARSystem.Server.Models.Notification", b =>
                 {
                     b.Property<int>("Id")
@@ -720,11 +659,6 @@ namespace PSUEISKOLARSystem.Server.Migrations
                     b.Property<DateTime>("EnrolledAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("LifecycleStatus")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
                     b.Property<int?>("ProgramId")
                         .HasColumnType("int");
 
@@ -763,10 +697,6 @@ namespace PSUEISKOLARSystem.Server.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("Category")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
                     b.Property<string>("Description")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
@@ -801,47 +731,6 @@ namespace PSUEISKOLARSystem.Server.Migrations
                     b.HasIndex("RequirementId");
 
                     b.ToTable("ScholarshipTypeRequirements");
-                });
-
-            modelBuilder.Entity("PSUEISKOLARSystem.Server.Models.SubmissionDeadline", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("AcademicYear")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CreatedById")
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<DateTime>("DueDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("RemindersSentAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("RequirementId")
-                        .HasColumnType("int");
-
-                    b.Property<int>("Semester")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CreatedById");
-
-                    b.HasIndex("RequirementId", "AcademicYear", "Semester")
-                        .IsUnique();
-
-                    b.ToTable("SubmissionDeadlines");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
@@ -1018,32 +907,6 @@ namespace PSUEISKOLARSystem.Server.Migrations
                     b.Navigation("Scholar");
                 });
 
-            modelBuilder.Entity("PSUEISKOLARSystem.Server.Models.Message", b =>
-                {
-                    b.HasOne("PSUEISKOLARSystem.Server.Models.DocumentRequirement", "Requirement")
-                        .WithMany()
-                        .HasForeignKey("RequirementId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("PSUEISKOLARSystem.Server.Models.ApplicationUser", "Scholar")
-                        .WithMany()
-                        .HasForeignKey("ScholarId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("PSUEISKOLARSystem.Server.Models.ApplicationUser", "Sender")
-                        .WithMany()
-                        .HasForeignKey("SenderId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Requirement");
-
-                    b.Navigation("Scholar");
-
-                    b.Navigation("Sender");
-                });
-
             modelBuilder.Entity("PSUEISKOLARSystem.Server.Models.Notification", b =>
                 {
                     b.HasOne("PSUEISKOLARSystem.Server.Models.ApplicationUser", "Recipient")
@@ -1097,24 +960,6 @@ namespace PSUEISKOLARSystem.Server.Migrations
                     b.Navigation("Requirement");
 
                     b.Navigation("ScholarshipType");
-                });
-
-            modelBuilder.Entity("PSUEISKOLARSystem.Server.Models.SubmissionDeadline", b =>
-                {
-                    b.HasOne("PSUEISKOLARSystem.Server.Models.ApplicationUser", "CreatedBy")
-                        .WithMany()
-                        .HasForeignKey("CreatedById")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("PSUEISKOLARSystem.Server.Models.DocumentRequirement", "Requirement")
-                        .WithMany()
-                        .HasForeignKey("RequirementId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("CreatedBy");
-
-                    b.Navigation("Requirement");
                 });
 
             modelBuilder.Entity("PSUEISKOLARSystem.Server.Models.AcademicProgram", b =>

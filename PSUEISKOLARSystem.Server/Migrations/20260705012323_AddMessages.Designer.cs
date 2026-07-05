@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using PSUEISKOLARSystem.Server.Data;
 
@@ -11,9 +12,11 @@ using PSUEISKOLARSystem.Server.Data;
 namespace PSUEISKOLARSystem.Server.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260705012323_AddMessages")]
+    partial class AddMessages
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -322,13 +325,6 @@ namespace PSUEISKOLARSystem.Server.Migrations
                         .IsConcurrencyToken()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<DateTime?>("ConsentAcceptedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("ConsentVersion")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -336,16 +332,7 @@ namespace PSUEISKOLARSystem.Server.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
 
-                    b.Property<bool>("EmailAnnouncements")
-                        .HasColumnType("bit");
-
                     b.Property<bool>("EmailConfirmed")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("EmailDeadlines")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("EmailDocumentStatus")
                         .HasColumnType("bit");
 
                     b.Property<string>("FirstName")
@@ -488,10 +475,6 @@ namespace PSUEISKOLARSystem.Server.Migrations
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("SampleImagePath")
-                        .HasMaxLength(260)
-                        .HasColumnType("nvarchar(260)");
 
                     b.Property<int?>("ScholarshipTypeId")
                         .HasColumnType("int");
@@ -720,11 +703,6 @@ namespace PSUEISKOLARSystem.Server.Migrations
                     b.Property<DateTime>("EnrolledAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("LifecycleStatus")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
                     b.Property<int?>("ProgramId")
                         .HasColumnType("int");
 
@@ -762,10 +740,6 @@ namespace PSUEISKOLARSystem.Server.Migrations
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Category")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
 
                     b.Property<string>("Description")
                         .HasMaxLength(500)
