@@ -133,6 +133,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 IsRequired = dto.IsRequired,
             };
             db.DocumentRequirements.Add(req);
+            db.Audit(this, "CreateRequirement", $"Created document requirement '{req.Name}'");
             await db.SaveChangesAsync();
             return Ok(new { req.Id });
         }
@@ -146,6 +147,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             req.Name = dto.Name.Trim();
             req.Description = dto.Description?.Trim();
             req.IsRequired = dto.IsRequired;
+            db.Audit(this, "UpdateRequirement", $"Updated document requirement #{id} '{req.Name}'");
             await db.SaveChangesAsync();
             return NoContent();
         }
@@ -157,6 +159,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             var req = await db.DocumentRequirements.FindAsync(id);
             if (req is null) return NotFound();
             req.IsActive = false;
+            db.Audit(this, "DeleteRequirement", $"Deleted document requirement #{id} '{req.Name}'");
             await db.SaveChangesAsync();
             return NoContent();
         }

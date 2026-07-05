@@ -70,6 +70,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 if (existing.DueDate != dto.DueDate)
                     existing.RemindersSentAt = null;
                 existing.DueDate = dto.DueDate;
+                db.Audit(this, "UpdateDeadline", $"Updated deadline for requirement #{dto.RequirementId} ({dto.AcademicYear} Sem {dto.Semester}) → {dto.DueDate:yyyy-MM-dd}");
                 await db.SaveChangesAsync();
                 return Ok(new { existing.Id });
             }
@@ -83,6 +84,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 CreatedById = User.FindFirstValue(ClaimTypes.NameIdentifier),
             };
             db.SubmissionDeadlines.Add(deadline);
+            db.Audit(this, "CreateDeadline", $"Set deadline for requirement #{dto.RequirementId} ({dto.AcademicYear} Sem {dto.Semester}) → {dto.DueDate:yyyy-MM-dd}");
             await db.SaveChangesAsync();
             return Ok(new { deadline.Id });
         }
@@ -109,6 +111,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
         {
             var deadline = await db.SubmissionDeadlines.FindAsync(id);
             if (deadline is null) return NotFound();
+            db.Audit(this, "DeleteDeadline", $"Removed deadline #{id} (requirement #{deadline.RequirementId})");
             db.SubmissionDeadlines.Remove(deadline);
             await db.SaveChangesAsync();
             return NoContent();

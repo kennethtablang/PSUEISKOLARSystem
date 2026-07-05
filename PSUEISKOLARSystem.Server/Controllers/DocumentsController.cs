@@ -160,6 +160,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     ChangedById = scholarId,
                     ChangedAt = submission.SubmittedAt,
                 });
+                db.Audit(this, "UploadDocument", $"Submitted '{requirement.Name}' ({academicYear} Sem {semester})");
                 await db.SaveChangesAsync();
 
                 // Notify scholar (fire-and-forget)
@@ -269,6 +270,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 ChangedAt = DateTime.UtcNow,
             });
 
+            db.Audit(this, "ReviewDocument", $"Marked submission #{id} ({submission.Requirement?.Name}) as {status}");
             await db.SaveChangesAsync();
 
             var requirementName = submission.Requirement?.Name ?? "Document";
@@ -330,6 +332,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     ChangedAt = now,
                 });
             }
+            db.Audit(this, "BatchReviewDocuments", $"Marked {submissions.Count} submission(s) as {status}");
             await db.SaveChangesAsync();
 
             foreach (var submission in submissions)
@@ -401,6 +404,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 return BadRequest(new { message = "Verified documents cannot be deleted." });
 
             await storage.DeleteAsync(submission.StoredFileName);
+            db.Audit(this, "DeleteDocument", $"Deleted submission #{id} ({submission.FileName})");
             db.DocumentSubmissions.Remove(submission);
             await db.SaveChangesAsync();
             return NoContent();

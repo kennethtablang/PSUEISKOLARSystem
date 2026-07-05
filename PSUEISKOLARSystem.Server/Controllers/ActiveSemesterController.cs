@@ -52,6 +52,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             config.Semester = dto.Semester;
             config.UpdatedAt = DateTime.UtcNow;
             config.UpdatedById = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            db.Audit(this, "SetActiveSemester", $"Set active semester to {config.AcademicYear} Semester {config.Semester}");
             await db.SaveChangesAsync();
 
             return Ok(new { config.AcademicYear, config.Semester, config.UpdatedAt });

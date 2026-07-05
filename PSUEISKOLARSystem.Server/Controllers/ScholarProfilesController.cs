@@ -229,6 +229,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             profile.BirthDate = dto.BirthDate;
             profile.Address = dto.Address;
 
+            db.Audit(this, "UpdateScholarProfile", $"Updated profile for {user.FullName} (student {dto.StudentId})");
             await db.SaveChangesAsync();
             return NoContent();
         }
@@ -299,6 +300,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             };
 
             db.AcademicGrades.Add(grade);
+            db.Audit(this, "AddGrade", $"Recorded GWA {dto.Gwa} for {profile.User.FullName} ({dto.AcademicYear} Sem {dto.Semester})");
             await db.SaveChangesAsync();
             return Ok(new { grade.Id, grade.MeetsRequirement });
         }

@@ -110,6 +110,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             };
 
             db.Announcements.Add(announcement);
+            db.Audit(this, "CreateAnnouncement", $"Created announcement '{announcement.Title}'");
             await db.SaveChangesAsync();
 
             // Resolve targeted scholars once, then deliver via both channels.
@@ -199,6 +200,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             announcement.ExpiresAt = dto.ExpiresAt;
             announcement.IntentAction = string.IsNullOrWhiteSpace(dto.IntentAction) ? null : dto.IntentAction;
 
+            db.Audit(this, "UpdateAnnouncement", $"Updated announcement #{id} '{announcement.Title}'");
             await db.SaveChangesAsync();
             return NoContent();
         }
@@ -269,6 +271,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             if (announcement is null) return NotFound();
 
             announcement.IsActive = false;
+            db.Audit(this, "DeleteAnnouncement", $"Deleted announcement #{id} '{announcement.Title}'");
             await db.SaveChangesAsync();
             return NoContent();
         }

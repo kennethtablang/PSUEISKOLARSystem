@@ -53,6 +53,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 MinimumGwa = dto.MinimumGwa,
             };
             db.ScholarshipTypes.Add(st);
+            db.Audit(this, "CreateScholarshipType", $"Created scholarship type '{st.Name}'");
             await db.SaveChangesAsync();
 
             await SetRequirements(st.Id, dto.RequirementIds);
@@ -74,6 +75,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             st.MinimumGwa = dto.MinimumGwa;
 
             await SetRequirements(id, dto.RequirementIds);
+            db.Audit(this, "UpdateScholarshipType", $"Updated scholarship type #{id} '{st.Name}'");
             await db.SaveChangesAsync();
 
             return NoContent();
@@ -87,6 +89,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             var st = await db.ScholarshipTypes.FindAsync(id);
             if (st is null) return NotFound();
             st.IsActive = !st.IsActive;
+            db.Audit(this, "ToggleScholarshipType", $"Set scholarship type #{id} '{st.Name}' to {(st.IsActive ? "Active" : "Inactive")}");
             await db.SaveChangesAsync();
             return Ok(new { st.IsActive });
         }
@@ -104,6 +107,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             if (st.Scholars.Any())
                 return BadRequest(new { message = "Cannot delete a scholarship type that has scholars assigned. Deactivate it instead." });
 
+            db.Audit(this, "DeleteScholarshipType", $"Deleted scholarship type #{id} '{st.Name}'");
             db.ScholarshipTypes.Remove(st);
             await db.SaveChangesAsync();
             return NoContent();
