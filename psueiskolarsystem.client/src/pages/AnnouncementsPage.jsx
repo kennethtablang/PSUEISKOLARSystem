@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
-import { getAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement } from '../api/announcements';
+import { getAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement,
+  uploadAnnouncementImage, ANNOUNCEMENT_INTENTS } from '../api/announcements';
+import AnnouncementImage from '../components/AnnouncementImage';
 import { getCampuses } from '../api/campuses';
 import { getPrograms, getScholarshipTypes } from '../api/lookups';
 import { useTitle } from '../hooks/useTitle';
@@ -96,10 +98,17 @@ function AnnouncementCard({ a, onEdit, onDelete }) {
 
   return (
     <div className="clay-card p-5 group relative">
+      {a.hasImage && <AnnouncementImage announcementId={a.id} style={{ marginBottom: 12 }} />}
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1">
           <p className="font-bold text-sm" style={{ color: '#0d1a33' }}>{a.title}</p>
           <p className="text-sm mt-1 leading-relaxed whitespace-pre-line" style={{ color: '#2a3a5a' }}>{a.content}</p>
+          {a.intentAction && ANNOUNCEMENT_INTENTS[a.intentAction] && (
+            <span className="inline-block mt-2 text-xs px-2 py-0.5 rounded-xl font-medium"
+              style={{ background: '#ede9fe', color: '#6d28d9', border: '1px solid #c4b5fd' }}>
+              Action: {ANNOUNCEMENT_INTENTS[a.intentAction].label}
+            </span>
+          )}
         </div>
         {a.expiresAt && (
           <span className="clay-badge shrink-0 text-xs" style={{ background: '#fff3cd', color: '#7d5a00', border: '1.5px solid #f0d060' }}>
@@ -144,7 +153,9 @@ function AnnouncementModal({ initial, lookups, token, onClose, onSaved }) {
     expiresAt:              initial?.expiresAt
       ? new Date(initial.expiresAt).toISOString().slice(0, 16)
       : '',
+    intentAction:           initial?.intentAction ?? '',
   });
+  const [imageFile, setImageFile] = useState(null);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -163,12 +174,16 @@ function AnnouncementModal({ initial, lookups, token, onClose, onSaved }) {
         targetScholarshipTypeId: form.targetScholarshipTypeId ? parseInt(form.targetScholarshipTypeId) : null,
         targetProgramId:        form.targetProgramId ? parseInt(form.targetProgramId) : null,
         expiresAt:              form.expiresAt || null,
+        intentAction:           form.intentAction || null,
       };
+      let id = initial?.id;
       if (initial) {
         await updateAnnouncement(initial.id, payload, token);
       } else {
-        await createAnnouncement(payload, token);
+        const res = await createAnnouncement(payload, token);
+        id = res.id;
       }
+      if (imageFile && id) await uploadAnnouncementImage(id, imageFile, token);
       onSaved();
     } catch (err) {
       setError(err.message);
@@ -237,6 +252,25 @@ function AnnouncementModal({ initial, lookups, token, onClose, onSaved }) {
 
           <Field label="Expires At (optional)">
             <input type="datetime-local" value={form.expiresAt} onChange={e => set('expiresAt', e.target.value)} className="clay-input" />
+          </Field>
+
+          <Field label="Intended Action (optional)">
+            <select value={form.intentAction} onChange={e => set('intentAction', e.target.value)} className="clay-input">
+              <option value="">— None —</option>
+              {Object.entries(ANNOUNCEMENT_INTENTS).map(([key, v]) => (
+                <option key={key} value={key}>{v.label}</option>
+              ))}
+            </select>
+            <p className="text-xs mt-1" style={{ color: '#7a8aaa' }}>
+              Adds a button to the announcement that takes scholars to the relevant page.
+            </p>
+          </Field>
+
+          <Field label="Image (optional)">
+            <input type="file" accept=".png,.jpg,.jpeg,.webp" onChange={e => setImageFile(e.target.files?.[0] ?? null)} className="clay-input" />
+            {initial?.hasImage && !imageFile && (
+              <p className="text-xs mt-1" style={{ color: '#7a8aaa' }}>An image is already attached. Choosing a new file replaces it.</p>
+            )}
           </Field>
 
           <div className="flex gap-3 pt-2">

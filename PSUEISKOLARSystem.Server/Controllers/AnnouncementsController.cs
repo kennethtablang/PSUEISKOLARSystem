@@ -6,14 +6,24 @@ using PSUEISKOLARSystem.Server.Data;
 using PSUEISKOLARSystem.Server.Interfaces;
 using PSUEISKOLARSystem.Server.Models;
 using PSUEISKOLARSystem.Server.Models.Enums;
+using PSUEISKOLARSystem.Server.Services;
 
 namespace PSUEISKOLARSystem.Server.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
     [Authorize]
-    public class AnnouncementsController(ApplicationDbContext db, IEmailService emailService, INotificationService notifications) : ControllerBase
+    public class AnnouncementsController(ApplicationDbContext db, IEmailService emailService, INotificationService notifications, IFileStorageService storage) : ControllerBase
     {
+        private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
+        { ".png", ".jpg", ".jpeg", ".webp" };
+
+        private static string ContentTypeFor(string fileName) => System.IO.Path.GetExtension(fileName).ToLowerInvariant() switch
+        {
+            ".png" => "image/png",
+            ".webp" => "image/webp",
+            _ => "image/jpeg",
+        };
         [HttpGet]
         public async Task<IActionResult> GetAll()
         {
@@ -73,6 +83,8 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 TargetScholarshipType = a.TargetScholarshipType?.Name,
                 TargetProgram = a.TargetProgram?.Name,
                 a.ExpiresAt,
+                a.IntentAction,
+                HasImage = a.ImagePath != null,
                 a.CreatedAt,
                 CreatedBy = a.CreatedBy.MiddleName != null
                     ? a.CreatedBy.FirstName + " " + a.CreatedBy.MiddleName + " " + a.CreatedBy.LastName
@@ -93,6 +105,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 TargetScholarshipTypeId = dto.TargetScholarshipTypeId,
                 TargetProgramId = dto.TargetProgramId,
                 ExpiresAt = dto.ExpiresAt,
+                IntentAction = string.IsNullOrWhiteSpace(dto.IntentAction) ? null : dto.IntentAction,
                 CreatedById = User.FindFirstValue(ClaimTypes.NameIdentifier)!,
             };
 
@@ -184,8 +197,67 @@ namespace PSUEISKOLARSystem.Server.Controllers
             announcement.TargetScholarshipTypeId = dto.TargetScholarshipTypeId;
             announcement.TargetProgramId = dto.TargetProgramId;
             announcement.ExpiresAt = dto.ExpiresAt;
+            announcement.IntentAction = string.IsNullOrWhiteSpace(dto.IntentAction) ? null : dto.IntentAction;
 
             await db.SaveChangesAsync();
+            return NoContent();
+        }
+
+        // POST /api/announcements/{id}/image  — attach an image (admin/coord)
+        [HttpPost("{id}/image")]
+        [Authorize(Roles = $"{UserRoles.Administrator},{UserRoles.ScholarshipCoordinator}")]
+        public async Task<IActionResult> UploadImage(int id, IFormFile file)
+        {
+            var announcement = await db.Announcements.FindAsync(id);
+            if (announcement is null) return NotFound();
+            if (file is null || file.Length == 0)
+                return BadRequest(new { message = "No image uploaded." });
+            if (!ImageExtensions.Contains(System.IO.Path.GetExtension(file.FileName)))
+                return BadRequest(new { message = "Image must be PNG, JPG, or WEBP." });
+
+            try
+            {
+                var (stored, _) = await storage.SaveAsync(file);
+                if (announcement.ImagePath is not null)
+                    await storage.DeleteAsync(announcement.ImagePath);
+                announcement.ImagePath = stored;
+                await db.SaveChangesAsync();
+                return Ok(new { hasImage = true });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        // GET /api/announcements/{id}/image  — serve the image (any authenticated user)
+        [HttpGet("{id}/image")]
+        public async Task<IActionResult> GetImage(int id)
+        {
+            var announcement = await db.Announcements.FindAsync(id);
+            if (announcement?.ImagePath is null) return NotFound();
+            try
+            {
+                var (stream, contentType) = await storage.GetAsync(announcement.ImagePath, ContentTypeFor(announcement.ImagePath));
+                Response.Headers["X-Content-Type-Options"] = "nosniff";
+                return File(stream, contentType, enableRangeProcessing: true);
+            }
+            catch (FileNotFoundException) { return NotFound(); }
+        }
+
+        // DELETE /api/announcements/{id}/image
+        [HttpDelete("{id}/image")]
+        [Authorize(Roles = $"{UserRoles.Administrator},{UserRoles.ScholarshipCoordinator}")]
+        public async Task<IActionResult> DeleteImage(int id)
+        {
+            var announcement = await db.Announcements.FindAsync(id);
+            if (announcement is null) return NotFound();
+            if (announcement.ImagePath is not null)
+            {
+                await storage.DeleteAsync(announcement.ImagePath);
+                announcement.ImagePath = null;
+                await db.SaveChangesAsync();
+            }
             return NoContent();
         }
 
@@ -209,5 +281,6 @@ namespace PSUEISKOLARSystem.Server.Controllers
         int? TargetCampusId,
         int? TargetScholarshipTypeId,
         int? TargetProgramId,
-        DateTime? ExpiresAt);
+        DateTime? ExpiresAt,
+        string? IntentAction);
 }

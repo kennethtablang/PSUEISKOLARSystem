@@ -1,5 +1,41 @@
 const API = '/api/announcements';
 
+// Intended-action keys → scholar-facing button label + route.
+export const ANNOUNCEMENT_INTENTS = {
+  SubmitDocuments:    { label: 'Submit Documents',     to: '/my-documents' },
+  UpdateProfile:      { label: 'Update My Profile',    to: '/my-profile' },
+  ContactCoordinator: { label: 'Message Coordinator',  to: '/messages' },
+};
+
+export async function uploadAnnouncementImage(id, file, token) {
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetch(`${API}/${id}/image`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to upload image.');
+  }
+  return res.json();
+}
+
+export async function getAnnouncementImage(id, token) {
+  const res = await fetch(`${API}/${id}/image`, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) throw new Error('Image not available.');
+  return URL.createObjectURL(await res.blob());
+}
+
+export async function deleteAnnouncementImage(id, token) {
+  const res = await fetch(`${API}/${id}/image`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error('Failed to remove image.');
+}
+
 export async function getAnnouncements(token) {
   const res = await fetch(API, { headers: { Authorization: `Bearer ${token}` } });
   if (!res.ok) throw new Error('Failed to load announcements.');

@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
-import { getAnnouncements } from '../api/announcements';
+import { getAnnouncements, ANNOUNCEMENT_INTENTS } from '../api/announcements';
+import AnnouncementImage from '../components/AnnouncementImage';
 import { getScholarProfile, getScholars } from '../api/scholars';
 import { getUsers } from '../api/users';
 import { getAnalyticsOverview } from '../api/analytics';
@@ -346,12 +347,20 @@ function AnnouncementItem({ a }) {
     ? Math.ceil((new Date(a.expiresAt) - Date.now()) / (1000 * 60 * 60 * 24))
     : null;
   const isUrgent = daysLeft !== null && daysLeft <= 7;
+  const intent = a.intentAction ? ANNOUNCEMENT_INTENTS[a.intentAction] : null;
   return (
     <div className="clay-card p-5" style={isUrgent ? { border: '1.5px solid #f0a860' } : undefined}>
+      {a.hasImage && <AnnouncementImage announcementId={a.id} style={{ marginBottom: 12 }} />}
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1">
           <p className="font-bold text-sm" style={{ color: '#0d1a33' }}>{a.title}</p>
           <p className="text-sm mt-1 leading-relaxed whitespace-pre-line" style={{ color: '#2a3a5a' }}>{a.content}</p>
+          {intent && (
+            <Link to={intent.to} className="inline-flex items-center gap-1.5 mt-3 clay-btn clay-btn-primary px-3.5 py-2 text-xs font-bold">
+              {intent.label}
+              <ArrowRight size={13} strokeWidth={2.5} />
+            </Link>
+          )}
         </div>
         {a.expiresAt && (
           isUrgent ? (
