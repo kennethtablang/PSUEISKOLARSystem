@@ -8,5 +8,6 @@ namespace PSUEISKOLARSystem.Server.Interfaces
         Task SendDocumentStatusEmailAsync(string toEmail, string toName, string requirementName, string status, string? feedback);
         Task SendDocumentUploadConfirmationAsync(string toEmail, string toName, string requirementName, string academicYear, int semester);
         Task SendAnnouncementEmailAsync(string toEmail, string toName, string title, string content);
+        Task SendScholarWelcomeAsync(string toEmail, string toName, string tempPassword, string verifyLink);
     }
 }
