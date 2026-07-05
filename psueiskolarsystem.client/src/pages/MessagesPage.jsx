@@ -100,7 +100,7 @@ export default function MessagesPage() {
           style={{ width: 320, borderRight: '1.5px solid #d8e2f0', display: selected ? undefined : 'flex' }}>
           <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: '1.5px solid #eef2f9' }}>
             <div>
-              <h1 className="text-lg font-black" style={{ color: '#0d1a33' }}>Messages</h1>
+              <h1 className="text-lg font-black" style={{ color: 'var(--text-strong)' }}>Messages</h1>
               <p className="text-xs" style={{ color: '#7a8aaa' }}>{isStaff ? 'Scholar conversations' : 'Chat with your coordinator'}</p>
             </div>
             {!isStaff && (
@@ -127,7 +127,7 @@ export default function MessagesPage() {
                 }}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-bold truncate" style={{ color: '#0d1a33' }}>
+                  <span className="text-sm font-bold truncate" style={{ color: 'var(--text-strong)' }}>
                     {isStaff ? t.scholarName : (t.requirementName ?? 'General')}
                   </span>
                   {t.unread > 0 && (
@@ -164,7 +164,7 @@ export default function MessagesPage() {
                   <ArrowLeft size={16} color="#003087" />
                 </button>
                 <div className="min-w-0">
-                  <p className="text-sm font-black truncate" style={{ color: '#0d1a33' }}>
+                  <p className="text-sm font-black truncate" style={{ color: 'var(--text-strong)' }}>
                     {isStaff ? selected.scholarName : (selected.requirementName ?? 'General')}
                   </p>
                   <p className="text-xs" style={{ color: '#7a8aaa' }}>
@@ -183,7 +183,7 @@ export default function MessagesPage() {
                   <div key={m.id} className="flex" style={{ justifyContent: m.mine ? 'flex-end' : 'flex-start' }}>
                     <div className="max-w-md px-3.5 py-2.5 rounded-2xl" style={{
                       background: m.mine ? '#003087' : '#fff',
-                      color: m.mine ? '#fff' : '#0d1a33',
+                      color: m.mine ? '#fff' : 'var(--text-strong)',
                       boxShadow: '0 1px 4px rgba(0,20,60,0.08)',
                       borderBottomRightRadius: m.mine ? 4 : 16,
                       borderBottomLeftRadius: m.mine ? 16 : 4,
@@ -225,14 +225,14 @@ export default function MessagesPage() {
       {showNew && (
         <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{ background: 'rgba(0,20,60,0.45)' }}>
           <div className="clay-card-modal w-full max-w-md p-7">
-            <h2 className="text-base font-black mb-1.5" style={{ color: '#0d1a33' }}>New Conversation</h2>
+            <h2 className="text-base font-black mb-1.5" style={{ color: 'var(--text-strong)' }}>New Conversation</h2>
             <p className="text-sm mb-4" style={{ color: '#5a6a85' }}>What is this about? Pick a document or start a general chat.</p>
             <div className="space-y-2 max-h-72 overflow-y-auto mb-4">
-              <button onClick={() => startThread(null, null)} className="clay-card w-full text-left px-4 py-3 text-sm font-semibold" style={{ color: '#0d1a33' }}>
+              <button onClick={() => startThread(null, null)} className="clay-card w-full text-left px-4 py-3 text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>
                 General question
               </button>
               {requirements.map(r => (
-                <button key={r.id} onClick={() => startThread(r.id, r.name)} className="clay-card w-full text-left px-4 py-3 text-sm" style={{ color: '#0d1a33' }}>
+                <button key={r.id} onClick={() => startThread(r.id, r.name)} className="clay-card w-full text-left px-4 py-3 text-sm" style={{ color: 'var(--text-strong)' }}>
                   {r.name}
                 </button>
               ))}

@@ -110,7 +110,7 @@ export default function ScholarshipTypesPage() {
                   <tr key={st.id} className="clay-table-row">
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-semibold" style={{ color: '#0d1a33' }}>{st.name}</p>
+                        <p className="font-semibold" style={{ color: 'var(--text-strong)' }}>{st.name}</p>
                         {st.category && (
                           <span className="text-xs px-1.5 py-0.5 rounded-xl font-medium"
                             style={{ background: '#ede9fe', color: '#6d28d9', border: '1px solid #c4b5fd' }}>
@@ -122,7 +122,7 @@ export default function ScholarshipTypesPage() {
                         <p className="text-xs mt-0.5" style={{ color: '#7a8aaa' }}>{st.description}</p>
                       )}
                     </td>
-                    <td className="px-5 py-3.5 font-mono text-sm" style={{ color: '#0d1a33' }}>
+                    <td className="px-5 py-3.5 font-mono text-sm" style={{ color: 'var(--text-strong)' }}>
                       {st.minimumGwa.toFixed(2)}
                     </td>
                     <td className="px-5 py-3.5">
@@ -138,7 +138,7 @@ export default function ScholarshipTypesPage() {
                           ))}
                           {st.requirements.length > 3 && (
                             <span className="clay-badge text-xs"
-                              style={{ background: '#e8edf5', color: '#7a8aaa', border: '1px solid rgba(0,0,0,0.08)' }}>
+                              style={{ background: 'var(--bg)', color: '#7a8aaa', border: '1px solid rgba(0,0,0,0.08)' }}>
                               +{st.requirements.length - 3} more
                             </span>
                           )}
@@ -262,7 +262,7 @@ function ScholarshipTypeModal({ initial, allRequirements, token, onClose, onSave
   return (
     <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{ background: 'rgba(0,20,60,0.45)' }}>
       <div className="clay-card-modal w-full p-7" style={{ maxWidth: 560, maxHeight: '90vh', overflowY: 'auto' }}>
-        <h2 className="text-base font-black mb-5" style={{ color: '#0d1a33' }}>
+        <h2 className="text-base font-black mb-5" style={{ color: 'var(--text-strong)' }}>
           {initial ? `Edit: ${initial.name}` : 'New Scholarship Type'}
         </h2>
       {error && <ErrorBox>{error}</ErrorBox>}
@@ -314,7 +314,7 @@ function ScholarshipTypeModal({ initial, allRequirements, token, onClose, onSave
         </Field>
 
         <div>
-          <label className="block text-sm font-semibold mb-2" style={{ color: '#0d1a33' }}>
+          <label className="block text-sm font-semibold mb-2" style={{ color: 'var(--text-strong)' }}>
             Required Documents for this Scholarship
           </label>
           <p className="text-xs mb-3" style={{ color: '#7a8aaa' }}>
@@ -390,7 +390,7 @@ function RequirementCheckRow({ req, checked, onChange }) {
         style={{ accentColor: '#003087', flexShrink: 0 }}
       />
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium" style={{ color: '#0d1a33' }}>{req.name}</p>
+        <p className="text-sm font-medium" style={{ color: 'var(--text-strong)' }}>{req.name}</p>
         {req.description && (
           <p className="text-xs mt-0.5" style={{ color: '#7a8aaa' }}>{req.description}</p>
         )}

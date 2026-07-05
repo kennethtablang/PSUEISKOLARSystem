@@ -44,7 +44,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex" style={{ background: '#e8edf5' }}>
+    <div className="min-h-screen flex" style={{ background: 'var(--bg)' }}>
 
       {/* ── LEFT PANEL ── */}
       <div className="hidden lg:flex flex-col w-[52%] relative overflow-hidden"
@@ -308,7 +308,7 @@ export default function LoginPage() {
 
       {/* ── RIGHT PANEL ── */}
       <div className="flex-1 flex flex-col items-center justify-center p-6 lg:p-12"
-        style={{ background: '#e8edf5' }}>
+        style={{ background: 'var(--bg)' }}>
 
         {/* Mobile logo */}
         <div className="flex items-center gap-3 mb-8 lg:hidden">
@@ -317,7 +317,7 @@ export default function LoginPage() {
             PSU
           </div>
           <div>
-            <p className="font-black text-base leading-tight" style={{ color: '#0d1a33' }}>e-Iskolar</p>
+            <p className="font-black text-base leading-tight" style={{ color: 'var(--text-strong)' }}>e-Iskolar</p>
             <p className="text-xs" style={{ color: '#7a8aaa' }}>Lingayen Campus</p>
           </div>
         </div>
@@ -327,8 +327,8 @@ export default function LoginPage() {
 
           {/* Header above card */}
           <div className="mb-6 px-1">
-            <h2 className="text-2xl font-black" style={{ color: '#0d1a33' }}>Welcome back</h2>
-            <p className="text-sm mt-1" style={{ color: '#4a5a7a' }}>
+            <h2 className="text-2xl font-black" style={{ color: 'var(--text-strong)' }}>Welcome back</h2>
+            <p className="text-sm mt-1" style={{ color: 'var(--text)' }}>
               Sign in to your PSU e-Iskolar account
             </p>
           </div>
@@ -349,7 +349,7 @@ export default function LoginPage() {
               {/* Email field */}
               <div>
                 <label className="block text-xs font-bold mb-2 uppercase tracking-wider"
-                  style={{ color: '#4a5a7a' }}>
+                  style={{ color: 'var(--text)' }}>
                   Email Address
                 </label>
                 <div className="relative">
@@ -372,7 +372,7 @@ export default function LoginPage() {
               {/* Password field */}
               <div>
                 <label className="block text-xs font-bold mb-2 uppercase tracking-wider"
-                  style={{ color: '#4a5a7a' }}>
+                  style={{ color: 'var(--text)' }}>
                   Password
                 </label>
                 <div className="relative">
@@ -425,7 +425,7 @@ export default function LoginPage() {
             <Link
               to="/register"
               className="clay-btn clay-btn-ghost w-full py-3 text-sm flex items-center justify-center gap-2"
-              style={{ color: '#0d1a33', textDecoration: 'none' }}>
+              style={{ color: 'var(--text-strong)', textDecoration: 'none' }}>
               <UserPlus size={15} strokeWidth={2.5} />
               Create New Account
             </Link>
@@ -480,8 +480,8 @@ function TwoFaModal({ ticket, onBack, onSuccess }) {
             style={{ background: 'rgba(0,37,112,0.08)', border: '2px solid rgba(0,37,112,0.15)' }}>
             <ShieldCheck size={24} color="#002570" strokeWidth={2} />
           </div>
-          <h2 className="text-base font-black" style={{ color: '#0d1a33' }}>Two-Factor Verification</h2>
-          <p className="text-sm mt-1" style={{ color: '#4a5a7a' }}>
+          <h2 className="text-base font-black" style={{ color: 'var(--text-strong)' }}>Two-Factor Verification</h2>
+          <p className="text-sm mt-1" style={{ color: 'var(--text)' }}>
             Enter the 6-digit code sent to your email
           </p>
         </div>
@@ -497,7 +497,7 @@ function TwoFaModal({ ticket, onBack, onSuccess }) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-bold mb-2 uppercase tracking-wider"
-              style={{ color: '#4a5a7a' }}>
+              style={{ color: 'var(--text)' }}>
               Authentication Code
             </label>
             <input
@@ -565,7 +565,7 @@ function ForgotPasswordModal({ onClose }) {
               style={{ background: 'rgba(0,37,112,0.08)', border: '1px solid rgba(0,37,112,0.12)' }}>
               <KeyRound size={15} color="#002570" strokeWidth={2} />
             </div>
-            <h2 className="text-base font-black" style={{ color: '#0d1a33' }}>Reset Password</h2>
+            <h2 className="text-base font-black" style={{ color: 'var(--text-strong)' }}>Reset Password</h2>
           </div>
           <button onClick={onClose}
             className="w-7 h-7 rounded-xl flex items-center justify-center hover:bg-black/5 transition-colors">
@@ -575,7 +575,7 @@ function ForgotPasswordModal({ onClose }) {
 
         {step === 1 ? (
           <>
-            <p className="text-sm mb-5 leading-relaxed" style={{ color: '#4a5a7a' }}>
+            <p className="text-sm mb-5 leading-relaxed" style={{ color: 'var(--text)' }}>
               Enter your registered email address and we will send you a password reset link.
             </p>
 
@@ -590,7 +590,7 @@ function ForgotPasswordModal({ onClose }) {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold mb-2 uppercase tracking-wider"
-                  style={{ color: '#4a5a7a' }}>
+                  style={{ color: 'var(--text)' }}>
                   Email Address
                 </label>
                 <div className="relative">
@@ -629,8 +629,8 @@ function ForgotPasswordModal({ onClose }) {
                 style={{ background: 'rgba(0,37,112,0.08)', border: '2px solid rgba(0,37,112,0.15)' }}>
                 <Mail size={22} color="#002570" strokeWidth={2} />
               </div>
-              <p className="font-black text-base mb-1" style={{ color: '#0d1a33' }}>Check Your Inbox</p>
-              <p className="text-sm leading-relaxed" style={{ color: '#4a5a7a' }}>
+              <p className="font-black text-base mb-1" style={{ color: 'var(--text-strong)' }}>Check Your Inbox</p>
+              <p className="text-sm leading-relaxed" style={{ color: 'var(--text)' }}>
                 A password reset link has been sent to <strong>{email}</strong>.
                 Please check your email and follow the instructions.
               </p>
@@ -650,8 +650,8 @@ function ForgotPasswordModal({ onClose }) {
                 style={{ background: 'rgba(0,37,112,0.06)', border: '2px solid rgba(0,37,112,0.10)' }}>
                 <Mail size={22} color="#7a8aaa" strokeWidth={2} />
               </div>
-              <p className="font-black text-base mb-1" style={{ color: '#0d1a33' }}>Email Not Found</p>
-              <p className="text-sm" style={{ color: '#4a5a7a' }}>
+              <p className="font-black text-base mb-1" style={{ color: 'var(--text-strong)' }}>Email Not Found</p>
+              <p className="text-sm" style={{ color: 'var(--text)' }}>
                 That email is not registered. Please contact your system administrator for assistance.
               </p>
             </div>

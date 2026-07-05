@@ -143,12 +143,12 @@ export default function UsersPage() {
               <tbody>
                 {paged.map(u => (
                   <tr key={u.id} className="clay-table-row">
-                    <td className="px-5 py-3.5 font-semibold" style={{ color: '#0d1a33' }}>{u.fullName}</td>
-                    <td className="px-5 py-3.5" style={{ color: '#4a5a7a' }}>{u.email}</td>
+                    <td className="px-5 py-3.5 font-semibold" style={{ color: 'var(--text-strong)' }}>{u.fullName}</td>
+                    <td className="px-5 py-3.5" style={{ color: 'var(--text)' }}>{u.email}</td>
                     <td className="px-5 py-3.5">
                       <span className={`clay-badge ${ROLE_BADGE_CLASS[u.role] ?? ''}`}>{u.role}</span>
                     </td>
-                    <td className="px-5 py-3.5 text-sm" style={{ color: '#4a5a7a' }}>
+                    <td className="px-5 py-3.5 text-sm" style={{ color: 'var(--text)' }}>
                       {u.campusName ?? <span style={{ color: '#b0bdd0', fontStyle: 'italic' }}>—</span>}
                     </td>
                     <td className="px-5 py-3.5">
@@ -256,7 +256,7 @@ function ImportScholarsModal({ token, onClose, onDone }) {
   return (
     <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{ background: 'rgba(0,20,60,0.45)' }}>
       <div className="clay-card-modal w-full p-7" style={{ maxWidth: 620, maxHeight: '88vh', overflowY: 'auto' }}>
-        <h2 className="text-base font-black mb-1.5" style={{ color: '#0d1a33' }}>Import Scholars</h2>
+        <h2 className="text-base font-black mb-1.5" style={{ color: 'var(--text-strong)' }}>Import Scholars</h2>
         <p className="text-sm mb-5" style={{ color: '#5a6a85' }}>
           Upload a CSV or Excel file to create many scholar accounts at once. Each created scholar is
           emailed a temporary password and a verification link.
@@ -270,7 +270,7 @@ function ImportScholarsModal({ token, onClose, onDone }) {
               <Download size={15} strokeWidth={2.4} /> Download template
             </button>
 
-            <label className="block text-xs font-bold mb-1.5 uppercase tracking-wider" style={{ color: '#4a5a7a' }}>
+            <label className="block text-xs font-bold mb-1.5 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
               Import file (.xlsx or .csv)
             </label>
             <input
@@ -315,7 +315,7 @@ function ImportScholarsModal({ token, onClose, onDone }) {
                   {result.results.map(r => (
                     <tr key={r.row} className="clay-table-row">
                       <td className="px-3 py-2" style={{ color: '#7a8aaa' }}>{r.row}</td>
-                      <td className="px-3 py-2" style={{ color: '#0d1a33' }}>{r.email || '—'}</td>
+                      <td className="px-3 py-2" style={{ color: 'var(--text-strong)' }}>{r.email || '—'}</td>
                       <td className="px-3 py-2">
                         <span className="inline-flex items-center gap-1.5" style={{ color: r.success ? '#0a7d43' : '#c0342c' }}>
                           {r.success ? <CheckCircle2 size={13} /> : <XCircle size={13} />}
@@ -495,7 +495,7 @@ export function ClayModal({ title, onClose, children }) {
   return (
     <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{ background: 'rgba(0,20,60,0.45)' }}>
       <div className="clay-card-modal w-full max-w-md p-7">
-        <h2 className="text-base font-black mb-5" style={{ color: '#0d1a33' }}>{title}</h2>
+        <h2 className="text-base font-black mb-5" style={{ color: 'var(--text-strong)' }}>{title}</h2>
         {children}
       </div>
     </div>
@@ -514,7 +514,7 @@ export function ErrorBox({ children }) {
 export function Field({ label, children }) {
   return (
     <div>
-      <label className="block text-xs font-bold mb-1.5 uppercase tracking-wider" style={{ color: '#4a5a7a' }}>{label}</label>
+      <label className="block text-xs font-bold mb-1.5 uppercase tracking-wider" style={{ color: 'var(--text)' }}>{label}</label>
       {children}
     </div>
   );

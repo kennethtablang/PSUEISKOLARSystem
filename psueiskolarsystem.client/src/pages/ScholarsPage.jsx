@@ -165,13 +165,13 @@ export default function ScholarsPage() {
                 {scholars.map(s => (
                   <tr key={s.id} className="clay-table-row">
                     <td className="px-5 py-3.5">
-                      <p className="font-semibold" style={{ color: '#0d1a33' }}>{s.fullName}</p>
+                      <p className="font-semibold" style={{ color: 'var(--text-strong)' }}>{s.fullName}</p>
                       <p className="text-xs" style={{ color: '#7a8aaa' }}>{s.email}</p>
                     </td>
-                    <td className="px-5 py-3.5 font-mono" style={{ color: '#2a3a5a' }}>{s.studentId}</td>
-                    <td className="px-5 py-3.5 text-xs" style={{ color: '#4a5a7a' }}>{s.campusName ?? '—'}</td>
-                    <td className="px-5 py-3.5" style={{ color: '#4a5a7a' }}>{s.programCode ?? '—'}</td>
-                    <td className="px-5 py-3.5 max-w-[140px] truncate" style={{ color: '#4a5a7a' }}>{s.scholarshipTypeName ?? '—'}</td>
+                    <td className="px-5 py-3.5 font-mono" style={{ color: 'var(--text)' }}>{s.studentId}</td>
+                    <td className="px-5 py-3.5 text-xs" style={{ color: 'var(--text)' }}>{s.campusName ?? '—'}</td>
+                    <td className="px-5 py-3.5" style={{ color: 'var(--text)' }}>{s.programCode ?? '—'}</td>
+                    <td className="px-5 py-3.5 max-w-[140px] truncate" style={{ color: 'var(--text)' }}>{s.scholarshipTypeName ?? '—'}</td>
                     <td className="px-5 py-3.5">
                       {s.latestGwa != null ? (
                         <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${GWA_BADGE(s.meetsRequirement)}`}>

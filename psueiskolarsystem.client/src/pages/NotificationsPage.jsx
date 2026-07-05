@@ -88,12 +88,12 @@ export default function NotificationsPage() {
               className="clay-btn px-3 py-1.5 text-xs font-semibold"
               style={category === f
                 ? { background: 'rgba(0,37,112,0.10)', color: '#002570', border: '1.5px solid rgba(0,37,112,0.25)' }
-                : { color: '#4a5a7a' }}
+                : { color: 'var(--text)' }}
             >
               {f ? (CATEGORY_META[f]?.label ?? f) : 'All'}
             </button>
           ))}
-          <label className="flex items-center gap-1.5 text-xs font-semibold ml-2 cursor-pointer" style={{ color: '#4a5a7a' }}>
+          <label className="flex items-center gap-1.5 text-xs font-semibold ml-2 cursor-pointer" style={{ color: 'var(--text)' }}>
             <input type="checkbox" checked={unreadOnly} onChange={e => setUnreadOnly(e.target.checked)} style={{ accentColor: '#003087' }} />
             Unread only
           </label>
@@ -120,7 +120,7 @@ export default function NotificationsPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <p className="text-sm truncate" style={{ color: '#0d1a33', fontWeight: n.isRead ? 600 : 800 }}>{n.title}</p>
+                    <p className="text-sm truncate" style={{ color: 'var(--text-strong)', fontWeight: n.isRead ? 600 : 800 }}>{n.title}</p>
                     {!n.isRead && <span className="w-2 h-2 rounded-full shrink-0" style={{ background: '#d92020' }} />}
                   </div>
                   <p className="text-sm mt-0.5" style={{ color: '#5a6a85' }}>{n.message}</p>

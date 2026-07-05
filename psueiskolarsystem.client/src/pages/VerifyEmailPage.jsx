@@ -31,7 +31,7 @@ export default function VerifyEmailPage() {
   }, []);
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6" style={{ background: '#e8edf5' }}>
+    <div className="min-h-screen flex items-center justify-center p-6" style={{ background: 'var(--bg)' }}>
       <div className="w-full" style={{ maxWidth: '440px' }}>
 
         {/* Logo */}
@@ -41,7 +41,7 @@ export default function VerifyEmailPage() {
             PSU
           </div>
           <div>
-            <p className="font-black text-lg leading-tight" style={{ color: '#0d1a33' }}>e-Iskolar</p>
+            <p className="font-black text-lg leading-tight" style={{ color: 'var(--text-strong)' }}>e-Iskolar</p>
             <p className="text-xs" style={{ color: '#7a8aaa' }}>Lingayen Campus</p>
           </div>
         </div>
@@ -54,8 +54,8 @@ export default function VerifyEmailPage() {
                 style={{ background: 'rgba(0,37,112,0.08)', border: '2px solid rgba(0,37,112,0.15)' }}>
                 <Loader size={28} color="#002570" strokeWidth={2} className="animate-spin" />
               </div>
-              <p className="font-black text-lg mb-2" style={{ color: '#0d1a33' }}>Verifying your email…</p>
-              <p className="text-sm" style={{ color: '#4a5a7a' }}>Please wait a moment.</p>
+              <p className="font-black text-lg mb-2" style={{ color: 'var(--text-strong)' }}>Verifying your email…</p>
+              <p className="text-sm" style={{ color: 'var(--text)' }}>Please wait a moment.</p>
             </>
           )}
 
@@ -65,8 +65,8 @@ export default function VerifyEmailPage() {
                 style={{ background: 'rgba(22,163,74,0.10)', border: '2px solid rgba(22,163,74,0.25)' }}>
                 <MailCheck size={28} color="#16a34a" strokeWidth={2} />
               </div>
-              <p className="font-black text-lg mb-2" style={{ color: '#0d1a33' }}>Email Verified!</p>
-              <p className="text-sm mb-6 leading-relaxed" style={{ color: '#4a5a7a' }}>
+              <p className="font-black text-lg mb-2" style={{ color: 'var(--text-strong)' }}>Email Verified!</p>
+              <p className="text-sm mb-6 leading-relaxed" style={{ color: 'var(--text)' }}>
                 Your account has been successfully verified. You can now sign in to PSU e-Iskolar.
               </p>
               <button
@@ -84,8 +84,8 @@ export default function VerifyEmailPage() {
                 style={{ background: '#fff0f0', border: '2px solid #f5b0b0' }}>
                 <AlertTriangle size={28} color="#b03030" strokeWidth={2} />
               </div>
-              <p className="font-black text-lg mb-2" style={{ color: '#0d1a33' }}>Verification Failed</p>
-              <p className="text-sm mb-6 leading-relaxed" style={{ color: '#4a5a7a' }}>
+              <p className="font-black text-lg mb-2" style={{ color: 'var(--text-strong)' }}>Verification Failed</p>
+              <p className="text-sm mb-6 leading-relaxed" style={{ color: 'var(--text)' }}>
                 {message || 'This verification link is invalid or has expired. Please register again to receive a new link.'}
               </p>
               <button

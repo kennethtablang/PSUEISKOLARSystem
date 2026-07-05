@@ -94,8 +94,8 @@ function SessionExpiredModal() {
           style={{ background: 'rgba(0,37,112,0.08)', border: '2px solid rgba(0,37,112,0.15)' }}>
           <Clock size={26} color="#002570" strokeWidth={2} />
         </div>
-        <p className="font-black text-lg mb-2" style={{ color: '#0d1a33' }}>Session Expired</p>
-        <p className="text-sm mb-6 leading-relaxed" style={{ color: '#4a5a7a' }}>
+        <p className="font-black text-lg mb-2" style={{ color: 'var(--text-strong)' }}>Session Expired</p>
+        <p className="text-sm mb-6 leading-relaxed" style={{ color: 'var(--text)' }}>
           You have been signed out due to 30 minutes of inactivity. Please sign in again to continue.
         </p>
         <button

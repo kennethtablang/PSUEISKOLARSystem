@@ -101,7 +101,7 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex" style={{ background: '#e8edf5' }}>
+    <div className="min-h-screen flex" style={{ background: 'var(--bg)' }}>
 
       {/* ── LEFT PANEL ── */}
       <div className="hidden lg:flex flex-col w-[52%] relative overflow-hidden"
@@ -197,7 +197,7 @@ export default function RegisterPage() {
 
       {/* ── RIGHT PANEL ── */}
       <div className="flex-1 flex flex-col items-center justify-center p-6 lg:p-12"
-        style={{ background: '#e8edf5', overflowY: 'auto' }}>
+        style={{ background: 'var(--bg)', overflowY: 'auto' }}>
 
         {/* Mobile logo */}
         <div className="flex items-center gap-3 mb-8 lg:hidden">
@@ -206,7 +206,7 @@ export default function RegisterPage() {
             PSU
           </div>
           <div>
-            <p className="font-black text-base leading-tight" style={{ color: '#0d1a33' }}>e-Iskolar</p>
+            <p className="font-black text-base leading-tight" style={{ color: 'var(--text-strong)' }}>e-Iskolar</p>
             <p className="text-xs" style={{ color: '#7a8aaa' }}>Lingayen Campus</p>
           </div>
         </div>
@@ -219,9 +219,9 @@ export default function RegisterPage() {
                 style={{ background: 'rgba(0,37,112,0.08)', border: '1px solid rgba(0,37,112,0.12)' }}>
                 <GraduationCap size={14} color="#002570" strokeWidth={2} />
               </div>
-              <h2 className="text-2xl font-black" style={{ color: '#0d1a33' }}>Scholar Sign Up</h2>
+              <h2 className="text-2xl font-black" style={{ color: 'var(--text-strong)' }}>Scholar Sign Up</h2>
             </div>
-            <p className="text-sm mt-1" style={{ color: '#4a5a7a' }}>
+            <p className="text-sm mt-1" style={{ color: 'var(--text)' }}>
               Create your PSU e-Iskolar scholar account.
             </p>
           </div>
@@ -235,8 +235,8 @@ export default function RegisterPage() {
                   style={{ background: 'rgba(0,48,135,0.08)', border: '2px solid rgba(0,48,135,0.15)' }}>
                   <MailCheck size={30} color="#002570" strokeWidth={1.8} />
                 </div>
-                <p className="font-black text-lg mb-2" style={{ color: '#0d1a33' }}>Check Your Email!</p>
-                <p className="text-sm leading-relaxed mb-4" style={{ color: '#4a5a7a' }}>
+                <p className="font-black text-lg mb-2" style={{ color: 'var(--text-strong)' }}>Check Your Email!</p>
+                <p className="text-sm leading-relaxed mb-4" style={{ color: 'var(--text)' }}>
                   A verification link has been sent to <strong>{form.email}</strong>.
                   Please click the link in that email to activate your account before signing in.
                 </p>
@@ -281,7 +281,7 @@ export default function RegisterPage() {
                   {/* First Name + Last Name */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: '#4a5a7a' }}>
+                      <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
                         First Name
                       </label>
                       <div className="relative">
@@ -301,7 +301,7 @@ export default function RegisterPage() {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: '#4a5a7a' }}>
+                      <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
                         Last Name
                       </label>
                       <div className="relative">
@@ -323,7 +323,7 @@ export default function RegisterPage() {
 
                   {/* Middle Name */}
                   <div>
-                    <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: '#4a5a7a' }}>
+                    <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
                       Middle Name <span style={{ color: '#9aaabb', fontWeight: 400, textTransform: 'none' }}>(optional)</span>
                     </label>
                     <div className="relative">
@@ -343,7 +343,7 @@ export default function RegisterPage() {
 
                   {/* Email */}
                   <div>
-                    <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: '#4a5a7a' }}>
+                    <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
                       Email Address
                     </label>
                     <div className="relative">
@@ -365,7 +365,7 @@ export default function RegisterPage() {
 
                   {/* Password */}
                   <div>
-                    <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: '#4a5a7a' }}>
+                    <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
                       Password
                     </label>
                     <div className="relative">
@@ -388,7 +388,7 @@ export default function RegisterPage() {
 
                   {/* Confirm Password */}
                   <div>
-                    <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: '#4a5a7a' }}>
+                    <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
                       Confirm Password
                     </label>
                     <div className="relative">
@@ -433,7 +433,7 @@ export default function RegisterPage() {
           <div className="text-center mt-5">
             <Link to="/login"
               className="inline-flex items-center gap-1.5 text-xs font-medium"
-              style={{ color: '#4a5a7a' }}>
+              style={{ color: 'var(--text)' }}>
               <ArrowLeft size={13} strokeWidth={2.5} />
               Already have an account? Sign in
             </Link>

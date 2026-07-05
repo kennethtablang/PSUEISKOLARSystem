@@ -152,12 +152,12 @@ export default function AnalyticsPage() {
           <div className="clay-card p-6">
             <div className="flex items-center gap-2 mb-5">
               <TrendingUp size={16} strokeWidth={2} style={{ color: '#003087' }} />
-              <h2 className="text-sm font-black" style={{ color: '#0d1a33' }}>GWA Compliance</h2>
+              <h2 className="text-sm font-black" style={{ color: 'var(--text-strong)' }}>GWA Compliance</h2>
             </div>
 
             <div className="flex items-end gap-3 mb-4">
               <span className="text-5xl font-black" style={{ color: '#003087' }}>{complianceRate}%</span>
-              <span className="text-sm pb-2" style={{ color: '#4a5a7a' }}>of scholars meeting GWA requirement</span>
+              <span className="text-sm pb-2" style={{ color: 'var(--text)' }}>of scholars meeting GWA requirement</span>
             </div>
 
             <div className="clay-progress-track w-full h-3 mb-4">
@@ -180,12 +180,12 @@ export default function AnalyticsPage() {
           <div className="clay-card p-6">
             <div className="flex items-center gap-2 mb-5">
               <FileCheck size={16} strokeWidth={2} style={{ color: '#003087' }} />
-              <h2 className="text-sm font-black" style={{ color: '#0d1a33' }}>Document Submissions</h2>
+              <h2 className="text-sm font-black" style={{ color: 'var(--text-strong)' }}>Document Submissions</h2>
             </div>
 
             <div className="flex items-end gap-3 mb-4">
               <span className="text-5xl font-black" style={{ color: '#003087' }}>{verifiedRate}%</span>
-              <span className="text-sm pb-2" style={{ color: '#4a5a7a' }}>verification rate</span>
+              <span className="text-sm pb-2" style={{ color: 'var(--text)' }}>verification rate</span>
             </div>
 
             <div className="clay-progress-track w-full h-3 mb-4">
@@ -208,7 +208,7 @@ export default function AnalyticsPage() {
 
           {/* Scholars by program — bar chart */}
           <div className="clay-card p-6">
-            <h2 className="text-sm font-black mb-5" style={{ color: '#0d1a33' }}>Scholars by Program</h2>
+            <h2 className="text-sm font-black mb-5" style={{ color: 'var(--text-strong)' }}>Scholars by Program</h2>
             {byProgram.length === 0 ? (
               <EmptyChart />
             ) : (
@@ -233,7 +233,7 @@ export default function AnalyticsPage() {
 
           {/* Scholars by scholarship type — pie chart */}
           <div className="clay-card p-6">
-            <h2 className="text-sm font-black mb-5" style={{ color: '#0d1a33' }}>Scholars by Scholarship Type</h2>
+            <h2 className="text-sm font-black mb-5" style={{ color: 'var(--text-strong)' }}>Scholars by Scholarship Type</h2>
             {byScholarshipType.length === 0 ? (
               <EmptyChart />
             ) : (
@@ -258,7 +258,7 @@ export default function AnalyticsPage() {
                   <Tooltip
                     contentStyle={{ borderRadius: '12px', border: '1.5px solid rgba(0,48,135,0.12)', boxShadow: '3px 3px 0px rgba(0,0,48,0.1)', fontSize: '12px' }}
                   />
-                  <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: '12px', color: '#4a5a7a' }} />
+                  <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: '12px', color: 'var(--text)' }} />
                 </PieChart>
               </ResponsiveContainer>
             )}
@@ -268,7 +268,7 @@ export default function AnalyticsPage() {
         {/* Submissions by period — bar chart */}
         {byPeriod.length > 0 && (
           <div className="clay-card p-6">
-            <h2 className="text-sm font-black mb-5" style={{ color: '#0d1a33' }}>Submission Activity by Period</h2>
+            <h2 className="text-sm font-black mb-5" style={{ color: 'var(--text-strong)' }}>Submission Activity by Period</h2>
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={byPeriod} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,48,0.06)" vertical={false} />
@@ -281,7 +281,7 @@ export default function AnalyticsPage() {
                 <Bar dataKey="verified"   name="Verified"   stackId="a" fill="#10a060" radius={[0, 0, 0, 0]} />
                 <Bar dataKey="pending"    name="Pending"    stackId="a" fill="#f5b800" />
                 <Bar dataKey="incomplete" name="Incomplete" stackId="a" fill="#f07030" radius={[6, 6, 0, 0]} />
-                <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: '12px', color: '#4a5a7a' }} />
+                <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: '12px', color: 'var(--text)' }} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -316,7 +316,7 @@ function KpiCard({ Icon, label, value, color, iconColor }) {
         <Icon size={18} strokeWidth={2} style={{ color: iconColor }} />
       </div>
       <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'rgba(0,0,0,0.42)' }}>{label}</p>
-      <p className="text-3xl font-black" style={{ color: '#0d1a33' }}>{value}</p>
+      <p className="text-3xl font-black" style={{ color: 'var(--text-strong)' }}>{value}</p>
     </div>
   );
 }

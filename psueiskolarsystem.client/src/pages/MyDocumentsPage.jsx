@@ -237,7 +237,7 @@ export default function MyDocumentsPage() {
                         ? 'Change Scholarship Type'
                         : 'Select Your Scholarship Type'}
                     </p>
-                    <p className="text-xs mb-3" style={{ color: '#4a5a7a' }}>
+                    <p className="text-xs mb-3" style={{ color: 'var(--text)' }}>
                       {showTypePicker && profile?.scholarshipTypeId
                         ? `Currently: ${profile.scholarshipTypeName}. Changing this will update the required documents shown.`
                         : 'Choose the scholarship you are enrolled in to see your required documents.'}
@@ -335,7 +335,7 @@ export default function MyDocumentsPage() {
                   style={{ background: 'rgba(0,37,112,0.08)', border: '1px solid rgba(0,37,112,0.12)' }}>
                   <Eye size={13} color="#002570" strokeWidth={2} />
                 </div>
-                <span className="text-sm font-bold truncate" style={{ color: '#0d1a33' }}>
+                <span className="text-sm font-bold truncate" style={{ color: 'var(--text-strong)' }}>
                   {preview.fileName}
                 </span>
               </div>
@@ -417,7 +417,7 @@ function PreviewContent({ preview }) {
         <FileX size={28} color="#7a8aaa" strokeWidth={1.5} />
       </div>
       <div className="text-center">
-        <p className="font-bold text-sm mb-1" style={{ color: '#0d1a33' }}>Preview Not Available</p>
+        <p className="font-bold text-sm mb-1" style={{ color: 'var(--text-strong)' }}>Preview Not Available</p>
         <p className="text-xs leading-relaxed" style={{ color: '#7a8aaa', maxWidth: 240 }}>
           This file type cannot be previewed in the browser. Use the Download button to open it.
         </p>
@@ -478,7 +478,7 @@ function RequirementRow({ requirement, submission, deadline, uploading, loadingP
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <p className="font-semibold" style={{ color: '#0d1a33' }}>{requirement.name}</p>
+            <p className="font-semibold" style={{ color: 'var(--text-strong)' }}>{requirement.name}</p>
             {requirement.isRequired && (
               <span className="text-xs px-1.5 py-0.5 rounded-xl font-medium"
                 style={{ background: '#dce8ff', color: '#003087', border: '1px solid #80aaee' }}>
@@ -598,8 +598,8 @@ function RequirementRow({ requirement, submission, deadline, uploading, loadingP
                     {i < history.length - 1 && <div className="w-px flex-1 mt-1" style={{ background: 'rgba(0,0,0,0.1)', minHeight: 12 }} />}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold" style={{ color: '#0d1a33' }}>{h.status}</p>
-                    {h.note && <p className="text-xs" style={{ color: '#4a5a7a' }}>{h.note}</p>}
+                    <p className="text-xs font-semibold" style={{ color: 'var(--text-strong)' }}>{h.status}</p>
+                    {h.note && <p className="text-xs" style={{ color: 'var(--text)' }}>{h.note}</p>}
                     <p className="text-xs mt-0.5" style={{ color: '#9aaabb' }}>
                       {new Date(h.changedAt).toLocaleString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </p>

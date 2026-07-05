@@ -191,10 +191,10 @@ export default function DocumentReviewPage() {
                         style={{ width: 16, height: 16, accentColor: '#003087' }} />
                     </td>
                     <td className="px-5 py-3.5">
-                      <p className="font-semibold" style={{ color: '#0d1a33' }}>{s.scholarName}</p>
+                      <p className="font-semibold" style={{ color: 'var(--text-strong)' }}>{s.scholarName}</p>
                       <p className="text-xs" style={{ color: '#7a8aaa' }}>{s.campusName ?? s.scholarEmail}</p>
                     </td>
-                    <td className="px-5 py-3.5" style={{ color: '#2a3a5a' }}>{s.requirementName}</td>
+                    <td className="px-5 py-3.5" style={{ color: 'var(--text)' }}>{s.requirementName}</td>
                     <td className="px-5 py-3.5">
                       <button
                         onClick={() => downloadFile(s.id, s.fileName, token).catch(e => alert(e.message))}
@@ -204,7 +204,7 @@ export default function DocumentReviewPage() {
                         {s.fileName}
                       </button>
                     </td>
-                    <td className="px-5 py-3.5 text-xs whitespace-nowrap" style={{ color: '#4a5a7a' }}>
+                    <td className="px-5 py-3.5 text-xs whitespace-nowrap" style={{ color: 'var(--text)' }}>
                       {s.academicYear} · Sem {s.semester}
                     </td>
                     <td className="px-5 py-3.5">
@@ -283,8 +283,8 @@ function ReviewModal({ submission, token, onClose, onSaved }) {
   return (
     <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{ background: 'rgba(0,20,60,0.45)' }}>
       <div className="clay-card-modal w-full max-w-md p-7" style={{ maxHeight: '90vh', overflowY: 'auto' }}>
-        <h2 className="text-base font-black mb-1" style={{ color: '#0d1a33' }}>Review Document</h2>
-        <p className="text-sm mb-5" style={{ color: '#4a5a7a' }}>
+        <h2 className="text-base font-black mb-1" style={{ color: 'var(--text-strong)' }}>Review Document</h2>
+        <p className="text-sm mb-5" style={{ color: 'var(--text)' }}>
           {submission.scholarName} · {submission.requirementName}
         </p>
 
@@ -307,7 +307,7 @@ function ReviewModal({ submission, token, onClose, onSaved }) {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: '#4a5a7a' }}>Decision</label>
+            <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>Decision</label>
             <div className="flex gap-3">
               {['Verified', 'Incomplete'].map(s => (
                 <label key={s} className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-2xl border-2 cursor-pointer text-sm font-bold transition-colors ${
@@ -323,7 +323,7 @@ function ReviewModal({ submission, token, onClose, onSaved }) {
           </div>
 
           <div>
-            <label className="block text-xs font-bold mb-1.5 uppercase tracking-wider" style={{ color: '#4a5a7a' }}>
+            <label className="block text-xs font-bold mb-1.5 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
               Feedback {status === 'Incomplete' && <span style={{ color: '#e03030' }}>*</span>}
             </label>
             <textarea
@@ -355,8 +355,8 @@ function ReviewModal({ submission, token, onClose, onSaved }) {
                     {i < history.length - 1 && <div className="w-px flex-1 mt-1" style={{ background: 'rgba(0,0,0,0.1)', minHeight: 16 }} />}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold" style={{ color: '#0d1a33' }}>{h.status}</p>
-                    {h.note && <p className="text-xs mt-0.5" style={{ color: '#4a5a7a' }}>{h.note}</p>}
+                    <p className="text-xs font-bold" style={{ color: 'var(--text-strong)' }}>{h.status}</p>
+                    {h.note && <p className="text-xs mt-0.5" style={{ color: 'var(--text)' }}>{h.note}</p>}
                     <p className="text-xs mt-0.5" style={{ color: '#9aaabb' }}>
                       {h.changedBy} · {new Date(h.changedAt).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </p>

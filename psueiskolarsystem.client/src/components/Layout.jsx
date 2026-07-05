@@ -436,7 +436,7 @@ export default function Layout({ children }) {
 
   /* ── Shell ──────────────────────────────────────── */
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: '#e8edf5' }}>
+    <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg)' }}>
 
       {/* ── Mobile backdrop ── */}
       {!isDesktop && mobileOpen && (
@@ -495,7 +495,7 @@ export default function Layout({ children }) {
                 style={{
                   width: 38, height: 38, borderRadius: 12, border: 'none', cursor: 'pointer',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: '#e8edf5',
+                  background: 'var(--bg)',
                   boxShadow: '4px 4px 10px rgba(163,177,198,0.55), -3px -3px 8px rgba(255,255,255,0.9)',
                 }}
               >
@@ -525,7 +525,7 @@ export default function Layout({ children }) {
                 style={{
                   width: '100%', height: 38, paddingLeft: 34, paddingRight: 12,
                   borderRadius: 11, border: '1px solid rgba(0,48,135,0.1)',
-                  background: 'rgba(255,255,255,0.7)', fontSize: 13, color: '#0d1a33', outline: 'none',
+                  background: 'rgba(255,255,255,0.7)', fontSize: 13, color: 'var(--text-strong)', outline: 'none',
                 }}
               />
             </form>

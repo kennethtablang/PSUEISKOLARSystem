@@ -119,8 +119,8 @@ function AnnouncementCard({ a, onEdit, onDelete }) {
       {a.hasImage && <AnnouncementImage announcementId={a.id} style={{ marginBottom: 12 }} />}
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1">
-          <p className="font-bold text-sm" style={{ color: '#0d1a33' }}>{a.title}</p>
-          <p className="text-sm mt-1 leading-relaxed whitespace-pre-line" style={{ color: '#2a3a5a' }}>{a.content}</p>
+          <p className="font-bold text-sm" style={{ color: 'var(--text-strong)' }}>{a.title}</p>
+          <p className="text-sm mt-1 leading-relaxed whitespace-pre-line" style={{ color: 'var(--text)' }}>{a.content}</p>
           {a.intentAction && ANNOUNCEMENT_INTENTS[a.intentAction] && (
             <span className="inline-block mt-2 text-xs px-2 py-0.5 rounded-xl font-medium"
               style={{ background: '#ede9fe', color: '#6d28d9', border: '1px solid #c4b5fd' }}>
@@ -146,7 +146,7 @@ function AnnouncementCard({ a, onEdit, onDelete }) {
               </span>
             ))
           ) : (
-            <span className="clay-badge text-xs" style={{ background: '#e8edf5', color: '#7a8aaa', border: '1px solid rgba(0,0,0,0.08)' }}>
+            <span className="clay-badge text-xs" style={{ background: 'var(--bg)', color: '#7a8aaa', border: '1px solid rgba(0,0,0,0.08)' }}>
               All users
             </span>
           )}
@@ -213,7 +213,7 @@ function AnnouncementModal({ initial, lookups, token, onClose, onSaved }) {
   return (
     <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{ background: 'rgba(0,20,60,0.45)' }}>
       <div className="clay-card-modal w-full p-7" style={{ maxWidth: 520, maxHeight: '90vh', overflowY: 'auto' }}>
-        <h2 className="text-base font-black mb-5" style={{ color: '#0d1a33' }}>
+        <h2 className="text-base font-black mb-5" style={{ color: 'var(--text-strong)' }}>
           {initial ? 'Edit Announcement' : 'New Announcement'}
         </h2>
 
@@ -235,7 +235,7 @@ function AnnouncementModal({ initial, lookups, token, onClose, onSaved }) {
               className="clay-input" placeholder="Announcement body…" />
           </Field>
 
-          <p className="text-xs font-bold uppercase tracking-wider pt-1" style={{ color: '#4a5a7a' }}>
+          <p className="text-xs font-bold uppercase tracking-wider pt-1" style={{ color: 'var(--text)' }}>
             Target Audience (leave blank to target all)
           </p>
 
@@ -306,7 +306,7 @@ function AnnouncementModal({ initial, lookups, token, onClose, onSaved }) {
 function Field({ label, children }) {
   return (
     <div>
-      <label className="block text-xs font-bold mb-1.5 uppercase tracking-wider" style={{ color: '#4a5a7a' }}>{label}</label>
+      <label className="block text-xs font-bold mb-1.5 uppercase tracking-wider" style={{ color: 'var(--text)' }}>{label}</label>
       {children}
     </div>
   );

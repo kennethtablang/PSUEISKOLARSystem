@@ -56,8 +56,8 @@ export default function Tutorial({ role, userName, onClose }) {
           <Icon size={28} color="#003087" strokeWidth={2} />
         </div>
 
-        <h2 className="text-lg font-black text-center mb-2" style={{ color: '#0d1a33' }}>{step.title}</h2>
-        <p className="text-sm text-center leading-relaxed mb-6" style={{ color: '#4a5a7a' }}>{step.body}</p>
+        <h2 className="text-lg font-black text-center mb-2" style={{ color: 'var(--text-strong)' }}>{step.title}</h2>
+        <p className="text-sm text-center leading-relaxed mb-6" style={{ color: 'var(--text)' }}>{step.body}</p>
 
         {/* Dots */}
         <div className="flex items-center justify-center gap-1.5 mb-6">

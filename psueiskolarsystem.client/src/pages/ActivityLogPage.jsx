@@ -15,7 +15,7 @@ const ACTION_COLORS = {
 };
 
 function ActionBadge({ action }) {
-  const style = ACTION_COLORS[action] ?? { bg: '#e8edf5', color: '#4a5a7a' };
+  const style = ACTION_COLORS[action] ?? { bg: 'var(--bg)', color: 'var(--text)' };
   return (
     <span className="clay-badge text-xs"
       style={{ background: style.bg, color: style.color, border: '1px solid rgba(0,0,0,0.06)' }}>
@@ -168,7 +168,7 @@ export default function ActivityLogPage() {
                       {formatTs(log.timestampUtc)}
                     </td>
                     <td className="px-5 py-3.5">
-                      <p className="font-semibold text-sm" style={{ color: '#0d1a33' }}>{log.userName}</p>
+                      <p className="font-semibold text-sm" style={{ color: 'var(--text-strong)' }}>{log.userName}</p>
                       {log.userEmail && (
                         <p className="text-xs mt-0.5" style={{ color: '#7a8aaa' }}>{log.userEmail}</p>
                       )}
@@ -176,7 +176,7 @@ export default function ActivityLogPage() {
                     <td className="px-5 py-3.5">
                       <ActionBadge action={log.action} />
                     </td>
-                    <td className="px-5 py-3.5 text-sm" style={{ color: '#4a5a7a' }}>
+                    <td className="px-5 py-3.5 text-sm" style={{ color: 'var(--text)' }}>
                       {log.details ?? <span style={{ color: '#b0bdd0', fontStyle: 'italic' }}>—</span>}
                     </td>
                   </tr>

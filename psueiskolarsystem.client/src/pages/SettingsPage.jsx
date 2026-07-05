@@ -132,7 +132,7 @@ export default function SettingsPage() {
                   </p>
                   {current ? (
                     <>
-                      <p style={{ fontSize: 22, fontWeight: 900, color: '#0d1a33', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
+                      <p style={{ fontSize: 22, fontWeight: 900, color: 'var(--text-strong)', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
                         A.Y. {current.academicYear}
                       </p>
                       <p style={{ fontSize: 14, fontWeight: 600, color: '#003087', marginTop: 2 }}>
@@ -154,7 +154,7 @@ export default function SettingsPage() {
 
             {/* Change form */}
             <div className="clay-card p-6">
-              <p style={{ fontSize: 13, fontWeight: 700, color: '#0d1a33', marginBottom: 20 }}>
+              <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-strong)', marginBottom: 20 }}>
                 Change Active Period
               </p>
 
@@ -177,7 +177,7 @@ export default function SettingsPage() {
 
                 {/* Academic Year */}
                 <div>
-                  <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: '#4a5a7a' }}>
+                  <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
                     Academic Year
                   </label>
                   <select
@@ -193,7 +193,7 @@ export default function SettingsPage() {
 
                 {/* Semester toggle */}
                 <div>
-                  <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: '#4a5a7a' }}>
+                  <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
                     Semester
                   </label>
                   <div style={{ display: 'flex', gap: 10 }}>
@@ -218,8 +218,8 @@ export default function SettingsPage() {
                               color: '#fff',
                               boxShadow: '4px 4px 0px #001040, inset 0 1px 0 rgba(255,255,255,0.18)',
                             } : {
-                              background: '#e8edf5',
-                              color: '#4a5a7a',
+                              background: 'var(--bg)',
+                              color: 'var(--text)',
                               boxShadow: '4px 4px 10px rgba(163,177,198,0.5), -3px -3px 8px rgba(255,255,255,0.9)',
                             }),
                           }}
@@ -257,7 +257,7 @@ export default function SettingsPage() {
                   <Archive size={20} color="#b03000" strokeWidth={2} />
                 </div>
                 <div>
-                  <p style={{ fontSize: 13, fontWeight: 800, color: '#0d1a33' }}>Archive Inactive Scholars</p>
+                  <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-strong)' }}>Archive Inactive Scholars</p>
                   <p style={{ fontSize: 12, color: '#7a8aaa', marginTop: 2 }}>
                     Deactivate scholar accounts with no document submissions within the specified period.
                   </p>
@@ -266,7 +266,7 @@ export default function SettingsPage() {
 
               <div className="flex items-end gap-3 flex-wrap">
                 <div>
-                  <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: '#4a5a7a' }}>
+                  <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
                     Inactive for more than
                   </label>
                   <select
@@ -317,7 +317,7 @@ export default function SettingsPage() {
                   <Database size={20} color="#0a7d43" strokeWidth={2} />
                 </div>
                 <div>
-                  <p style={{ fontSize: 13, fontWeight: 800, color: '#0d1a33' }}>Sample Data</p>
+                  <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-strong)' }}>Sample Data</p>
                   <p style={{ fontSize: 12, color: '#7a8aaa', marginTop: 2 }}>
                     Populate the system with sample coordinators, scholars (with profiles &amp; grades), and announcements for demos and testing.
                   </p>
@@ -366,14 +366,14 @@ export default function SettingsPage() {
                 <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(180,60,0,0.08)' }}>
                   <Archive size={15} color="#b03000" strokeWidth={2} />
                 </div>
-                <h2 className="text-base font-black" style={{ color: '#0d1a33' }}>Confirm Archive</h2>
+                <h2 className="text-base font-black" style={{ color: 'var(--text-strong)' }}>Confirm Archive</h2>
               </div>
               <button onClick={() => setShowArchiveConfirm(false)}
                 className="w-7 h-7 rounded-xl flex items-center justify-center hover:bg-black/5">
                 <X size={15} color="#7a8aaa" strokeWidth={2.5} />
               </button>
             </div>
-            <p className="text-sm leading-relaxed mb-6" style={{ color: '#4a5a7a' }}>
+            <p className="text-sm leading-relaxed mb-6" style={{ color: 'var(--text)' }}>
               This will <strong>deactivate</strong> all scholar accounts with no document submissions in the last{' '}
               <strong>{archiveDays} days</strong>. Deactivated accounts cannot log in until re-activated by an administrator.
             </p>

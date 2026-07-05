@@ -12,7 +12,7 @@ export default function Pagination({ page, totalPages, total, pageSize, onPageCh
           value={pageSize}
           onChange={e => onPageSizeChange(Number(e.target.value))}
           className="rounded-lg px-2 py-1"
-          style={{ border: '1px solid rgba(0,48,135,0.14)', background: '#fff', color: '#0d1a33', fontWeight: 600 }}
+          style={{ border: '1px solid rgba(0,48,135,0.14)', background: '#fff', color: 'var(--text-strong)', fontWeight: 600 }}
         >
           {PAGE_SIZES.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
@@ -28,7 +28,7 @@ export default function Pagination({ page, totalPages, total, pageSize, onPageCh
         >
           <ChevronLeft size={15} strokeWidth={2.4} color="#003087" />
         </button>
-        <span className="text-xs font-semibold px-2" style={{ color: '#4a5a7a' }}>
+        <span className="text-xs font-semibold px-2" style={{ color: 'var(--text)' }}>
           {page} / {Math.max(totalPages, 1)}
         </span>
         <button

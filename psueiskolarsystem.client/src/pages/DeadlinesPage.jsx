@@ -141,7 +141,7 @@ function TabBtn({ active, onClick, icon: Icon, label }) {
       className="clay-btn px-4 py-2 text-sm flex items-center gap-2"
       style={active
         ? { background: 'rgba(0,37,112,0.10)', color: '#002570', border: '1.5px solid rgba(0,37,112,0.25)' }
-        : { color: '#4a5a7a' }}
+        : { color: 'var(--text)' }}
     >
       <Icon size={15} strokeWidth={2.2} /> {label}
     </button>
@@ -168,7 +168,7 @@ function ManageTab({ requirements, deadlineByReq, onSet, onClear }) {
             const past = dl && new Date(dl.dueDate) < new Date();
             return (
               <tr key={req.id} className="clay-table-row">
-                <td className="px-5 py-3.5 font-semibold" style={{ color: '#0d1a33' }}>
+                <td className="px-5 py-3.5 font-semibold" style={{ color: 'var(--text-strong)' }}>
                   {req.name}
                   {req.isRequired && (
                     <span className="ml-2 text-xs px-1.5 py-0.5 rounded-xl font-medium"
@@ -228,7 +228,7 @@ function ReportCard({ row }) {
     <div className="clay-card p-5">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <p className="font-bold" style={{ color: '#0d1a33' }}>{row.requirementName}</p>
+          <p className="font-bold" style={{ color: 'var(--text-strong)' }}>{row.requirementName}</p>
           <p className="text-xs mt-0.5 flex items-center gap-1.5" style={{ color: row.isPastDue ? '#c0342c' : '#7a8aaa' }}>
             <Clock size={12} /> Due {due.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
             {row.isPastDue && ' · Past due'}
@@ -255,7 +255,7 @@ function ReportCard({ row }) {
               <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: '#c0342c' }}>Missing ({row.missing})</p>
               <ul className="space-y-1">
                 {row.missingScholars.map(s => (
-                  <li key={s.id} className="text-xs" style={{ color: '#4a5a7a' }}>
+                  <li key={s.id} className="text-xs" style={{ color: 'var(--text)' }}>
                     {s.fullName}{s.campusName ? <span style={{ color: '#9aaabb' }}> · {s.campusName}</span> : ''}
                   </li>
                 ))}
@@ -267,7 +267,7 @@ function ReportCard({ row }) {
               <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: '#c2410c' }}>Late ({row.late})</p>
               <ul className="space-y-1">
                 {row.lateSubmissions.map(s => (
-                  <li key={s.scholarId} className="text-xs" style={{ color: '#4a5a7a' }}>
+                  <li key={s.scholarId} className="text-xs" style={{ color: 'var(--text)' }}>
                     {s.scholarName}<span style={{ color: '#9aaabb' }}> · {new Date(s.submittedAt).toLocaleDateString()}</span>
                   </li>
                 ))}

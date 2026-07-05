@@ -43,7 +43,7 @@ export default function LandingPage() {
   useTitle('Home');
 
   return (
-    <div style={{ background: '#e8edf5', minHeight: '100vh', fontFamily: "Inter, system-ui, 'Segoe UI', sans-serif" }}>
+    <div style={{ background: 'var(--bg)', minHeight: '100vh', fontFamily: "Inter, system-ui, 'Segoe UI', sans-serif" }}>
 
       {/* Navbar */}
       <nav style={{
@@ -338,14 +338,14 @@ export default function LandingPage() {
                 About the Campus
               </p>
               <h2 style={{
-                fontSize: 22, fontWeight: 900, color: '#0d1a33',
+                fontSize: 22, fontWeight: 900, color: 'var(--text-strong)',
                 letterSpacing: '-0.02em', marginBottom: 14,
                 lineHeight: 1.2,
               }}>
                 PSU Lingayen<br />
                 <span style={{ color: '#003087' }}>Main Campus</span>
               </h2>
-              <p style={{ fontSize: 14, color: '#4a5a7a', lineHeight: 1.75, marginBottom: 24 }}>
+              <p style={{ fontSize: 14, color: 'var(--text)', lineHeight: 1.75, marginBottom: 24 }}>
                 Pangasinan State University Lingayen is the main campus of PSU, located in the
                 provincial capital of Pangasinan. It serves as the administrative and academic hub
                 offering undergraduate and graduate programs across various disciplines.
@@ -361,7 +361,7 @@ export default function LandingPage() {
                   </div>
                   <div>
                     <p style={{ fontSize: 11, fontWeight: 700, color: '#003087', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>Address</p>
-                    <p style={{ fontSize: 13.5, color: '#2a3a5a', lineHeight: 1.5 }}>Alvear St., Lingayen, Pangasinan 2401, Philippines</p>
+                    <p style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 1.5 }}>Alvear St., Lingayen, Pangasinan 2401, Philippines</p>
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
@@ -374,7 +374,7 @@ export default function LandingPage() {
                   </div>
                   <div>
                     <p style={{ fontSize: 11, fontWeight: 700, color: '#003087', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>Telephone</p>
-                    <p style={{ fontSize: 13.5, color: '#2a3a5a' }}>(075) 654-1211</p>
+                    <p style={{ fontSize: 13.5, color: 'var(--text)' }}>(075) 654-1211</p>
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
@@ -387,7 +387,7 @@ export default function LandingPage() {
                   </div>
                   <div>
                     <p style={{ fontSize: 11, fontWeight: 700, color: '#003087', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>Email</p>
-                    <p style={{ fontSize: 13.5, color: '#2a3a5a' }}>cssa.lingayen@psu.edu.ph</p>
+                    <p style={{ fontSize: 13.5, color: 'var(--text)' }}>cssa.lingayen@psu.edu.ph</p>
                   </div>
                 </div>
               </div>
@@ -402,14 +402,14 @@ export default function LandingPage() {
                 Administering Office
               </p>
               <h2 style={{
-                fontSize: 22, fontWeight: 900, color: '#0d1a33',
+                fontSize: 22, fontWeight: 900, color: 'var(--text-strong)',
                 letterSpacing: '-0.02em', marginBottom: 14,
                 lineHeight: 1.2,
               }}>
                 Coordinator for<br />
                 <span style={{ color: '#003087' }}>School Student Affairs</span>
               </h2>
-              <p style={{ fontSize: 14, color: '#4a5a7a', lineHeight: 1.75, marginBottom: 24 }}>
+              <p style={{ fontSize: 14, color: 'var(--text)', lineHeight: 1.75, marginBottom: 24 }}>
                 The CSSA Office is the designated unit responsible for all scholarship-related
                 programs at PSU Lingayen. It oversees scholar eligibility, document compliance,
                 and coordination with government and private scholarship sponsors.
@@ -419,7 +419,7 @@ export default function LandingPage() {
                   <div key={label} style={{
                     padding: '14px 16px',
                     borderRadius: 14,
-                    background: '#e8edf5',
+                    background: 'var(--bg)',
                     boxShadow: '4px 4px 10px rgba(163,177,198,0.5), -3px -3px 8px rgba(255,255,255,0.9)',
                   }}>
                     <div style={{
@@ -429,7 +429,7 @@ export default function LandingPage() {
                     }}>
                       <Icon size={13} color="#003087" strokeWidth={2.5} />
                     </div>
-                    <p style={{ fontSize: 11.5, fontWeight: 700, color: '#0d1a33', marginBottom: 4, lineHeight: 1.3 }}>{label}</p>
+                    <p style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--text-strong)', marginBottom: 4, lineHeight: 1.3 }}>{label}</p>
                     <p style={{ fontSize: 11, color: '#7a8aaa', lineHeight: 1.5 }}>{desc}</p>
                   </div>
                 ))}
@@ -474,7 +474,7 @@ export default function LandingPage() {
                 <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 11 }}>
                   {items.map(item => (
                     <li key={item} style={{
-                      fontSize: 13.5, color: '#2a3a5a', lineHeight: 1.45,
+                      fontSize: 13.5, color: 'var(--text)', lineHeight: 1.45,
                       display: 'flex', alignItems: 'flex-start', gap: 10,
                     }}>
                       <span style={{ color: '#f5b800', fontWeight: 900, fontSize: 14, lineHeight: 1.3, flexShrink: 0 }}>—</span>

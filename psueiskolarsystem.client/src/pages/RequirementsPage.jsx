@@ -110,7 +110,7 @@ export default function RequirementsPage() {
                 {displayed.map(r => (
                   <tr key={r.id} className="clay-table-row">
                     <td className="px-5 py-3.5">
-                      <p className="font-semibold" style={{ color: '#0d1a33' }}>{r.name}</p>
+                      <p className="font-semibold" style={{ color: 'var(--text-strong)' }}>{r.name}</p>
                       {r.description && (
                         <p className="text-xs mt-0.5" style={{ color: '#7a8aaa' }}>{r.description}</p>
                       )}
@@ -121,7 +121,7 @@ export default function RequirementsPage() {
                           Required
                         </span>
                       ) : (
-                        <span className="clay-badge" style={{ background: '#e8edf5', color: '#7a8aaa', border: '1px solid rgba(0,0,0,0.08)' }}>
+                        <span className="clay-badge" style={{ background: 'var(--bg)', color: '#7a8aaa', border: '1px solid rgba(0,0,0,0.08)' }}>
                           Optional
                         </span>
                       )}
@@ -264,7 +264,7 @@ function RequirementModal({ initial, token, onClose, onSaved }) {
             className="w-4 h-4 rounded"
             style={{ accentColor: '#003087' }}
           />
-          <span className="text-sm font-medium" style={{ color: '#0d1a33' }}>
+          <span className="text-sm font-medium" style={{ color: 'var(--text-strong)' }}>
             Mark as required
           </span>
           <span className="text-xs" style={{ color: '#7a8aaa' }}>

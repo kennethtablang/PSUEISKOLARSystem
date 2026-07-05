@@ -202,7 +202,7 @@ export default function DashboardPage() {
                 <RefreshCw size={20} strokeWidth={2} style={{ color: '#c05000' }} />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-black" style={{ color: '#0d1a33' }}>
+                <p className="text-sm font-black" style={{ color: 'var(--text-strong)' }}>
                   {renewal.count} scholar{renewal.count !== 1 ? 's' : ''} need renewal attention
                 </p>
                 <p className="text-xs mt-0.5" style={{ color: '#7a3010' }}>
@@ -237,7 +237,7 @@ export default function DashboardPage() {
                   style={{ color: scholarGwa.meetsRequirement === false ? 'rgba(192,80,0,0.6)' : 'rgba(16,128,80,0.6)' }}>
                   GWA Status · {scholarGwa.scholarshipTypeName ?? 'Scholarship'}
                 </p>
-                <p className="text-3xl font-black" style={{ color: '#0d1a33' }}>
+                <p className="text-3xl font-black" style={{ color: 'var(--text-strong)' }}>
                   {scholarGwa.latestGwa.toFixed(2)}
                 </p>
                 <p className="text-xs mt-0.5"
@@ -254,7 +254,7 @@ export default function DashboardPage() {
         {/* Upcoming deadlines (scholar) */}
         {user?.role === 'Scholar' && deadlines.length > 0 && (
           <div className="mb-8">
-            <h2 className="text-base font-black mb-4" style={{ color: '#0d1a33' }}>Upcoming Deadlines</h2>
+            <h2 className="text-base font-black mb-4" style={{ color: 'var(--text-strong)' }}>Upcoming Deadlines</h2>
             <div className="space-y-2">
               {deadlines.map(d => {
                 const days = Math.ceil((new Date(d.dueDate) - Date.now()) / 86400000);
@@ -264,7 +264,7 @@ export default function DashboardPage() {
                       <CalendarClock size={18} color="#c2410c" strokeWidth={2} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold" style={{ color: '#0d1a33' }}>{d.requirementName}</p>
+                      <p className="text-sm font-bold" style={{ color: 'var(--text-strong)' }}>{d.requirementName}</p>
                       <p className="text-xs" style={{ color: days <= 3 ? '#c2410c' : '#7a8aaa' }}>
                         Due {new Date(d.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} · {days <= 0 ? 'today' : `in ${days} day${days > 1 ? 's' : ''}`}
                       </p>
@@ -280,16 +280,16 @@ export default function DashboardPage() {
         {/* Scholar compliance section */}
         {user?.role === 'Scholar' && compliance && (
           <div className="mb-8 space-y-4">
-            <h2 className="text-base font-black" style={{ color: '#0d1a33' }}>Document Compliance</h2>
+            <h2 className="text-base font-black" style={{ color: 'var(--text-strong)' }}>Document Compliance</h2>
 
             {/* Progress card */}
             <div className="clay-card p-5">
               <div className="flex items-center justify-between mb-2">
                 <div>
-                  <p className="text-sm font-bold" style={{ color: '#0d1a33' }}>
+                  <p className="text-sm font-bold" style={{ color: 'var(--text-strong)' }}>
                     {compliance.scholarshipTypeName ?? 'Required Documents'} · {compliance.academicYear ?? ''}
                   </p>
-                  <p className="text-xs mt-0.5" style={{ color: '#4a5a7a' }}>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--text)' }}>
                     {compliance.verifiedCount} of {compliance.totalRequired} required documents verified
                   </p>
                 </div>
@@ -377,7 +377,7 @@ export default function DashboardPage() {
 
         {/* Announcements */}
         <div>
-          <h2 className="text-base font-black mb-4" style={{ color: '#0d1a33' }}>Announcements</h2>
+          <h2 className="text-base font-black mb-4" style={{ color: 'var(--text-strong)' }}>Announcements</h2>
           {announcements.length === 0 ? (
             <div className="clay-card p-8 text-center">
               <Inbox size={32} strokeWidth={1.5} className="mx-auto mb-3" style={{ color: '#b0bdd0' }} />
@@ -405,7 +405,7 @@ function StatCard({ label, value, Icon, color, iconColor }) {
         <Icon size={18} strokeWidth={2} style={{ color: iconColor }} />
       </div>
       <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'rgba(0,0,0,0.42)' }}>{label}</p>
-      <p className="text-3xl font-black" style={{ color: '#0d1a33' }}>{value}</p>
+      <p className="text-3xl font-black" style={{ color: 'var(--text-strong)' }}>{value}</p>
     </div>
   );
 }
@@ -426,7 +426,7 @@ function QuickAction({ to, Icon, label }) {
       <div className="w-11 h-11 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(0,48,135,0.08)' }}>
         <Icon size={20} color="#003087" strokeWidth={2} />
       </div>
-      <span className="text-xs font-bold" style={{ color: '#0d1a33' }}>{label}</span>
+      <span className="text-xs font-bold" style={{ color: 'var(--text-strong)' }}>{label}</span>
     </Link>
   );
 }
@@ -455,8 +455,8 @@ function DonutCard({ title, data }) {
             {data.map(d => (
               <div key={d.name} className="flex items-center gap-2 text-sm">
                 <span style={{ width: 10, height: 10, borderRadius: 3, background: d.color, flexShrink: 0 }} />
-                <span style={{ color: '#4a5a7a' }}>{d.name}</span>
-                <span className="ml-auto font-bold" style={{ color: '#0d1a33' }}>{d.value}</span>
+                <span style={{ color: 'var(--text)' }}>{d.name}</span>
+                <span className="ml-auto font-bold" style={{ color: 'var(--text-strong)' }}>{d.value}</span>
               </div>
             ))}
           </div>
@@ -478,8 +478,8 @@ function AnnouncementItem({ a }) {
       {a.hasImage && <AnnouncementImage announcementId={a.id} style={{ marginBottom: 12 }} />}
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1">
-          <p className="font-bold text-sm" style={{ color: '#0d1a33' }}>{a.title}</p>
-          <p className="text-sm mt-1 leading-relaxed whitespace-pre-line" style={{ color: '#2a3a5a' }}>{a.content}</p>
+          <p className="font-bold text-sm" style={{ color: 'var(--text-strong)' }}>{a.title}</p>
+          <p className="text-sm mt-1 leading-relaxed whitespace-pre-line" style={{ color: 'var(--text)' }}>{a.content}</p>
           {intent && (
             <Link to={intent.to} className="inline-flex items-center gap-1.5 mt-3 clay-btn clay-btn-primary px-3.5 py-2 text-xs font-bold">
               {intent.label}

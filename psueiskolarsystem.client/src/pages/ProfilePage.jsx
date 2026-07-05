@@ -144,13 +144,13 @@ export default function ProfilePage() {
             </div>
 
             <div className="flex-1 min-w-0">
-              <p style={{ fontSize: '1.25rem', fontWeight: 900, color: '#0d1a33', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
+              <p style={{ fontSize: '1.25rem', fontWeight: 900, color: 'var(--text-strong)', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
                 {user?.fullName}
               </p>
 
               <div className="flex items-center gap-1.5 mt-1.5">
                 <Mail size={12} strokeWidth={2} color="#7a8aaa" />
-                <p style={{ fontSize: '0.82rem', color: '#4a5a7a' }}>{user?.email}</p>
+                <p style={{ fontSize: '0.82rem', color: 'var(--text)' }}>{user?.email}</p>
               </div>
               <div className="flex items-center gap-2 mt-3 flex-wrap">
                 <span className={`clay-badge ${roleBadge.cls}`}>
@@ -186,22 +186,22 @@ export default function ProfilePage() {
               <div style={{ width: 32, height: 32, borderRadius: 10, background: 'rgba(0,48,135,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <User size={15} color="#003087" strokeWidth={2} />
               </div>
-              <h2 style={{ fontSize: '0.85rem', fontWeight: 800, color: '#0d1a33' }}>Personal Information</h2>
+              <h2 style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-strong)' }}>Personal Information</h2>
             </div>
 
             <form onSubmit={handleSaveName} className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: '#4a5a7a' }}>First Name</label>
+                  <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>First Name</label>
                   <input type="text" required value={firstName} onChange={e => setFirstName(e.target.value)} className="clay-input" placeholder="First name" />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: '#4a5a7a' }}>Last Name</label>
+                  <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>Last Name</label>
                   <input type="text" required value={lastName} onChange={e => setLastName(e.target.value)} className="clay-input" placeholder="Last name" />
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: '#4a5a7a' }}>
+                <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
                   Middle Name <span style={{ color: '#9aaabb', fontWeight: 400, textTransform: 'none' }}>(optional)</span>
                 </label>
                 <input type="text" value={middleName} onChange={e => setMiddleName(e.target.value)} className="clay-input" placeholder="Middle name" />
@@ -220,7 +220,7 @@ export default function ProfilePage() {
               <div style={{ width: 32, height: 32, borderRadius: 10, background: 'rgba(0,48,135,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <KeyRound size={15} color="#003087" strokeWidth={2} />
               </div>
-              <h2 style={{ fontSize: '0.85rem', fontWeight: 800, color: '#0d1a33' }}>Change Password</h2>
+              <h2 style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-strong)' }}>Change Password</h2>
             </div>
 
             <form onSubmit={handleChangePassword} className="space-y-4">
@@ -230,7 +230,7 @@ export default function ProfilePage() {
                 { label: 'Confirm New Password', val: confirmPw, set: setConfirmPw, ac: 'new-password' },
               ].map(({ label, val, set, ac }) => (
                 <div key={label}>
-                  <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: '#4a5a7a' }}>{label}</label>
+                  <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>{label}</label>
                   <div className="relative">
                     <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
                       <Lock size={13} color="#7a8aaa" strokeWidth={2} />
@@ -271,10 +271,10 @@ export default function ProfilePage() {
                   : <ShieldOff size={20} color="#7a8aaa" strokeWidth={2} />}
               </div>
               <div>
-                <h2 style={{ fontSize: '0.85rem', fontWeight: 800, color: '#0d1a33' }}>
+                <h2 style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-strong)' }}>
                   Two-Factor Authentication
                 </h2>
-                <p style={{ fontSize: '0.78rem', color: '#4a5a7a', marginTop: 2 }}>
+                <p style={{ fontSize: '0.78rem', color: 'var(--text)', marginTop: 2 }}>
                   {twoFaEnabled
                     ? 'A verification code will be sent to your email each time you sign in.'
                     : 'Toggle on to receive an email code at every sign-in for extra security.'}
@@ -327,9 +327,9 @@ export default function ProfilePage() {
             <div style={{ width: 32, height: 32, borderRadius: 10, background: 'rgba(0,48,135,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Bell size={15} color="#003087" strokeWidth={2} />
             </div>
-            <h2 style={{ fontSize: '0.85rem', fontWeight: 800, color: '#0d1a33' }}>Email Notification Preferences</h2>
+            <h2 style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-strong)' }}>Email Notification Preferences</h2>
           </div>
-          <p className="text-sm mb-4" style={{ color: '#4a5a7a' }}>
+          <p className="text-sm mb-4" style={{ color: 'var(--text)' }}>
             Choose which emails you receive. Account and security emails are always sent.
           </p>
 
@@ -340,7 +340,7 @@ export default function ProfilePage() {
               { key: 'emailDeadlines',      label: 'Submission deadline reminders' },
             ].map(({ key, label }) => (
               <label key={key} className="flex items-center justify-between clay-card-inner px-4 py-3 cursor-pointer">
-                <span className="text-sm font-semibold" style={{ color: '#0d1a33' }}>{label}</span>
+                <span className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>{label}</span>
                 <input
                   type="checkbox"
                   checked={prefs[key]}
@@ -357,8 +357,8 @@ export default function ProfilePage() {
           {prefsMsg && <StatusMsg msg={prefsMsg} />}
 
           <div style={{ height: 1, background: 'rgba(0,0,0,0.07)', margin: '20px 0' }} />
-          <h2 style={{ fontSize: '0.85rem', fontWeight: 800, color: '#0d1a33' }} className="mb-1.5">Guided Tour</h2>
-          <p className="text-sm mb-3" style={{ color: '#4a5a7a' }}>
+          <h2 style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-strong)' }} className="mb-1.5">Guided Tour</h2>
+          <p className="text-sm mb-3" style={{ color: 'var(--text)' }}>
             New here or need a refresher? Replay the walkthrough of the system's main features.
           </p>
           <button onClick={openTutorial} className="clay-btn clay-btn-ghost px-5 py-2.5 text-sm flex items-center gap-2">
@@ -368,8 +368,8 @@ export default function ProfilePage() {
           {user?.role === 'Scholar' && (
             <>
               <div style={{ height: 1, background: 'rgba(0,0,0,0.07)', margin: '20px 0' }} />
-              <h2 style={{ fontSize: '0.85rem', fontWeight: 800, color: '#0d1a33' }} className="mb-1.5">Your Data (RA 10173)</h2>
-              <p className="text-sm mb-3" style={{ color: '#4a5a7a' }}>
+              <h2 style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-strong)' }} className="mb-1.5">Your Data (RA 10173)</h2>
+              <p className="text-sm mb-3" style={{ color: 'var(--text)' }}>
                 Download a copy of the personal data PSU e-Iskolar holds about you.
               </p>
               <button onClick={handleDownloadData} className="clay-btn clay-btn-ghost px-5 py-2.5 text-sm flex items-center gap-2">
@@ -427,7 +427,7 @@ function Disable2faModal({ token, onClose, onDisabled }) {
               style={{ background: 'rgba(200,0,0,0.06)' }}>
               <ShieldOff size={15} color="#c03030" strokeWidth={2} />
             </div>
-            <h2 className="text-base font-black" style={{ color: '#0d1a33' }}>Disable 2FA</h2>
+            <h2 className="text-base font-black" style={{ color: 'var(--text-strong)' }}>Disable 2FA</h2>
           </div>
           <button onClick={onClose}
             className="w-7 h-7 rounded-xl flex items-center justify-center hover:bg-black/5">
@@ -435,7 +435,7 @@ function Disable2faModal({ token, onClose, onDisabled }) {
           </button>
         </div>
 
-        <p className="text-sm mb-5" style={{ color: '#4a5a7a' }}>
+        <p className="text-sm mb-5" style={{ color: 'var(--text)' }}>
           Enter your current password to confirm disabling two-factor authentication. Your account will be less secure.
         </p>
 
@@ -449,7 +449,7 @@ function Disable2faModal({ token, onClose, onDisabled }) {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: '#4a5a7a' }}>
+            <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
               Current Password
             </label>
             <div className="relative">
@@ -496,7 +496,7 @@ function InfoBlock({ icon, label, value }) {
           {label}
         </p>
       </div>
-      <p style={{ fontSize: '0.8rem', fontWeight: 600, color: '#0d1a33', wordBreak: 'break-all' }}>{value}</p>
+      <p style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-strong)', wordBreak: 'break-all' }}>{value}</p>
     </div>
   );
 }

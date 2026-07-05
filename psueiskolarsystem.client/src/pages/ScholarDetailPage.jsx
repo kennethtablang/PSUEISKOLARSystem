@@ -96,7 +96,7 @@ export default function ScholarDetailPage() {
   return (
     <Layout>
       <div className="p-8 max-w-3xl">
-        <button onClick={() => navigate(-1)} className="text-sm mb-5 flex items-center gap-1 hover:underline" style={{ color: '#4a5a7a' }}>
+        <button onClick={() => navigate(-1)} className="text-sm mb-5 flex items-center gap-1 hover:underline" style={{ color: 'var(--text)' }}>
           ← Back
         </button>
 
@@ -211,10 +211,10 @@ export default function ScholarDetailPage() {
                   <tbody>
                     {grades.map((g, i) => (
                       <tr key={g.id} style={{ borderTop: i > 0 ? '1px solid rgba(0,0,0,0.05)' : 'none' }}>
-                        <td className="py-2.5" style={{ color: '#2a3a5a' }}>{g.academicYear}</td>
-                        <td className="py-2.5" style={{ color: '#2a3a5a' }}>Sem {g.semester}</td>
+                        <td className="py-2.5" style={{ color: 'var(--text)' }}>{g.academicYear}</td>
+                        <td className="py-2.5" style={{ color: 'var(--text)' }}>Sem {g.semester}</td>
                         <td className="py-2.5">
-                          <span className="font-mono font-bold" style={{ color: g.meetsRequirement ? '#0d1a33' : '#c03010' }}>
+                          <span className="font-mono font-bold" style={{ color: g.meetsRequirement ? 'var(--text-strong)' : '#c03010' }}>
                             {g.gwa.toFixed(2)}
                           </span>
                         </td>
@@ -230,7 +230,7 @@ export default function ScholarDetailPage() {
                             </span>
                           )}
                         </td>
-                        <td className="py-2.5 text-xs" style={{ color: '#4a5a7a' }}>{g.remarks ?? '—'}</td>
+                        <td className="py-2.5 text-xs" style={{ color: 'var(--text)' }}>{g.remarks ?? '—'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -316,7 +316,7 @@ function Detail({ label, value }) {
   return (
     <div>
       <dt className="text-xs" style={{ color: '#7a8aaa' }}>{label}</dt>
-      <dd className="text-sm font-semibold mt-0.5" style={{ color: '#0d1a33' }}>{value}</dd>
+      <dd className="text-sm font-semibold mt-0.5" style={{ color: 'var(--text-strong)' }}>{value}</dd>
     </div>
   );
 }
@@ -488,7 +488,7 @@ function ClayModal({ title, onClose, children }) {
   return (
     <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{ background: 'rgba(0,20,60,0.45)' }}>
       <div className="clay-card-modal w-full max-w-md p-7">
-        <h2 className="text-base font-black mb-5" style={{ color: '#0d1a33' }}>{title}</h2>
+        <h2 className="text-base font-black mb-5" style={{ color: 'var(--text-strong)' }}>{title}</h2>
         {children}
       </div>
     </div>
@@ -507,7 +507,7 @@ function ErrorBox({ children }) {
 function Field({ label, children }) {
   return (
     <div>
-      <label className="block text-xs font-bold mb-1.5 uppercase tracking-wider" style={{ color: '#4a5a7a' }}>{label}</label>
+      <label className="block text-xs font-bold mb-1.5 uppercase tracking-wider" style={{ color: 'var(--text)' }}>{label}</label>
       {children}
     </div>
   );

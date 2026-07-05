@@ -26,18 +26,18 @@ export default function ConsentGate() {
           style={{ background: 'rgba(0,37,112,0.08)', border: '2px solid rgba(0,37,112,0.15)' }}>
           <ShieldCheck size={26} color="#002570" strokeWidth={2} />
         </div>
-        <h2 className="font-black text-lg mb-2 text-center" style={{ color: '#0d1a33' }}>Data Privacy Notice</h2>
-        <p className="text-sm mb-3 leading-relaxed" style={{ color: '#4a5a7a' }}>
+        <h2 className="font-black text-lg mb-2 text-center" style={{ color: 'var(--text-strong)' }}>Data Privacy Notice</h2>
+        <p className="text-sm mb-3 leading-relaxed" style={{ color: 'var(--text)' }}>
           In compliance with the <strong>Data Privacy Act of 2012 (RA 10173)</strong>, PSU e-Iskolar
           collects and processes your personal and academic information solely for scholarship
           profiling, records management, and compliance monitoring.
         </p>
-        <ul className="text-sm mb-3 leading-relaxed pl-5 list-disc" style={{ color: '#4a5a7a' }}>
+        <ul className="text-sm mb-3 leading-relaxed pl-5 list-disc" style={{ color: 'var(--text)' }}>
           <li>Your data is accessible only to authorized administrators and coordinators.</li>
           <li>It will not be shared with third parties without your consent.</li>
           <li>You may view and download the personal data we hold about you at any time.</li>
         </ul>
-        <p className="text-sm mb-6 leading-relaxed" style={{ color: '#4a5a7a' }}>
+        <p className="text-sm mb-6 leading-relaxed" style={{ color: 'var(--text)' }}>
           By continuing, you acknowledge that you have read and understood this notice and consent to
           the processing of your data for the purposes described.
         </p>

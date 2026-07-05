@@ -48,7 +48,7 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen flex" style={{ background: '#e8edf5' }}>
+    <div className="min-h-screen flex" style={{ background: 'var(--bg)' }}>
 
       {/* ── LEFT PANEL ── */}
       <div className="hidden lg:flex flex-col w-[52%] relative overflow-hidden"
@@ -294,7 +294,7 @@ export default function ResetPasswordPage() {
 
       {/* ── RIGHT PANEL ── */}
       <div className="flex-1 flex flex-col items-center justify-center p-6 lg:p-12"
-        style={{ background: '#e8edf5' }}>
+        style={{ background: 'var(--bg)' }}>
 
         {/* Mobile logo */}
         <div className="flex items-center gap-3 mb-8 lg:hidden">
@@ -303,7 +303,7 @@ export default function ResetPasswordPage() {
             PSU
           </div>
           <div>
-            <p className="font-black text-base leading-tight" style={{ color: '#0d1a33' }}>e-Iskolar</p>
+            <p className="font-black text-base leading-tight" style={{ color: 'var(--text-strong)' }}>e-Iskolar</p>
             <p className="text-xs" style={{ color: '#7a8aaa' }}>Lingayen Campus</p>
           </div>
         </div>
@@ -312,8 +312,8 @@ export default function ResetPasswordPage() {
 
           {/* Header */}
           <div className="mb-6 px-1">
-            <h2 className="text-2xl font-black" style={{ color: '#0d1a33' }}>Set New Password</h2>
-            <p className="text-sm mt-1" style={{ color: '#4a5a7a' }}>
+            <h2 className="text-2xl font-black" style={{ color: 'var(--text-strong)' }}>Set New Password</h2>
+            <p className="text-sm mt-1" style={{ color: 'var(--text)' }}>
               {email ? `Resetting password for ${email}` : 'Enter your new password below.'}
             </p>
           </div>
@@ -327,8 +327,8 @@ export default function ResetPasswordPage() {
                   style={{ background: 'rgba(0,48,135,0.08)', border: '2px solid rgba(0,48,135,0.15)' }}>
                   <ShieldCheck size={26} color="#002570" strokeWidth={2} />
                 </div>
-                <p className="font-black text-lg mb-1" style={{ color: '#0d1a33' }}>Password Updated!</p>
-                <p className="text-sm mb-6" style={{ color: '#4a5a7a' }}>
+                <p className="font-black text-lg mb-1" style={{ color: 'var(--text-strong)' }}>Password Updated!</p>
+                <p className="text-sm mb-6" style={{ color: 'var(--text)' }}>
                   Your password has been reset successfully. You can now sign in with your new credentials.
                 </p>
                 <button
@@ -361,7 +361,7 @@ export default function ResetPasswordPage() {
                   {/* New Password */}
                   <div>
                     <label className="block text-xs font-bold mb-2 uppercase tracking-wider"
-                      style={{ color: '#4a5a7a' }}>
+                      style={{ color: 'var(--text)' }}>
                       New Password
                     </label>
                     <div className="relative">
@@ -386,7 +386,7 @@ export default function ResetPasswordPage() {
                   {/* Confirm Password */}
                   <div>
                     <label className="block text-xs font-bold mb-2 uppercase tracking-wider"
-                      style={{ color: '#4a5a7a' }}>
+                      style={{ color: 'var(--text)' }}>
                       Confirm Password
                     </label>
                     <div className="relative">
@@ -429,7 +429,7 @@ export default function ResetPasswordPage() {
           <div className="text-center mt-5">
             <Link to="/login"
               className="inline-flex items-center gap-1.5 text-xs font-medium"
-              style={{ color: '#4a5a7a' }}>
+              style={{ color: 'var(--text)' }}>
               <ArrowLeft size={13} strokeWidth={2.5} />
               Back to Sign In
             </Link>

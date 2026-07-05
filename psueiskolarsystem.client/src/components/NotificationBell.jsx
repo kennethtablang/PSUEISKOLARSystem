@@ -60,7 +60,7 @@ export default function NotificationBell({ variant = 'floating' }) {
         style={{
           position: 'relative', width: 40, height: 40, borderRadius: 12, border: 'none', cursor: 'pointer',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: '#e8edf5',
+          background: 'var(--bg)',
           boxShadow: open
             ? 'inset 3px 3px 7px rgba(163,177,198,0.6), inset -3px -3px 7px rgba(255,255,255,0.9)'
             : '4px 4px 10px rgba(163,177,198,0.55), -3px -3px 8px rgba(255,255,255,0.9)',
@@ -93,7 +93,7 @@ export default function NotificationBell({ variant = 'floating' }) {
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             padding: '13px 16px', borderBottom: '1px solid rgba(0,48,135,0.07)',
           }}>
-            <p style={{ fontWeight: 800, fontSize: 14, color: '#0d1a33' }}>
+            <p style={{ fontWeight: 800, fontSize: 14, color: 'var(--text-strong)' }}>
               Notifications {unreadCount > 0 && (
                 <span style={{ color: '#d92020', fontSize: 12, fontWeight: 700 }}>· {unreadCount} new</span>
               )}
@@ -146,7 +146,7 @@ export default function NotificationBell({ variant = 'floating' }) {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                       <p style={{
-                        flex: 1, fontSize: 13, fontWeight: n.isRead ? 600 : 800, color: '#0d1a33',
+                        flex: 1, fontSize: 13, fontWeight: n.isRead ? 600 : 800, color: 'var(--text-strong)',
                         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                       }}>
                         {n.title}
