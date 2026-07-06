@@ -125,7 +125,7 @@ export default function ProfilePage() {
 
   return (
     <Layout>
-      <div className="p-8" style={{ maxWidth: '860px' }}>
+      <div className="p-4 sm:p-8" style={{ maxWidth: '860px' }}>
 
         <div className="mb-8">
           <h1 className="page-title">My Profile</h1>

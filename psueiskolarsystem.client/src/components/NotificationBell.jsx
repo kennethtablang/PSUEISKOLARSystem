@@ -75,7 +75,7 @@ export default function NotificationBell({ variant = 'floating' }) {
             position: 'absolute', top: -3, right: -3, minWidth: 18, height: 18, padding: '0 4px',
             borderRadius: 999, background: 'linear-gradient(145deg, #ff5a5a, #d92020)',
             color: '#fff', fontSize: 10, fontWeight: 800, lineHeight: '18px', textAlign: 'center',
-            boxShadow: '0 2px 5px rgba(217,32,32,0.5)', border: '2px solid #e8edf5',
+            boxShadow: '0 2px 5px rgba(217,32,32,0.5)', border: '2px solid var(--bg)',
           }}>
             {unreadCount > 99 ? '99+' : unreadCount}
           </span>

@@ -77,6 +77,36 @@ body {
 }
 .fade-up { animation: fadeUp 0.3s ease both; }
 
+/* ═══ STAT TILES (theme-aware colored KPI cards) ═══ */
+.stat-tile {
+  background: var(--tile-bg);
+  box-shadow: 6px 6px 16px rgba(163,177,198,0.5), -4px -4px 12px rgba(255,255,255,0.85);
+}
+.stat-tile-icon {
+  background: rgba(255,255,255,0.5);
+  box-shadow: 3px 3px 8px rgba(163,177,198,0.35), -2px -2px 5px rgba(255,255,255,0.9);
+}
+.stat-tile-label { color: rgba(0,0,0,0.42); }
+.stat-tile-value { color: #0d1a33; }
+
+:root[data-theme="dark"] .stat-tile {
+  /* Darken the pastel toward the surface so tiles read on the dark theme while keeping their hue */
+  background: color-mix(in srgb, var(--tile-bg) 20%, var(--surface));
+  box-shadow: 8px 8px 20px rgba(0,0,0,0.45), -5px -5px 14px rgba(255,255,255,0.03), inset 0 1px 0 rgba(255,255,255,0.04);
+}
+:root[data-theme="dark"] .stat-tile-icon {
+  background: rgba(255,255,255,0.09);
+  box-shadow: none;
+}
+:root[data-theme="dark"] .stat-tile-label { color: var(--text-muted); }
+:root[data-theme="dark"] .stat-tile-value { color: var(--text-strong); }
+
+/* ═══ GUIDED TOUR SPOTLIGHT ═══ */
+@keyframes tourPulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(245,184,0,0.28); }
+  50%      { box-shadow: 0 0 0 7px rgba(245,184,0,0.12); }
+}
+
 /* ═══ ROUTE TRANSITION ═══ */
 @keyframes routeFade {
   from { opacity: 0; transform: translateY(6px); }

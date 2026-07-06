@@ -300,7 +300,7 @@ export default function Layout({ children }) {
 
           const { to, label, Icon } = item;
           return (
-            <NavLink key={to} to={to} style={{ display: 'block', marginBottom: 2 }} title={isCollapsed ? label : undefined}>
+            <NavLink key={to} to={to} data-tour={to} style={{ display: 'block', marginBottom: 2 }} title={isCollapsed ? label : undefined}>
               {({ isActive }) => (
                 <div
                   style={{
@@ -549,7 +549,7 @@ export default function Layout({ children }) {
             >
               <ThemeIcon size={17} strokeWidth={2.2} color="#003087" />
             </button>
-            <NotificationBell variant="inline" />
+            <span data-tour="notifications"><NotificationBell variant="inline" /></span>
             <div
               onClick={() => navigate('/profile')}
               title="My Profile"

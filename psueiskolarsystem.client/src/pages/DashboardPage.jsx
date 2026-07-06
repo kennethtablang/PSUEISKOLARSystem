@@ -136,7 +136,7 @@ export default function DashboardPage() {
 
   return (
     <Layout>
-      <div className="p-8 max-w-4xl">
+      <div className="p-4 sm:p-8 max-w-4xl">
         {/* Header */}
         <div className="mb-7">
           <h1 className="page-title">
@@ -459,16 +459,12 @@ function relativeTime(iso) {
 
 function StatCard({ label, value, Icon, color, iconColor }) {
   return (
-    <div className="rounded-3xl p-5" style={{
-      background: color,
-      boxShadow: '6px 6px 16px rgba(163,177,198,0.5), -4px -4px 12px rgba(255,255,255,0.85)',
-    }}>
-      <div className="w-10 h-10 rounded-2xl flex items-center justify-center mb-3"
-        style={{ background: 'rgba(255,255,255,0.5)', boxShadow: '3px 3px 8px rgba(163,177,198,0.35), -2px -2px 5px rgba(255,255,255,0.9)' }}>
+    <div className="rounded-3xl p-5 stat-tile" style={{ '--tile-bg': color }}>
+      <div className="w-10 h-10 rounded-2xl flex items-center justify-center mb-3 stat-tile-icon">
         <Icon size={18} strokeWidth={2} style={{ color: iconColor }} />
       </div>
-      <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'rgba(0,0,0,0.42)' }}>{label}</p>
-      <p className="text-3xl font-black" style={{ color: '#0d1a33' }}>{value}</p>
+      <p className="text-xs font-bold uppercase tracking-wider mb-1 stat-tile-label">{label}</p>
+      <p className="text-3xl font-black stat-tile-value">{value}</p>
     </div>
   );
 }

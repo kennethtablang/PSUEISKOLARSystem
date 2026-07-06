@@ -92,12 +92,12 @@ export default function ScholarDetailPage() {
 
   useEffect(() => { load(); }, [targetUserId]);
 
-  if (loading) return <Layout><div className="p-8 text-sm" style={{ color: '#7a8aaa' }}>Loading…</div></Layout>;
-  if (error) return <Layout><div className="p-8 text-sm" style={{ color: '#e03030' }}>{error}</div></Layout>;
+  if (loading) return <Layout><div className="p-4 sm:p-8 text-sm" style={{ color: '#7a8aaa' }}>Loading…</div></Layout>;
+  if (error) return <Layout><div className="p-4 sm:p-8 text-sm" style={{ color: '#e03030' }}>{error}</div></Layout>;
 
   return (
     <Layout>
-      <div className="p-8 max-w-3xl">
+      <div className="p-4 sm:p-8 max-w-3xl">
         <button onClick={() => navigate(-1)} className="text-sm mb-5 flex items-center gap-1 hover:underline" style={{ color: 'var(--text)' }}>
           ← Back
         </button>

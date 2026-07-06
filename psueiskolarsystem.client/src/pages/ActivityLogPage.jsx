@@ -97,7 +97,7 @@ export default function ActivityLogPage() {
 
   return (
     <Layout>
-      <div className="p-8">
+      <div className="p-4 sm:p-8">
 
         {/* Header */}
         <div className="flex items-start justify-between mb-6">

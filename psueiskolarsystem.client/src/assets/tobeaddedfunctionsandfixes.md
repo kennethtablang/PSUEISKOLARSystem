@@ -97,13 +97,13 @@
 - [x] Test coverage is minimal (2 suites) — extend to the deadline report, bulk import, and preference enforcement.
 - No API **versioning** strategy.
 - [x] Add tabbing on the System Settings
-- We still need to fix the dark mode, there are components that are still not affected by the dark mode. 
-- On the tutorial we need a guided tutorial where the system will point out where and what. 
+- [x] We still need to fix the dark mode, there are components that are still not affected by the dark mode. 
+- [x] On the tutorial we need a guided tutorial where the system will point out where and what. 
 - [x] We need a details on the upload image on the announcement. We need to put what is the resolution needed for the image to be uploaded. 
 - Remove the other campuses we dont need those. We are focusing on a single campus and that is Lingayen Campus(main campus)
 - [x] We need to add a ask again for the logout function. 
 - [x] When the student is newly register to the system then the first thing that thhe student needs to do is to Setup their account details and information about them. 
 - [x] Add a favicon
 - [x] Work on the overall transitions and animations all over the system
-- Check responsiveness of the system
+- [x] Check responsiveness of the system
 - 

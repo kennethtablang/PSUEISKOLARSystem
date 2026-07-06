@@ -82,7 +82,7 @@ export default function AnalyticsPage() {
 
   if (loading) return (
     <Layout>
-      <div className="p-8 flex items-center justify-center h-64">
+      <div className="p-4 sm:p-8 flex items-center justify-center h-64">
         <p className="text-sm" style={{ color: '#7a8aaa' }}>Loading analytics…</p>
       </div>
     </Layout>
@@ -90,7 +90,7 @@ export default function AnalyticsPage() {
 
   if (error) return (
     <Layout>
-      <div className="p-8">
+      <div className="p-4 sm:p-8">
         <p className="text-sm" style={{ color: '#e03030' }}>{error}</p>
       </div>
     </Layout>
@@ -106,7 +106,7 @@ export default function AnalyticsPage() {
 
   return (
     <Layout>
-      <div className="p-8 max-w-6xl space-y-8">
+      <div className="p-4 sm:p-8 max-w-6xl space-y-8">
 
         {/* Header */}
         <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -330,16 +330,12 @@ function LiveBadge({ lastUpdated }) {
 
 function KpiCard({ Icon, label, value, color, iconColor }) {
   return (
-    <div className="rounded-3xl p-5" style={{
-      background: color,
-      boxShadow: '6px 6px 16px rgba(163,177,198,0.5), -4px -4px 12px rgba(255,255,255,0.85)',
-    }}>
-      <div className="w-10 h-10 rounded-2xl flex items-center justify-center mb-3"
-        style={{ background: 'rgba(255,255,255,0.5)', boxShadow: '3px 3px 8px rgba(163,177,198,0.35), -2px -2px 5px rgba(255,255,255,0.9)' }}>
+    <div className="rounded-3xl p-5 stat-tile" style={{ '--tile-bg': color }}>
+      <div className="w-10 h-10 rounded-2xl flex items-center justify-center mb-3 stat-tile-icon">
         <Icon size={18} strokeWidth={2} style={{ color: iconColor }} />
       </div>
-      <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'rgba(0,0,0,0.42)' }}>{label}</p>
-      <p className="text-3xl font-black" style={{ color: '#0d1a33' }}>{value}</p>
+      <p className="text-xs font-bold uppercase tracking-wider mb-1 stat-tile-label">{label}</p>
+      <p className="text-3xl font-black stat-tile-value">{value}</p>
     </div>
   );
 }

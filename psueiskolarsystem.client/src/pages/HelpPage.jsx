@@ -79,7 +79,7 @@ export default function HelpPage() {
 
   return (
     <Layout>
-      <div className="p-8" style={{ maxWidth: 760 }}>
+      <div className="p-4 sm:p-8" style={{ maxWidth: 760 }}>
         <div className="mb-7">
           <h1 className="page-title flex items-center gap-2">
             <HelpCircle size={22} strokeWidth={2.2} style={{ color: '#003087' }} /> Help &amp; FAQ

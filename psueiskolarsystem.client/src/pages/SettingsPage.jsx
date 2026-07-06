@@ -113,7 +113,7 @@ export default function SettingsPage() {
 
   return (
     <Layout>
-      <div className="p-8" style={{ maxWidth: 680 }}>
+      <div className="p-4 sm:p-8" style={{ maxWidth: 680 }}>
 
         {/* Header */}
         <div className="mb-7">

@@ -81,7 +81,7 @@ export default function NotificationsPage() {
 
   return (
     <Layout>
-      <div className="p-8 max-w-3xl">
+      <div className="p-4 sm:p-8 max-w-3xl">
         <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
           <div>
             <h1 className="page-title">Notifications</h1>

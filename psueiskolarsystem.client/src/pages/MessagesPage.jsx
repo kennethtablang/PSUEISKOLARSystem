@@ -114,7 +114,7 @@ export default function MessagesPage() {
 
           <div className="flex-1 overflow-y-auto">
             {threads.length === 0 ? (
-              <div className="p-8 text-center">
+              <div className="p-4 sm:p-8 text-center">
                 <MessageSquare size={26} strokeWidth={1.6} color="rgba(0,48,135,0.25)" />
                 <p className="mt-2 text-xs" style={{ color: '#7a8aaa' }}>No conversations yet.</p>
               </div>
@@ -124,7 +124,7 @@ export default function MessagesPage() {
                 onClick={() => setSelected({ scholarId: t.scholarId, scholarName: t.scholarName, requirementId: t.requirementId, requirementName: t.requirementName })}
                 className="w-full text-left px-5 py-3.5 flex flex-col gap-1"
                 style={{
-                  borderBottom: '1px solid #f0f4fa',
+                  borderBottom: '1px solid var(--surface-inset)',
                   background: sameThread(t, selected) ? 'rgba(0,48,135,0.06)' : 'transparent',
                 }}
               >

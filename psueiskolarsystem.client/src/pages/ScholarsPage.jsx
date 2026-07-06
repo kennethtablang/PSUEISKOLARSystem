@@ -103,8 +103,8 @@ export default function ScholarsPage() {
 
   return (
     <Layout>
-      <div className="p-8">
-        <div className="flex items-center justify-between mb-6">
+      <div className="p-4 sm:p-8">
+        <div className="flex items-center justify-between gap-3 flex-wrap mb-6">
           <div>
             <h1 className="page-title">Scholars</h1>
             <p className="page-subtitle">{subtitle}</p>

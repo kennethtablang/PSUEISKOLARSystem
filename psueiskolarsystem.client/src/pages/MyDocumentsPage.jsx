@@ -193,10 +193,10 @@ export default function MyDocumentsPage() {
           style={{
             width: preview ? '50%' : '100%',
             transition: 'width 0.25s ease',
-            borderRight: preview ? '1.5px solid #d8e2f0' : 'none',
+            borderRight: preview ? '1.5px solid var(--surface-inset)' : 'none',
           }}
         >
-          <div className="p-8" style={{ maxWidth: preview ? undefined : '768px' }}>
+          <div className="p-4 sm:p-8" style={{ maxWidth: preview ? undefined : '768px' }}>
 
             <div className="flex items-start justify-between mb-6 flex-wrap gap-3">
               <div>
