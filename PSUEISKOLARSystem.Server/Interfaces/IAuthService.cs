@@ -15,5 +15,7 @@ namespace PSUEISKOLARSystem.Server.Interfaces
         Task DisableTwoFactorAsync(string userId, string password);
         Task<AuthResponseDto> VerifyTwoFactorLoginAsync(TwoFactorLoginRequestDto request);
         Task VerifyEmailAsync(string email, string token);
+        Task<bool> ResendVerificationAsync(string email);
+        Task<bool> IsEmailAvailableAsync(string email);
     }
 }

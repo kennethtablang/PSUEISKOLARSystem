@@ -7,6 +7,7 @@ using PSUEISKOLARSystem.Server.Data;
 using PSUEISKOLARSystem.Server.DTOs.Auth;
 using PSUEISKOLARSystem.Server.DTOs.Users;
 using PSUEISKOLARSystem.Server.Exceptions;
+using PSUEISKOLARSystem.Server.Interfaces;
 using PSUEISKOLARSystem.Server.Models;
 using PSUEISKOLARSystem.Server.Models.Enums;
 
@@ -17,6 +18,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
     [Authorize(Roles = UserRoles.Administrator)]
     public class UsersController(
         UserManager<ApplicationUser> userManager,
+        IAuthService authService,
         ApplicationDbContext db) : ControllerBase
     {
         [HttpGet]
@@ -89,6 +91,20 @@ namespace PSUEISKOLARSystem.Server.Controllers
             if (dto.CampusId.HasValue && !await db.Campuses.AnyAsync(c => c.Id == dto.CampusId))
                 return BadRequest(new { message = $"Campus does not exist." });
 
+            // Email / login change — enforce uniqueness, keep the account confirmed.
+            var newEmail = dto.Email.Trim();
+            if (!string.Equals(user.Email, newEmail, StringComparison.OrdinalIgnoreCase))
+            {
+                var existing = await userManager.FindByEmailAsync(newEmail);
+                if (existing is not null && existing.Id != user.Id)
+                    return BadRequest(new { message = "Another account already uses this email." });
+
+                user.Email = newEmail;
+                user.NormalizedEmail = userManager.NormalizeEmail(newEmail);
+                user.UserName = newEmail;
+                user.NormalizedUserName = userManager.NormalizeName(newEmail);
+            }
+
             user.FirstName = dto.FirstName.Trim();
             user.MiddleName = string.IsNullOrWhiteSpace(dto.MiddleName) ? null : dto.MiddleName.Trim();
             user.LastName = dto.LastName.Trim();
@@ -131,6 +147,29 @@ namespace PSUEISKOLARSystem.Server.Controllers
             await db.SaveChangesAsync();
 
             return NoContent();
+        }
+
+        // POST /api/users/{id}/send-password-reset — admin triggers a reset email for a user.
+        [HttpPost("{id}/send-password-reset")]
+        public async Task<IActionResult> SendPasswordReset(string id)
+        {
+            var user = await userManager.FindByIdAsync(id);
+            if (user is null) return NotFound(new { message = "User not found." });
+            if (string.IsNullOrWhiteSpace(user.Email))
+                return BadRequest(new { message = "This user has no email address on file." });
+
+            await authService.ForgotPasswordAsync(user.Email);
+
+            var actorId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            db.AuditLogs.Add(new AuditLog
+            {
+                UserId  = actorId,
+                Action  = "AdminPasswordReset",
+                Details = $"Sent a password reset link to {user.Email}",
+            });
+            await db.SaveChangesAsync();
+
+            return Ok(new { message = $"A password reset link has been sent to {user.Email}." });
         }
 
         [HttpDelete("{id}")]

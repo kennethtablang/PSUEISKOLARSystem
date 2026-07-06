@@ -90,6 +90,26 @@ export async function forgotPassword(email) {
   return res.json();
 }
 
+export async function checkEmailAvailable(email, signal) {
+  const res = await fetch(`${API}/email-available?email=${encodeURIComponent(email)}`, { signal });
+  if (!res.ok) throw new Error('Check failed.');
+  const data = await res.json();
+  return data.available;
+}
+
+export async function resendVerification(email) {
+  const res = await fetch(`${API}/resend-verification`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Request failed.');
+  }
+  return res.json();
+}
+
 export async function resetPassword(email, token, newPassword) {
   const res = await fetch(`${API}/reset-password`, {
     method: 'POST',

@@ -106,6 +106,30 @@ namespace PSUEISKOLARSystem.Server.Controllers
             }
         }
 
+        [HttpPost("resend-verification")]
+        [EnableRateLimiting("auth")]
+        public async Task<IActionResult> ResendVerification(ForgotPasswordRequestDto request)
+        {
+            var sent = await authService.ResendVerificationAsync(request.Email);
+            // Respond generically regardless, to avoid revealing which emails are registered.
+            return Ok(new
+            {
+                sent,
+                message = "If that email is registered and not yet verified, a new verification link has been sent.",
+            });
+        }
+
+        // GET /api/auth/email-available?email=  — live "is this email free?" check for forms.
+        // Rate-limited to blunt bulk user enumeration (registration already reveals
+        // existence on submit, so this exposes nothing new in kind — only speed).
+        [HttpGet("email-available")]
+        [EnableRateLimiting("emailcheck")]
+        public async Task<IActionResult> EmailAvailable([FromQuery] string email)
+        {
+            var available = await authService.IsEmailAvailableAsync(email);
+            return Ok(new { available });
+        }
+
         [HttpGet("verify-email")]
         public async Task<IActionResult> VerifyEmail([FromQuery] string email, [FromQuery] string token)
         {
@@ -182,9 +206,9 @@ namespace PSUEISKOLARSystem.Server.Controllers
             if (user is null) return NotFound();
 
             user.ConsentAcceptedAt = DateTime.UtcNow;
-            user.ConsentVersion = "1.0";
+            user.ConsentVersion = PrivacyNotice.CurrentVersion;
             await db.SaveChangesAsync();
-            return Ok(new { user.ConsentAcceptedAt });
+            return Ok(new { user.ConsentAcceptedAt, user.ConsentVersion });
         }
 
         // FR-20: per-category email notification preferences.

@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { getActiveSemester, setActiveSemester } from '../api/settings';
 import { useTitle } from '../hooks/useTitle';
 import { useTheme } from '../context/ThemeContext';
-import { CalendarDays, CheckCircle, Archive, AlertTriangle, X, Database, Sun, Moon, Monitor } from 'lucide-react';
+import { CalendarDays, CheckCircle, Archive, AlertTriangle, X, Database, Sun, Moon, Monitor, Clock } from 'lucide-react';
 
 function yearOptions() {
   const y = new Date().getFullYear();
@@ -15,7 +15,7 @@ function yearOptions() {
 
 export default function SettingsPage() {
   useTitle('System Settings');
-  const { token } = useAuth();
+  const { token, inactivityMin, setInactivityMin } = useAuth();
   const { theme, setTheme } = useTheme();
 
   const [current, setCurrent] = useState(null);
@@ -35,7 +35,7 @@ export default function SettingsPage() {
   const TABS = [
     { key: 'period',     label: 'Academic Period', Icon: CalendarDays },
     { key: 'maintenance', label: 'Maintenance',    Icon: Archive },
-    { key: 'appearance', label: 'Appearance',      Icon: Monitor },
+    { key: 'appearance', label: 'Preferences',      Icon: Monitor },
   ];
 
   async function handleSeed() {
@@ -390,8 +390,8 @@ export default function SettingsPage() {
 
             </>)}
 
-            {/* ── Appearance tab ── */}
-            {tab === 'appearance' && (
+            {/* ── Preferences tab ── */}
+            {tab === 'appearance' && (<>
             <div className="clay-card p-6">
               <div className="flex items-center gap-3 mb-5">
                 <div style={{ width: 44, height: 44, borderRadius: 13, flexShrink: 0, background: 'rgba(0,48,135,0.08)', border: '1px solid rgba(0,48,135,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -414,7 +414,32 @@ export default function SettingsPage() {
                 ))}
               </div>
             </div>
-            )}
+
+            <div className="clay-card p-6">
+              <div className="flex items-center gap-3 mb-5">
+                <div style={{ width: 44, height: 44, borderRadius: 13, flexShrink: 0, background: 'rgba(0,48,135,0.08)', border: '1px solid rgba(0,48,135,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Clock size={20} color="#003087" strokeWidth={2} />
+                </div>
+                <div>
+                  <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-strong)' }}>Session Timeout</p>
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                    Automatically sign out after this much inactivity (applies to this browser).
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                {[15, 30, 60, 120].map(min => (
+                  <button key={min} onClick={() => setInactivityMin(min)}
+                    className="clay-btn px-4 py-2.5 text-sm flex items-center gap-2"
+                    style={inactivityMin === min
+                      ? { background: 'rgba(0,37,112,0.12)', color: '#003087', border: '1.5px solid rgba(0,37,112,0.3)' }
+                      : { color: 'var(--text)' }}>
+                    {min < 60 ? `${min} min` : `${min / 60} hr${min > 60 ? 's' : ''}`}
+                  </button>
+                ))}
+              </div>
+            </div>
+            </>)}
 
           </div>
         )}

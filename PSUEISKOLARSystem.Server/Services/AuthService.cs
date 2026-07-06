@@ -162,16 +162,40 @@ namespace PSUEISKOLARSystem.Server.Services
 
             await userManager.AddToRoleAsync(user, "Scholar");
 
+            await SendVerificationEmailAsync(user);
+
+            var userDto = mapper.Map<UserDto>(user);
+            userDto.Role = "Scholar";
+            return userDto;
+        }
+
+        // Generates a fresh confirmation token and emails the verification link.
+        private async Task SendVerificationEmailAsync(ApplicationUser user)
+        {
             var token = await userManager.GenerateEmailConfirmationTokenAsync(user);
             var verifyLink = $"{_emailSettings.AppBaseUrl}/verify-email" +
                              $"?email={Uri.EscapeDataString(user.Email!)}" +
                              $"&token={Uri.EscapeDataString(token)}";
 
             await emailService.SendEmailVerificationAsync(user.Email!, user.FullName, verifyLink);
+        }
 
-            var userDto = mapper.Map<UserDto>(user);
-            userDto.Role = "Scholar";
-            return userDto;
+        // Re-sends the verification link if the account exists and is still unverified.
+        // Returns false for unknown/already-verified emails (caller responds generically
+        // to avoid leaking which emails are registered).
+        public async Task<bool> ResendVerificationAsync(string email)
+        {
+            var user = await userManager.FindByEmailAsync(email);
+            if (user is null || user.EmailConfirmed) return false;
+
+            await SendVerificationEmailAsync(user);
+            return true;
+        }
+
+        public async Task<bool> IsEmailAvailableAsync(string email)
+        {
+            if (string.IsNullOrWhiteSpace(email)) return false;
+            return await userManager.FindByEmailAsync(email.Trim()) is null;
         }
 
         public async Task VerifyEmailAsync(string email, string token)

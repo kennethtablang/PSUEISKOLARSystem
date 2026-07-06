@@ -1,7 +1,7 @@
 # To Be Added
 
 ## Authentication
-- Resend email-verification link (no way to re-request if the first email is lost).
+- [x] Resend email-verification link (no way to re-request if the first email is lost).
 - [x] Account lockout / cooldown after repeated failed logins (currently unlimited attempts).
 - [x] Password-strength meter on the register and change-password forms.
 - "Remember me" / refresh-token option — today it's a hard 30-minute inactivity logout with no token refresh.
@@ -9,7 +9,7 @@
 ## Student Management
 - Scholar profile photo/avatar upload (only initials are shown anywhere).
 - Guided scholarship **renewal workflow** — lifecycle statuses exist, but there's no per-period renewal process that checks document compliance + grade thresholds and advances the status automatically.
-- Edit a scholar's email/login from their profile (only name/campus are editable via User Management).
+- [x] Edit a scholar's email/login from their profile (only name/campus are editable via User Management).
 - Clear reactivate/restore flow for archived scholars (archive exists; un-archiving is only a manual status toggle).
 
 ## Scholarship Management
@@ -19,7 +19,7 @@
 
 ## User Management
 - **Server-side pagination + filtering** for the Users list (currently returns *all* users and paginates on the client — see Performance).
-- Resend credentials / trigger a password reset for a user from the admin panel.
+- [x] Resend credentials / trigger a password reset for a user from the admin panel.
 - Allow a coordinator to cover multiple campuses (currently a single `CampusId`).
 
 ## Dashboard
@@ -39,8 +39,8 @@
 - Finer in-app category muting (beyond the 3 email-preference toggles).
 
 ## Settings
-- Privacy-notice **version management** — re-prompt for consent when the notice version changes (the field exists but isn't enforced).
-- Configurable inactivity-timeout duration.
+- [x] Privacy-notice **version management** — re-prompt for consent when the notice version changes (the field exists but isn't enforced).
+- [x] Configurable inactivity-timeout duration.
 - SMTP / email-template configuration from the UI (currently `appsettings` only).
 - One-click database **backup/export** from Settings.
 
@@ -70,8 +70,8 @@
 - Several modals still lack **inline, field-level** validation (they rely on server 400s or `alert`).
 - [x] No client-side size/type feedback before image uploads (server enforces 10 MB + extension).
 - [x] Announcement `ExpiresAt` can be set in the past with no warning.
-- Email uniqueness is only caught on submit — no live "email already taken" check.
-- Grade academic-year isn't checked against the active semester.
+- [x] Email uniqueness is only caught on submit — no live "email already taken" check.
+- [x] Grade academic-year isn't checked against the active semester.
 
 ## Performance
 - `GET /api/users` loads **all** users into memory (client-side paging) — add server pagination.
@@ -81,9 +81,9 @@
 
 ## Security
 - [x] **No rate limiting or lockout** on `/api/auth/login` and `forgot-password` — brute-force exposure.
-- File uploads are validated by **extension + size only**, not content/magic bytes — add signature checks (or AV scan) for COR/ID uploads.
+- [x] File uploads are validated by **extension + size only**, not content/magic bytes — add signature checks (or AV scan) for COR/ID uploads.
 - [x] **Failed** login attempts aren't audit-logged (only successful logins are).
-- Confirm HTTPS/HSTS is enforced in production (only a dev HTTPS redirect today).
+- [x] Confirm HTTPS/HSTS is enforced in production (only a dev HTTPS redirect today).
 - [x] `AnalyticsChanged` is broadcast to *all* SignalR clients (incl. scholars) — harmless bare signal, but scope it to staff to avoid needless fan-out.
 
 ## Code Quality

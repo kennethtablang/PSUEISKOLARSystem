@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { registerScholar } from '../api/auth';
+import { registerScholar, checkEmailAvailable } from '../api/auth';
 import { useTitle } from '../hooks/useTitle';
 import { Mail, Lock, User, UserCheck, FolderUp, TrendingUp, Bell, ArrowRight, ArrowLeft, AlertTriangle, GraduationCap, MailCheck } from 'lucide-react';
 import PasswordStrengthMeter, { getPasswordStrength } from '../components/PasswordStrengthMeter';
@@ -20,6 +20,7 @@ export default function RegisterPage() {
   const [error, setError]       = useState('');
   const [success, setSuccess]   = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [emailStatus, setEmailStatus] = useState(null); // null | 'checking' | 'available' | 'taken'
 
   useTitle('Create Scholar Account');
   const navigate = useNavigate();
@@ -27,6 +28,23 @@ export default function RegisterPage() {
   function set(field, value) {
     setForm(f => ({ ...f, [field]: value }));
   }
+
+  /* Debounced live check for whether the email is already registered */
+  useEffect(() => {
+    const email = form.email.trim();
+    if (!/^\S+@\S+\.\S+$/.test(email)) { setEmailStatus(null); return; }
+    setEmailStatus('checking');
+    const controller = new AbortController();
+    const t = setTimeout(async () => {
+      try {
+        const available = await checkEmailAvailable(email, controller.signal);
+        setEmailStatus(available ? 'available' : 'taken');
+      } catch {
+        if (!controller.signal.aborted) setEmailStatus(null);
+      }
+    }, 450);
+    return () => { clearTimeout(t); controller.abort(); };
+  }, [form.email]);
 
   function isPasswordValid() {
     const { passed } = getPasswordStrength(form.password);
@@ -36,6 +54,11 @@ export default function RegisterPage() {
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
+
+    if (emailStatus === 'taken') {
+      setError('An account with this email already exists.');
+      return;
+    }
 
     if (!isPasswordValid()) {
       setError('Password does not meet the requirements below.');
@@ -324,6 +347,17 @@ export default function RegisterPage() {
                         autoComplete="off"
                       />
                     </div>
+                    {emailStatus === 'checking' && (
+                      <p className="text-xs mt-1" style={{ color: '#7a8aaa' }}>Checking availability…</p>
+                    )}
+                    {emailStatus === 'available' && (
+                      <p className="text-xs mt-1" style={{ color: '#16a34a' }}>✓ This email is available.</p>
+                    )}
+                    {emailStatus === 'taken' && (
+                      <p className="text-xs mt-1 font-medium" style={{ color: '#dc2626' }}>
+                        An account with this email already exists.
+                      </p>
+                    )}
                   </div>
 
                   {/* Password */}

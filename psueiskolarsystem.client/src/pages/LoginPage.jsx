@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { login, forgotPassword, verifyTwoFactorLogin } from '../api/auth';
+import { login, forgotPassword, verifyTwoFactorLogin, resendVerification } from '../api/auth';
 import { useTitle } from '../hooks/useTitle';
-import { Mail, Lock, UserCheck, FolderUp, TrendingUp, Bell, ArrowRight, X, KeyRound, UserPlus, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { Mail, Lock, UserCheck, FolderUp, TrendingUp, Bell, ArrowRight, X, KeyRound, UserPlus, AlertTriangle, ShieldCheck, MailCheck } from 'lucide-react';
 
 const HIGHLIGHTS = [
   { Icon: UserCheck,  label: 'Scholar Profiling',      desc: 'Academic records & personal information' },
@@ -19,6 +19,19 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
   const [showForgot, setShowForgot] = useState(false);
   const [twoFa, setTwoFa] = useState(null); // { userId } when 2FA required
+  const [resend, setResend] = useState({ busy: false, msg: '' });
+
+  const needsVerification = /verified/i.test(error);
+
+  async function handleResendVerification() {
+    setResend({ busy: true, msg: '' });
+    try {
+      const data = await resendVerification(email);
+      setResend({ busy: false, msg: data.message });
+    } catch (err) {
+      setResend({ busy: false, msg: err.message });
+    }
+  }
 
   useTitle('Sign In');
   const { signIn } = useAuth();
@@ -341,6 +354,28 @@ export default function LoginPage() {
                 style={{ background: '#fff0f0', color: '#b03030', border: '1.5px solid #f5b0b0' }}>
                 <AlertTriangle size={14} strokeWidth={2.5} className="mt-px shrink-0" />
                 <span>{error}</span>
+              </div>
+            )}
+
+            {needsVerification && (
+              <div className="mb-5 -mt-2">
+                {resend.msg ? (
+                  <p className="flex items-start gap-2 text-xs p-3 rounded-2xl"
+                    style={{ background: '#eef6ff', color: '#003087', border: '1px solid #bcd4f5' }}>
+                    <MailCheck size={14} strokeWidth={2.5} className="mt-px shrink-0" />
+                    <span>{resend.msg}</span>
+                  </p>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleResendVerification}
+                    disabled={resend.busy || !email}
+                    className="clay-btn clay-btn-ghost w-full py-2.5 text-sm flex items-center justify-center gap-2"
+                    style={{ opacity: (resend.busy || !email) ? 0.6 : 1 }}>
+                    <MailCheck size={14} strokeWidth={2.5} />
+                    {resend.busy ? 'Sending…' : 'Resend verification email'}
+                  </button>
+                )}
               </div>
             )}
 

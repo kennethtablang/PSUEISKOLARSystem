@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
-import { getUsers, updateUser, setUserStatus, deleteUser } from '../api/users';
+import { getUsers, updateUser, setUserStatus, deleteUser, sendPasswordReset } from '../api/users';
 import { register } from '../api/auth';
 import { getCampuses } from '../api/campuses';
 import { downloadImportTemplate, importScholars, triggerDownload } from '../api/userImport';
@@ -81,6 +81,19 @@ export default function UsersPage() {
       await deleteUser(user.id, token);
       setUsers(prev => prev.filter(u => u.id !== user.id));
     } catch (e) { alert(e.message); }
+  }
+
+  const [resetting, setResetting] = useState(null);
+  async function handleSendReset(user) {
+    setResetting(user.id);
+    try {
+      const data = await sendPasswordReset(user.id, token);
+      alert(data.message || `A password reset link was sent to ${user.email}.`);
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setResetting(null);
+    }
   }
 
   function openCreate() { setEditing(null); setShowModal(true); }
@@ -163,6 +176,9 @@ export default function UsersPage() {
                         </button>
                         <button onClick={() => handleToggleStatus(u)} className="text-xs font-medium hover:underline" style={{ color: '#1a3a7a' }}>
                           {u.isActive ? 'Deactivate' : 'Activate'}
+                        </button>
+                        <button onClick={() => handleSendReset(u)} disabled={resetting === u.id} className="text-xs font-medium hover:underline" style={{ color: '#8a5a00', opacity: resetting === u.id ? 0.6 : 1 }}>
+                          {resetting === u.id ? 'Sending…' : 'Reset Password'}
                         </button>
                         <button onClick={() => handleDelete(u)} className="text-xs font-medium hover:underline" style={{ color: '#e03030' }}>
                           Delete
@@ -428,6 +444,7 @@ function EditUserModal({ user, campuses, token, onClose, onSaved }) {
     firstName:  user.firstName  ?? '',
     middleName: user.middleName ?? '',
     lastName:   user.lastName   ?? '',
+    email:      user.email      ?? '',
     role:       user.role       ?? 'Scholar',
     campusId:   user.campusId   ? String(user.campusId) : '',
   });
@@ -445,6 +462,7 @@ function EditUserModal({ user, campuses, token, onClose, onSaved }) {
         firstName:  form.firstName.trim(),
         middleName: form.middleName.trim() || null,
         lastName:   form.lastName.trim(),
+        email:      form.email.trim(),
         role:       form.role,
         campusId:   form.campusId ? parseInt(form.campusId) : null,
       }, token);
@@ -470,6 +488,9 @@ function EditUserModal({ user, campuses, token, onClose, onSaved }) {
         </div>
         <Field label="Middle Name (optional)">
           <input value={form.middleName} onChange={e => set('middleName', e.target.value)} className="clay-input" />
+        </Field>
+        <Field label="Email / Login">
+          <input required type="email" value={form.email} onChange={e => set('email', e.target.value)} className="clay-input" />
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Role">

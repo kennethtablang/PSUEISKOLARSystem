@@ -3,15 +3,28 @@ import { getMe } from '../api/auth';
 
 const AuthContext = createContext(null);
 
-const INACTIVITY_MS = 30 * 60 * 1000; // 30 minutes
 const ACTIVITY_EVENTS = ['mousedown', 'keydown', 'touchstart', 'scroll'];
+const INACTIVITY_KEY = 'inactivityTimeoutMin';
+const DEFAULT_INACTIVITY_MIN = 30;
+
+function readInactivityMin() {
+  const raw = parseInt(localStorage.getItem(INACTIVITY_KEY), 10);
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_INACTIVITY_MIN;
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(() => localStorage.getItem('token'));
   const [loading, setLoading] = useState(true);
   const [sessionExpired, setSessionExpired] = useState(false);
+  const [inactivityMin, setInactivityMinState] = useState(readInactivityMin);
   const inactivityTimer = useRef(null);
+
+  const setInactivityMin = useCallback((min) => {
+    const val = Number.isFinite(min) && min > 0 ? min : DEFAULT_INACTIVITY_MIN;
+    localStorage.setItem(INACTIVITY_KEY, String(val));
+    setInactivityMinState(val);
+  }, []);
 
   useEffect(() => {
     if (!token) {
@@ -34,8 +47,8 @@ export function AuthProvider({ children }) {
       setToken(null);
       setUser(null);
       setSessionExpired(true);
-    }, INACTIVITY_MS);
-  }, []);
+    }, inactivityMin * 60 * 1000);
+  }, [inactivityMin]);
 
   // Start/clear the inactivity timer based on auth state
   useEffect(() => {
@@ -74,7 +87,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, signIn, signOut, refreshUser, sessionExpired, setSessionExpired }}>
+    <AuthContext.Provider value={{ user, token, loading, signIn, signOut, refreshUser, sessionExpired, setSessionExpired, inactivityMin, setInactivityMin }}>
       {children}
     </AuthContext.Provider>
   );

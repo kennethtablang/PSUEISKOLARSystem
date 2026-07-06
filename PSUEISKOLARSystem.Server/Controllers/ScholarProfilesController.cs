@@ -283,6 +283,12 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
             if (profile is null) return NotFound(new { message = "Scholar profile not found." });
 
+            // A grade can't be recorded for a period later than the active academic semester.
+            var active = await db.ActiveSemesters.FirstOrDefaultAsync();
+            if (active is not null && IsLaterPeriod(dto.AcademicYear, dto.Semester, active.AcademicYear, active.Semester))
+                return BadRequest(new { message =
+                    $"Cannot record a grade for A.Y. {dto.AcademicYear} Semester {dto.Semester} — it is later than the active period (A.Y. {active.AcademicYear} Semester {active.Semester})." });
+
             // Coordinators may only record grades for scholars in their campus (FR-8.6).
             var scope = CoordinatorCampusScope();
             if (scope.HasValue && profile.User.CampusId != scope) return Forbid();
@@ -305,6 +311,21 @@ namespace PSUEISKOLARSystem.Server.Controllers
             await db.SaveChangesAsync();
             _ = notifications.BroadcastAsync("AnalyticsChanged");
             return Ok(new { grade.Id, grade.MeetsRequirement });
+        }
+
+        // True when (year, sem) is strictly later than the reference period.
+        // Academic year is the leading 4-digit year of a "YYYY-YYYY" string; if it
+        // can't be parsed we can't compare, so we don't block.
+        private static bool IsLaterPeriod(string year, int semester, string refYear, int refSemester)
+        {
+            static int? StartYear(string ay) =>
+                int.TryParse(ay?.Split('-')[0], out var y) ? y : null;
+
+            var y1 = StartYear(year);
+            var y2 = StartYear(refYear);
+            if (y1 is null || y2 is null) return false;
+
+            return y1 > y2 || (y1 == y2 && semester > refSemester);
         }
 
         private static ScholarProfileDto Map(ScholarProfile sp)

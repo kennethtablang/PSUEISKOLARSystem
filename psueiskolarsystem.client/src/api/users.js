@@ -39,3 +39,13 @@ export async function deleteUser(id, token) {
   });
   if (!res.ok) throw new Error('Failed to delete user.');
 }
+
+export async function sendPasswordReset(id, token) {
+  const res = await fetch(`${API}/${id}/send-password-reset`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || 'Failed to send password reset.');
+  return data;
+}

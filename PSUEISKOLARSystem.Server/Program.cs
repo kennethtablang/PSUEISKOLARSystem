@@ -134,6 +134,18 @@ namespace PSUEISKOLARSystem.Server
                             Window = TimeSpan.FromMinutes(1),
                             QueueLimit = 0,
                         }));
+
+                // Slightly more lenient bucket for the live email-availability check
+                // (a debounced form field), while still capping bulk enumeration.
+                options.AddPolicy("emailcheck", httpContext =>
+                    RateLimitPartition.GetFixedWindowLimiter(
+                        partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                        factory: _ => new FixedWindowRateLimiterOptions
+                        {
+                            PermitLimit = 20,
+                            Window = TimeSpan.FromMinutes(1),
+                            QueueLimit = 0,
+                        }));
             });
 
             var app = builder.Build();
@@ -157,6 +169,11 @@ namespace PSUEISKOLARSystem.Server
                 {
                     options.SwaggerEndpoint("/swagger/v1/swagger.json", "PSU e-Iskolar API v1");
                 });
+            }
+            else
+            {
+                // Enforce HTTPS at the browser via HSTS in production (NFR security).
+                app.UseHsts();
             }
 
             app.UseHttpsRedirection();
