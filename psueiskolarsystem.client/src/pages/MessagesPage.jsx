@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/UIContext';
 import { useNotifications } from '../context/NotificationContext';
 import { getThreads, getThread, sendMessage } from '../api/messages';
 import { getRequirements } from '../api/documents';
@@ -13,6 +14,7 @@ const sameThread = (t, s) => t && s && t.scholarId === s.scholarId && sameReq(t.
 export default function MessagesPage() {
   useTitle('Messages');
   const { token, user } = useAuth();
+  const toast = useToast();
   const { subscribeToMessages, refreshMessageUnread } = useNotifications();
   const isStaff = user.role !== 'Scholar';
 
@@ -75,7 +77,7 @@ export default function MessagesPage() {
       setMessages(prev => [...prev, sent]);
       setBody('');
       loadThreads();
-    } catch (err) { alert(err.message); }
+    } catch (err) { toast(err.message, 'error'); }
     finally { setSending(false); }
   }
 

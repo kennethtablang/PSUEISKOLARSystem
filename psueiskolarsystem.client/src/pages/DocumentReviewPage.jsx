@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
+import { useToast, useConfirm } from '../context/UIContext';
 import { getSubmissions, reviewDocument, batchReviewDocuments, downloadFile, getSubmissionHistory } from '../api/documents';
 import { getActiveSemester } from '../api/settings';
 import { useTitle } from '../hooks/useTitle';
@@ -19,6 +20,8 @@ const STATUS_STYLE = {
 export default function DocumentReviewPage() {
   useTitle('Document Review');
   const { token } = useAuth();
+  const toast = useToast();
+  const confirm = useConfirm();
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [reviewing, setReviewing] = useState(null);
@@ -59,16 +62,16 @@ export default function DocumentReviewPage() {
   async function handleBatch(status) {
     if (selected.size === 0) return;
     if (status === 'Incomplete' && !bulkFeedback.trim()) {
-      alert('Please add feedback explaining what needs correcting before marking incomplete.');
+      toast('Please add feedback explaining what needs correcting before marking incomplete.', 'error');
       return;
     }
-    if (!confirm(`Mark ${selected.size} submission(s) as ${status}?`)) return;
+    if (!(await confirm({ title: `Mark as ${status}`, message: `Mark ${selected.size} submission(s) as ${status}?`, confirmLabel: 'Confirm' }))) return;
     setBulkBusy(true);
     try {
       await batchReviewDocuments([...selected], status, bulkFeedback.trim() || null, token);
       setBulkFeedback('');
       await load();
-    } catch (e) { alert(e.message); }
+    } catch (e) { toast(e.message, 'error'); }
     finally { setBulkBusy(false); }
   }
 
@@ -197,7 +200,7 @@ export default function DocumentReviewPage() {
                     <td className="px-5 py-3.5" style={{ color: 'var(--text)' }}>{s.requirementName}</td>
                     <td className="px-5 py-3.5">
                       <button
-                        onClick={() => downloadFile(s.id, s.fileName, token).catch(e => alert(e.message))}
+                        onClick={() => downloadFile(s.id, s.fileName, token).catch(e => toast(e.message, 'error'))}
                         className="text-xs hover:underline truncate max-w-[180px] block text-left"
                         style={{ color: '#003087' }}
                       >
@@ -256,6 +259,7 @@ export default function DocumentReviewPage() {
 const STATUS_DOT = { Pending: '#c07800', Verified: '#0a7a50', Incomplete: '#c03010' };
 
 function ReviewModal({ submission, token, onClose, onSaved }) {
+  const toast = useToast();
   const [status, setStatus] = useState('Verified');
   const [feedback, setFeedback] = useState(submission.feedbackNote ?? '');
   const [submitting, setSubmitting] = useState(false);
@@ -290,7 +294,7 @@ function ReviewModal({ submission, token, onClose, onSaved }) {
 
         <div className="mb-4">
           <button
-            onClick={() => downloadFile(submission.id, submission.fileName, token).catch(e => alert(e.message))}
+            onClick={() => downloadFile(submission.id, submission.fileName, token).catch(e => toast(e.message, 'error'))}
             className="text-sm hover:underline"
             style={{ color: '#003087' }}
           >

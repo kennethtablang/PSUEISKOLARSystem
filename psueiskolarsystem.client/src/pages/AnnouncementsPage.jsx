@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
+import { useConfirm } from '../context/UIContext';
 import { getAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement,
   uploadAnnouncementImage, ANNOUNCEMENT_INTENTS } from '../api/announcements';
 import AnnouncementCard from '../components/AnnouncementCard';
@@ -14,6 +15,7 @@ const ROLE_LABELS = { '': 'All Users', Scholar: 'Scholars', ScholarshipCoordinat
 export default function AnnouncementsPage() {
   useTitle('Announcements');
   const { token } = useAuth();
+  const confirm = useConfirm();
   const [announcements, setAnnouncements] = useState([]);
   const [lookups, setLookups] = useState({ campuses: [], scholarshipTypes: [], programs: [] });
   const [loading, setLoading] = useState(true);
@@ -46,7 +48,7 @@ export default function AnnouncementsPage() {
   useEffect(() => { load(); }, []);
 
   async function handleDelete(id) {
-    if (!confirm('Delete this announcement?')) return;
+    if (!(await confirm({ title: 'Delete announcement', message: 'Delete this announcement?', confirmLabel: 'Delete', danger: true }))) return;
     await deleteAnnouncement(id, token);
     setAnnouncements(prev => prev.filter(a => a.id !== id));
   }

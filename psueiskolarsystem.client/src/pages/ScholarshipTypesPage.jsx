@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
+import { useToast, useConfirm } from '../context/UIContext';
 import {
   getScholarshipTypes, createScholarshipType, updateScholarshipType,
   toggleScholarshipTypeActive, deleteScholarshipType,
@@ -13,6 +14,8 @@ import { TableSkeleton, EmptyState } from '../components/ListState';
 export default function ScholarshipTypesPage() {
   useTitle('Scholarship Types');
   const { token } = useAuth();
+  const toast = useToast();
+  const confirm = useConfirm();
   const [types, setTypes] = useState([]);
   const [requirements, setRequirements] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -48,17 +51,17 @@ export default function ScholarshipTypesPage() {
       const { isActive } = await toggleScholarshipTypeActive(id, token);
       setTypes(prev => prev.map(t => t.id === id ? { ...t, isActive } : t));
     } catch (e) {
-      alert(e.message);
+      toast(e.message, 'error');
     }
   }
 
   async function handleDelete(id) {
-    if (!confirm('Delete this scholarship type? This cannot be undone.')) return;
+    if (!(await confirm({ title: 'Delete scholarship type', message: 'Delete this scholarship type? This cannot be undone.', confirmLabel: 'Delete', danger: true }))) return;
     try {
       await deleteScholarshipType(id, token);
       setTypes(prev => prev.filter(t => t.id !== id));
     } catch (e) {
-      alert(e.message);
+      toast(e.message, 'error');
     }
   }
 

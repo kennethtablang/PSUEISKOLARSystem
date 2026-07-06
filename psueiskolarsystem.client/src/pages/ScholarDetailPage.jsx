@@ -4,6 +4,7 @@ import { AlertTriangle, Printer } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/UIContext';
 import { getScholarProfile, upsertScholarProfile, getGrades, addGrade, setLifecycleStatus } from '../api/scholars';
 import { getPrograms, getScholarshipTypes } from '../api/lookups';
 import { useTitle } from '../hooks/useTitle';
@@ -12,6 +13,7 @@ export default function ScholarDetailPage() {
   useTitle('Scholar Profile');
   const { userId } = useParams();
   const { token, user: currentUser } = useAuth();
+  const toast = useToast();
   const navigate = useNavigate();
 
   const [profile, setProfile] = useState(null);
@@ -27,7 +29,7 @@ export default function ScholarDetailPage() {
   async function handleStatusChange(status) {
     setSavingStatus(true);
     try { await setLifecycleStatus(targetUserId, status, token); await load(); }
-    catch (e) { alert(e.message); }
+    catch (e) { toast(e.message, 'error'); }
     finally { setSavingStatus(false); }
   }
 

@@ -61,7 +61,7 @@
 - [x] Email send failures are silently swallowed with no retry or admin visibility.
 
 ## UI/UX
-- Replace `alert()` / `confirm()` calls with in-app **toasts/modals** for a consistent look.
+- [x] Replace `alert()` / `confirm()` calls with in-app **toasts/modals** for a consistent look.
 - [x] Wide tables overflow on small screens — wrap them in `overflow-x-auto` containers.
 - [x] Messaging on mobile renders both the thread list and conversation — add a single-pane, back-button flow.
 - [x] Add loading **skeletons** and standardize empty states across list pages.

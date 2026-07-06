@@ -9,10 +9,13 @@ import { useTitle } from '../hooks/useTitle';
 import { ClayModal, ErrorBox, Field, ModalButtons } from './UsersPage';
 import { TableSkeleton, EmptyState } from '../components/ListState';
 import { ImageIcon, X, Layers } from 'lucide-react';
+import { useToast, useConfirm } from '../context/UIContext';
 
 export default function RequirementsPage() {
   useTitle('Document Requirements');
   const { token } = useAuth();
+  const toast = useToast();
+  const confirm = useConfirm();
   const [requirements, setRequirements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -35,17 +38,17 @@ export default function RequirementsPage() {
     if (!file) return;
     setBusySample(id);
     try { await uploadRequirementSample(id, file, token); await load(); }
-    catch (e) { alert(e.message); }
+    catch (e) { toast(e.message, 'error'); }
     finally { setBusySample(null); }
   }
   async function handleViewSample(id) {
     try { setViewSample(await getRequirementSample(id, token)); }
-    catch (e) { alert(e.message); }
+    catch (e) { toast(e.message, 'error'); }
   }
   async function handleRemoveSample(id) {
-    if (!confirm('Remove the sample image for this requirement?')) return;
+    if (!(await confirm({ title: 'Remove sample image', message: 'Remove the sample image for this requirement?', confirmLabel: 'Remove', danger: true }))) return;
     try { await deleteRequirementSample(id, token); await load(); }
-    catch (e) { alert(e.message); }
+    catch (e) { toast(e.message, 'error'); }
   }
 
   async function load() {
@@ -60,12 +63,12 @@ export default function RequirementsPage() {
   useEffect(() => { load(); }, []);
 
   async function handleDelete(id) {
-    if (!confirm('Remove this requirement? Scholars with this requirement assigned will no longer see it.')) return;
+    if (!(await confirm({ title: 'Remove requirement', message: 'Remove this requirement? Scholars with this requirement assigned will no longer see it.', confirmLabel: 'Remove', danger: true }))) return;
     try {
       await deleteRequirement(id, token);
       setRequirements(prev => prev.filter(r => r.id !== id));
     } catch (e) {
-      alert(e.message);
+      toast(e.message, 'error');
     }
   }
 

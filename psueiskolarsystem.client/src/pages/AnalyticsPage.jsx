@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/UIContext';
 import { useNotifications } from '../context/NotificationContext';
 import { getAnalyticsOverview } from '../api/analytics';
 import { getCampuses } from '../api/campuses';
@@ -18,6 +19,7 @@ const PIE_COLORS  = ['#003087', '#f5b800', '#10b981', '#8b5cf6', '#f97316', '#06
 export default function AnalyticsPage() {
   useTitle('Data Visualization');
   const { token } = useAuth();
+  const toast = useToast();
   const { subscribeToAnalytics } = useNotifications();
   const [data, setData] = useState(null);
   const [campuses, setCampuses] = useState([]);
@@ -55,7 +57,7 @@ export default function AnalyticsPage() {
       if (type === 'scholars') await exportScholars(token, { campusId: campusId || undefined });
       else await exportSubmissions(token);
     } catch (e) {
-      alert(e.message);
+      toast(e.message, 'error');
     } finally {
       setExporting(null);
     }

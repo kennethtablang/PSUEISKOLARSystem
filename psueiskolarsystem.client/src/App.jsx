@@ -6,6 +6,7 @@ import { TutorialProvider } from './context/TutorialContext';
 import { ThemeProvider } from './context/ThemeContext';
 import ConsentGate from './components/ConsentGate';
 import OnboardingGate from './components/OnboardingGate';
+import { UIProvider } from './context/UIContext';
 import { Clock } from 'lucide-react';
 import ProtectedRoute from './components/ProtectedRoute';
 import LandingPage from './pages/LandingPage';
@@ -42,6 +43,7 @@ export default function App() {
       <AuthProvider>
       <NotificationProvider>
       <TutorialProvider>
+      <UIProvider>
         <SessionExpiredModal />
         <ConsentGate />
         <OnboardingGate />
@@ -74,6 +76,7 @@ export default function App() {
 
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
+      </UIProvider>
       </TutorialProvider>
       </NotificationProvider>
       </AuthProvider>

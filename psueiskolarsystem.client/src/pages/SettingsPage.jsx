@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
+import { useConfirm } from '../context/UIContext';
 import { getActiveSemester, setActiveSemester } from '../api/settings';
 import { useTitle } from '../hooks/useTitle';
 import { useTheme } from '../context/ThemeContext';
@@ -16,6 +17,7 @@ function yearOptions() {
 export default function SettingsPage() {
   useTitle('System Settings');
   const { token, inactivityMin, setInactivityMin } = useAuth();
+  const confirm = useConfirm();
   const { theme, setTheme } = useTheme();
 
   const [current, setCurrent] = useState(null);
@@ -39,7 +41,7 @@ export default function SettingsPage() {
   ];
 
   async function handleSeed() {
-    if (!confirm('Seed sample coordinators, scholars, grades, and announcements? This is safe to run more than once — it will not duplicate existing sample data.')) return;
+    if (!(await confirm({ title: 'Seed sample data', message: 'Seed sample coordinators, scholars, grades, and announcements? This is safe to run more than once — it will not duplicate existing sample data.', confirmLabel: 'Seed data' }))) return;
     setSeeding(true);
     setSeedResult(null);
     try {

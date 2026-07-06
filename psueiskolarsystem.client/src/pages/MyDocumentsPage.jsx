@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
+import { useToast, useConfirm } from '../context/UIContext';
 import { getRequirements, getSubmissions, uploadDocument, deleteSubmission, downloadFile, previewFile, getSubmissionHistory, getRequirementSample } from '../api/documents';
 import { getScholarProfile, upsertScholarProfile } from '../api/scholars';
 import { getScholarshipTypes } from '../api/lookups';
@@ -18,6 +19,8 @@ const STATUS_STYLE = {
 export default function MyDocumentsPage() {
   useTitle('My Documents');
   const { token, user } = useAuth();
+  const toast = useToast();
+  const confirm = useConfirm();
 
   const [requirements,    setRequirements]    = useState([]);
   const [submissions,     setSubmissions]     = useState([]);
@@ -37,7 +40,7 @@ export default function MyDocumentsPage() {
 
   async function handleViewSample(reqId) {
     try { setSampleUrl(await getRequirementSample(reqId, token)); }
-    catch (e) { alert(e.message); }
+    catch (e) { toast(e.message, 'error'); }
   }
 
   // preview state
@@ -121,7 +124,7 @@ export default function MyDocumentsPage() {
       setShowTypePicker(false);
       await load();
     } catch (e) {
-      alert(e.message);
+      toast(e.message, 'error');
     } finally {
       setSavingType(false);
     }
@@ -148,11 +151,11 @@ export default function MyDocumentsPage() {
     const allowedExts = ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx'];
     const ext = file.name.split('.').pop()?.toLowerCase();
     if (!allowedExts.includes(ext)) {
-      alert(`Unsupported file type ".${ext}". Accepted: PDF, JPG, PNG, DOC, DOCX.`);
+      toast(`Unsupported file type ".${ext}". Accepted: PDF, JPG, PNG, DOC, DOCX.`, 'error');
       return;
     }
     if (file.size > 10 * 1024 * 1024) {
-      alert(`This file is ${(file.size / 1024 / 1024).toFixed(1)} MB — the maximum is 10 MB.`);
+      toast(`This file is ${(file.size / 1024 / 1024).toFixed(1)} MB — the maximum is 10 MB.`, 'error');
       return;
     }
     setUploading(requirementId);
@@ -160,20 +163,20 @@ export default function MyDocumentsPage() {
       await uploadDocument(file, requirementId, period.academicYear, period.semester, token);
       await load();
     } catch (e) {
-      alert(e.message);
+      toast(e.message, 'error');
     } finally {
       setUploading(null);
     }
   }
 
   async function handleDelete(submissionId) {
-    if (!confirm('Remove this submission?')) return;
+    if (!(await confirm({ title: 'Remove submission', message: 'Remove this submission?', confirmLabel: 'Remove', danger: true }))) return;
     if (preview?.submissionId === submissionId) closePreview();
     try {
       await deleteSubmission(submissionId, token);
       setSubmissions(prev => prev.filter(s => s.id !== submissionId));
     } catch (e) {
-      alert(e.message);
+      toast(e.message, 'error');
     }
   }
 
@@ -352,7 +355,7 @@ export default function MyDocumentsPage() {
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <button
-                  onClick={() => downloadFile(preview.submissionId, preview.fileName, token).catch(e => alert(e.message))}
+                  onClick={() => downloadFile(preview.submissionId, preview.fileName, token).catch(e => toast(e.message, 'error'))}
                   className="clay-btn clay-btn-ghost text-xs px-3 py-1.5 flex items-center gap-1.5"
                   style={{ color: '#003087' }}>
                   <Download size={12} strokeWidth={2.5} />
@@ -470,6 +473,7 @@ function Badge({ color, bg, children }) {
 }
 
 function RequirementRow({ requirement, submission, deadline, uploading, loadingPreview, isPreviewing, onUpload, onDelete, onPreview, onViewSample, token }) {
+  const toast = useToast();
   const inputId  = `file-${requirement.id}`;
   const canUpload = !submission || submission.status === 'Incomplete';
   const [showHistory, setShowHistory] = useState(false);
@@ -522,7 +526,7 @@ function RequirementRow({ requirement, submission, deadline, uploading, loadingP
       {submission && (
         <div className="mt-3 flex items-center gap-3 text-sm">
           <button
-            onClick={() => downloadFile(submission.id, submission.fileName, token).catch(e => alert(e.message))}
+            onClick={() => downloadFile(submission.id, submission.fileName, token).catch(e => toast(e.message, 'error'))}
             className="hover:underline truncate max-w-xs text-left"
             style={{ color: '#003087' }}>
             {submission.fileName}

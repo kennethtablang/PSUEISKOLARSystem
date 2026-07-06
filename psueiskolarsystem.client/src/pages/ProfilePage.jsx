@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/UIContext';
 import { updateProfile, enable2fa, disable2fa, updateNotificationPreferences } from '../api/auth';
 import { exportScholarData } from '../api/scholars';
 import { useTutorial } from '../context/TutorialContext';
@@ -18,6 +19,7 @@ export default function ProfilePage() {
   useTitle('Profile');
   const { user, token, refreshUser } = useAuth();
   const { openTutorial } = useTutorial();
+  const toast = useToast();
 
   const [firstName,  setFirstName]  = useState(user?.firstName  ?? '');
   const [middleName, setMiddleName] = useState(user?.middleName ?? '');
@@ -62,7 +64,7 @@ export default function ProfilePage() {
       const a = document.createElement('a');
       a.href = url; a.download = 'my-eiskolar-data.json';
       a.click(); URL.revokeObjectURL(url);
-    } catch (err) { alert(err.message); }
+    } catch (err) { toast(err.message, 'error'); }
   }
 
   const initials  = ((user?.firstName?.[0] ?? '') + (user?.lastName?.[0] ?? '')).toUpperCase() || '?';

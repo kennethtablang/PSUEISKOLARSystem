@@ -10,6 +10,7 @@ import Pagination from '../components/Pagination';
 import { TableSkeleton, EmptyState } from '../components/ListState';
 import { useTitle } from '../hooks/useTitle';
 import { ctlStyle } from '../constants/ui';
+import { useToast, useConfirm } from '../context/UIContext';
 
 const ROLES = ['Administrator', 'ScholarshipCoordinator', 'Scholar'];
 
@@ -22,6 +23,8 @@ const ROLE_BADGE_CLASS = {
 export default function UsersPage() {
   useTitle('User Management');
   const { token } = useAuth();
+  const toast = useToast();
+  const confirm = useConfirm();
   const [users, setUsers]           = useState([]);
   const [total, setTotal]           = useState(0);
   const [campuses, setCampuses]     = useState([]);
@@ -82,15 +85,15 @@ export default function UsersPage() {
     try {
       await setUserStatus(user.id, !user.isActive, token);
       setUsers(prev => prev.map(u => u.id === user.id ? { ...u, isActive: !u.isActive } : u));
-    } catch (e) { alert(e.message); }
+    } catch (e) { toast(e.message, 'error'); }
   }
 
   async function handleDelete(user) {
-    if (!confirm(`Delete ${user.fullName}? This cannot be undone.`)) return;
+    if (!(await confirm({ title: 'Delete user', message: `Delete ${user.fullName}? This cannot be undone.`, confirmLabel: 'Delete', danger: true }))) return;
     try {
       await deleteUser(user.id, token);
       load(page); // reload the page so totals/paging stay correct
-    } catch (e) { alert(e.message); }
+    } catch (e) { toast(e.message, 'error'); }
   }
 
   const [resetting, setResetting] = useState(null);
@@ -98,9 +101,9 @@ export default function UsersPage() {
     setResetting(user.id);
     try {
       const data = await sendPasswordReset(user.id, token);
-      alert(data.message || `A password reset link was sent to ${user.email}.`);
+      toast(data.message || `A password reset link was sent to ${user.email}.`, 'success');
     } catch (e) {
-      alert(e.message);
+      toast(e.message, 'error');
     } finally {
       setResetting(null);
     }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
+import { useToast, useConfirm } from '../context/UIContext';
 import { getRequirements } from '../api/documents';
 import { getActiveSemester } from '../api/settings';
 import { getDeadlines, upsertDeadline, deleteDeadline, getDeadlineReport } from '../api/deadlines';
@@ -14,6 +15,8 @@ function toDateInput(iso) {
 export default function DeadlinesPage() {
   useTitle('Deadlines');
   const { token } = useAuth();
+  const toast = useToast();
+  const confirm = useConfirm();
 
   const [period, setPeriod] = useState({ academicYear: '', semester: 1 });
   const [ready, setReady] = useState(false);
@@ -72,13 +75,13 @@ export default function DeadlinesPage() {
         dueDate: `${dateStr}T23:59:59Z`,
       }, token);
       await loadManage();
-    } catch (e) { alert(e.message); }
+    } catch (e) { toast(e.message, 'error'); }
   }
 
   async function handleClear(id) {
-    if (!confirm('Remove this deadline?')) return;
+    if (!(await confirm({ title: 'Remove deadline', message: 'Remove this deadline?', confirmLabel: 'Remove', danger: true }))) return;
     try { await deleteDeadline(id, token); await loadManage(); }
-    catch (e) { alert(e.message); }
+    catch (e) { toast(e.message, 'error'); }
   }
 
   return (
