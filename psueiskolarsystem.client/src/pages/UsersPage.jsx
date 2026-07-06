@@ -32,6 +32,7 @@ export default function UsersPage() {
   const [showImport, setShowImport] = useState(false);
   const [filterRole, setFilterRole] = useState('');
   const [filterCampus, setFilterCampus] = useState('');
+  const [filterStatus, setFilterStatus] = useState(''); // '' | 'true' (active) | 'false' (archived)
   const [search, setSearch]         = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage]             = useState(1);
@@ -55,6 +56,7 @@ export default function UsersPage() {
         role:     filterRole   || undefined,
         campusId: filterCampus || undefined,
         search:   debouncedSearch || undefined,
+        isActive: filterStatus || undefined,
         page:     p,
         pageSize,
       });
@@ -66,13 +68,13 @@ export default function UsersPage() {
     } finally {
       setLoading(false);
     }
-  }, [token, filterRole, filterCampus, debouncedSearch, pageSize, page]);
+  }, [token, filterRole, filterCampus, filterStatus, debouncedSearch, pageSize, page]);
 
   /* Reset to page 1 whenever filters/search change */
-  useEffect(() => { setPage(1); }, [debouncedSearch, filterRole, filterCampus, pageSize]);
+  useEffect(() => { setPage(1); }, [debouncedSearch, filterRole, filterCampus, filterStatus, pageSize]);
 
   /* Load whenever the query inputs change */
-  useEffect(() => { load(page); /* eslint-disable-next-line */ }, [page, debouncedSearch, filterRole, filterCampus, pageSize]);
+  useEffect(() => { load(page); /* eslint-disable-next-line */ }, [page, debouncedSearch, filterRole, filterCampus, filterStatus, pageSize]);
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
@@ -143,6 +145,11 @@ export default function UsersPage() {
             <option value="">All Campuses</option>
             {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
+          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="clay-input" style={{ ...ctlStyle, width: 'auto' }}>
+            <option value="">All Statuses</option>
+            <option value="true">Active</option>
+            <option value="false">Archived</option>
+          </select>
         </div>
 
         {error && <p className="text-sm mb-4" style={{ color: '#003087' }}>{error}</p>}
@@ -182,8 +189,8 @@ export default function UsersPage() {
                         <button onClick={() => openEdit(u)} className="text-xs font-medium hover:underline" style={{ color: '#003087' }}>
                           Edit
                         </button>
-                        <button onClick={() => handleToggleStatus(u)} className="text-xs font-medium hover:underline" style={{ color: '#1a3a7a' }}>
-                          {u.isActive ? 'Deactivate' : 'Activate'}
+                        <button onClick={() => handleToggleStatus(u)} className="text-xs font-medium hover:underline" style={{ color: u.isActive ? '#1a3a7a' : '#0a7d43' }}>
+                          {u.isActive ? 'Archive' : 'Restore'}
                         </button>
                         <button onClick={() => handleSendReset(u)} disabled={resetting === u.id} className="text-xs font-medium hover:underline" style={{ color: '#8a5a00', opacity: resetting === u.id ? 0.6 : 1 }}>
                           {resetting === u.id ? 'Sending…' : 'Reset Password'}

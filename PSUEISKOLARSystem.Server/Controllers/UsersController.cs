@@ -26,6 +26,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             [FromQuery] string? role,
             [FromQuery] int? campusId,
             [FromQuery] string? search,
+            [FromQuery] bool? isActive,
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 20)
         {
@@ -36,6 +37,9 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
             if (campusId.HasValue)
                 query = query.Where(u => u.CampusId == campusId);
+
+            if (isActive.HasValue)
+                query = query.Where(u => u.IsActive == isActive);
 
             // Filter by role in SQL (join through AspNetUserRoles) instead of loading everyone.
             if (!string.IsNullOrWhiteSpace(role))

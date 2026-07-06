@@ -177,3 +177,23 @@ export async function deleteRequirement(id, token) {
     throw new Error(err.message || 'Failed to remove requirement.');
   }
 }
+
+export async function getRequirementScholarshipTypes(id, token) {
+  const res = await fetch(`${REQ_API}/${id}/scholarship-types`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error('Failed to load linked scholarship types.');
+  return res.json(); // number[]
+}
+
+export async function setRequirementScholarshipTypes(id, scholarshipTypeIds, token) {
+  const res = await fetch(`${REQ_API}/${id}/scholarship-types`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(scholarshipTypeIds),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to assign scholarship types.');
+  }
+}

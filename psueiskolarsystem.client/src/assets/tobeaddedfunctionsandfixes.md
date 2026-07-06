@@ -10,12 +10,12 @@
 - Scholar profile photo/avatar upload (only initials are shown anywhere).
 - Guided scholarship **renewal workflow** — lifecycle statuses exist, but there's no per-period renewal process that checks document compliance + grade thresholds and advances the status automatically.
 - [x] Edit a scholar's email/login from their profile (only name/campus are editable via User Management).
-- Clear reactivate/restore flow for archived scholars (archive exists; un-archiving is only a manual status toggle).
+- [x] Clear reactivate/restore flow for archived scholars (archive exists; un-archiving is only a manual status toggle).
 
 ## Scholarship Management
 - Scholarship **slots/quota** per type (and per campus) with filled-vs-available tracking.
 - Display-order / grouping for document requirements (the checklist order is currently name-sorted only).
-- Bulk-assign a requirement to multiple scholarship types at once.
+- [x] Bulk-assign a requirement to multiple scholarship types at once.
 
 ## User Management
 - [x] **Server-side pagination + filtering** for the Users list (currently returns *all* users and paginates on the client — see Performance).
@@ -45,7 +45,7 @@
 - One-click database **backup/export** from Settings.
 
 ## Others
-- **Global search** across documents, announcements, and users (navbar search covers scholars only).
+- [x] **Global search** across documents, announcements, and users (navbar search covers scholars only).
 - **Announcement scheduling** (publish at a future date/time).
 - [x] Activity-log **export** to Excel/CSV (parity with the scholar/submission exports).
 - [x] In-app help/FAQ page to complement the first-time tutorial.
@@ -104,6 +104,6 @@
 - [x] We need to add a ask again for the logout function. 
 - When the student is newly register to the system then the first thing that thhe student needs to do is to Setup their account details and information about them. 
 - [x] Add a favicon
-- Work on the overall transitions and animations all over the system
+- [x] Work on the overall transitions and animations all over the system
 - Check responsiveness of the system
 - 

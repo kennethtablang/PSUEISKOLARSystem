@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { getRequirements, createRequirement, updateRequirement, deleteRequirement,
-  uploadRequirementSample, getRequirementSample, deleteRequirementSample } from '../api/documents';
+  uploadRequirementSample, getRequirementSample, deleteRequirementSample,
+  getRequirementScholarshipTypes, setRequirementScholarshipTypes } from '../api/documents';
+import { getScholarshipTypes } from '../api/lookups';
 import { useTitle } from '../hooks/useTitle';
 import { ClayModal, ErrorBox, Field, ModalButtons } from './UsersPage';
 import { TableSkeleton, EmptyState } from '../components/ListState';
-import { ImageIcon, X } from 'lucide-react';
+import { ImageIcon, X, Layers } from 'lucide-react';
 
 export default function RequirementsPage() {
   useTitle('Document Requirements');
@@ -18,6 +20,10 @@ export default function RequirementsPage() {
   const [viewSample, setViewSample] = useState(null); // object URL being previewed
   const [busySample, setBusySample] = useState(null); // requirement id uploading
   const [search, setSearch] = useState('');
+  const [assigning, setAssigning] = useState(null); // requirement whose types are being assigned
+  const [scholarshipTypes, setScholarshipTypes] = useState([]);
+
+  useEffect(() => { getScholarshipTypes(token).then(setScholarshipTypes).catch(() => {}); }, []);
 
   const displayed = search
     ? requirements.filter(r =>
@@ -151,6 +157,13 @@ export default function RequirementsPage() {
                     <td className="px-5 py-3.5 text-right">
                       <div className="flex items-center gap-3 justify-end">
                         <button
+                          onClick={() => setAssigning(r)}
+                          className="text-xs font-medium hover:underline flex items-center gap-1"
+                          style={{ color: '#6030b0' }}
+                        >
+                          <Layers size={12} /> Assign Types
+                        </button>
+                        <button
                           onClick={() => openEdit(r)}
                           className="text-xs font-medium hover:underline"
                           style={{ color: '#003087' }}
@@ -180,6 +193,16 @@ export default function RequirementsPage() {
           token={token}
           onClose={() => setShowModal(false)}
           onSaved={() => { setShowModal(false); load(); }}
+        />
+      )}
+
+      {assigning && (
+        <AssignTypesModal
+          requirement={assigning}
+          scholarshipTypes={scholarshipTypes}
+          token={token}
+          onClose={() => setAssigning(null)}
+          onSaved={() => setAssigning(null)}
         />
       )}
 
@@ -279,6 +302,73 @@ function RequirementModal({ initial, token, onClose, onSaved }) {
           label={initial ? 'Save Changes' : 'Create Requirement'}
         />
       </form>
+    </ClayModal>
+  );
+}
+
+function AssignTypesModal({ requirement, scholarshipTypes, token, onClose, onSaved }) {
+  const [selected, setSelected] = useState(null); // Set of type ids; null = loading
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    getRequirementScholarshipTypes(requirement.id, token)
+      .then(ids => setSelected(new Set(ids)))
+      .catch(() => setSelected(new Set()));
+  }, [requirement.id, token]);
+
+  function toggle(id) {
+    setSelected(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError('');
+    setSubmitting(true);
+    try {
+      await setRequirementScholarshipTypes(requirement.id, [...selected], token);
+      onSaved();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <ClayModal title={`Assign “${requirement.name}” to Scholarship Types`} onClose={onClose}>
+      {error && <ErrorBox>{error}</ErrorBox>}
+      <p className="text-sm mb-4" style={{ color: 'var(--text)' }}>
+        Select every scholarship type that must submit this requirement. Types left unselected won’t
+        require it. A type with <em>no</em> requirements configured sees all requirements by default.
+      </p>
+      {selected === null ? (
+        <p className="text-sm" style={{ color: '#7a8aaa' }}>Loading…</p>
+      ) : scholarshipTypes.length === 0 ? (
+        <p className="text-sm" style={{ color: '#7a8aaa' }}>No scholarship types exist yet.</p>
+      ) : (
+        <form onSubmit={handleSubmit}>
+          <div className="space-y-1.5 mb-5 max-h-72 overflow-y-auto">
+            {scholarshipTypes.map(t => (
+              <label key={t.id} className="flex items-center gap-3 cursor-pointer select-none clay-card-inner px-3 py-2.5 rounded-xl">
+                <input
+                  type="checkbox"
+                  checked={selected.has(t.id)}
+                  onChange={() => toggle(t.id)}
+                  className="w-4 h-4 rounded"
+                  style={{ accentColor: '#003087' }}
+                />
+                <span className="text-sm font-medium" style={{ color: 'var(--text-strong)' }}>{t.name}</span>
+              </label>
+            ))}
+          </div>
+          <ModalButtons onClose={onClose} submitting={submitting} label={`Assign to ${selected.size} type${selected.size !== 1 ? 's' : ''}`} />
+        </form>
+      )}
     </ClayModal>
   );
 }

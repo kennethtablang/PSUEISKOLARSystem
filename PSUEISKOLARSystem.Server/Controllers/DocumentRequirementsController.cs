@@ -154,6 +154,48 @@ namespace PSUEISKOLARSystem.Server.Controllers
             await db.SaveChangesAsync();
             return NoContent();
         }
+
+        // GET /api/document-requirements/{id}/scholarship-types
+        // Returns the ids of scholarship types this requirement is linked to.
+        [HttpGet("{id}/scholarship-types")]
+        [Authorize(Roles = UserRoles.Administrator)]
+        public async Task<IActionResult> GetScholarshipTypes(int id)
+        {
+            if (!await db.DocumentRequirements.AnyAsync(r => r.Id == id)) return NotFound();
+            var typeIds = await db.ScholarshipTypeRequirements
+                .Where(str => str.RequirementId == id)
+                .Select(str => str.ScholarshipTypeId)
+                .ToListAsync();
+            return Ok(typeIds);
+        }
+
+        // PUT /api/document-requirements/{id}/scholarship-types  — bulk-assign this
+        // requirement to many scholarship types at once (FR-16).
+        [HttpPut("{id}/scholarship-types")]
+        [Authorize(Roles = UserRoles.Administrator)]
+        public async Task<IActionResult> SetScholarshipTypes(int id, List<int> scholarshipTypeIds)
+        {
+            var req = await db.DocumentRequirements.FindAsync(id);
+            if (req is null) return NotFound();
+
+            var existing = await db.ScholarshipTypeRequirements
+                .Where(str => str.RequirementId == id)
+                .ToListAsync();
+            db.ScholarshipTypeRequirements.RemoveRange(existing);
+
+            var validTypeIds = await db.ScholarshipTypes
+                .Where(t => scholarshipTypeIds.Contains(t.Id))
+                .Select(t => t.Id)
+                .ToListAsync();
+
+            db.ScholarshipTypeRequirements.AddRange(
+                validTypeIds.Select(tid => new ScholarshipTypeRequirement { RequirementId = id, ScholarshipTypeId = tid }));
+
+            db.Audit(this, "SetRequirementScholarshipTypes",
+                $"Assigned requirement #{id} '{req.Name}' to {validTypeIds.Count} scholarship type(s)");
+            await db.SaveChangesAsync();
+            return NoContent();
+        }
     }
 
     public record DocumentRequirementRequest(

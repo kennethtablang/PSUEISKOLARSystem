@@ -1,10 +1,11 @@
 const API = '/api/users';
 
-export async function getUsers(token, { role, campusId, search, page = 1, pageSize = 20 } = {}) {
+export async function getUsers(token, { role, campusId, search, isActive, page = 1, pageSize = 20 } = {}) {
   const params = new URLSearchParams({ page, pageSize });
   if (role) params.set('role', role);
   if (campusId) params.set('campusId', campusId);
   if (search) params.set('search', search);
+  if (isActive !== undefined && isActive !== '') params.set('isActive', isActive);
   const res = await fetch(`${API}?${params}`, {
     headers: { Authorization: `Bearer ${token}` },
   });

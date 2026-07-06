@@ -5,9 +5,10 @@ import { useNotifications } from '../context/NotificationContext';
 import { useTheme } from '../context/ThemeContext';
 import NotificationBell from './NotificationBell';
 import ConfirmDialog from './ConfirmDialog';
+import GlobalSearch from './GlobalSearch';
 import {
   LayoutDashboard, GraduationCap, FileCheck, Users, Bell,
-  FolderOpen, User, LogOut, BarChart2, Search,
+  FolderOpen, User, LogOut, BarChart2,
   ChevronLeft, Settings, Menu, X, ClipboardList, Activity, Award, CalendarClock, MessageSquare,
   Sun, Moon, Monitor, HelpCircle,
 } from 'lucide-react';
@@ -122,7 +123,6 @@ export default function Layout({ children }) {
     () => localStorage.getItem('sidebar-collapsed') === 'true'
   );
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [navSearch, setNavSearch] = useState('');
   const [confirmLogout, setConfirmLogout] = useState(false);
 
   /* Persist desktop collapsed state */
@@ -530,25 +530,9 @@ export default function Layout({ children }) {
             </>
           )}
 
-          {/* Global search — coordinators/admins search scholars */}
+          {/* Global search — coordinators/admins search scholars, announcements, requirements */}
           {(user?.role === 'Administrator' || user?.role === 'ScholarshipCoordinator') && (
-            <form
-              onSubmit={e => { e.preventDefault(); const q = navSearch.trim(); navigate(q ? `/scholars?search=${encodeURIComponent(q)}` : '/scholars'); }}
-              style={{ position: 'relative', flex: isDesktop ? '0 1 340px' : 1, maxWidth: 340 }}
-            >
-              <Search size={15} strokeWidth={2.2} color="#7a8aaa"
-                style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
-              <input
-                value={navSearch}
-                onChange={e => setNavSearch(e.target.value)}
-                placeholder="Search scholars…"
-                style={{
-                  width: '100%', height: 38, paddingLeft: 34, paddingRight: 12,
-                  borderRadius: 11, border: '1px solid rgba(0,48,135,0.1)',
-                  background: 'rgba(255,255,255,0.7)', fontSize: 13, color: 'var(--text-strong)', outline: 'none',
-                }}
-              />
-            </form>
+            <GlobalSearch isDesktop={isDesktop} />
           )}
 
           {/* Right cluster */}
@@ -582,7 +566,10 @@ export default function Layout({ children }) {
           </div>
         </header>
 
-        {children}
+        {/* Fade the routed content in on each navigation */}
+        <div key={location.pathname} className="route-fade">
+          {children}
+        </div>
       </main>
 
       <ConfirmDialog
