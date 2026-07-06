@@ -3,7 +3,7 @@ import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { getAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement,
   uploadAnnouncementImage, ANNOUNCEMENT_INTENTS } from '../api/announcements';
-import AnnouncementImage from '../components/AnnouncementImage';
+import AnnouncementCard from '../components/AnnouncementCard';
 import { getCampuses } from '../api/campuses';
 import { getPrograms, getScholarshipTypes } from '../api/lookups';
 import { useTitle } from '../hooks/useTitle';
@@ -86,7 +86,7 @@ export default function AnnouncementsPage() {
         ) : (
           <div className="space-y-3">
             {displayed.map(a => (
-              <AnnouncementCard key={a.id} a={a} onEdit={() => openEdit(a)} onDelete={() => handleDelete(a.id)} />
+              <AnnouncementCard key={a.id} a={a} variant="manage" onEdit={() => openEdit(a)} onDelete={() => handleDelete(a.id)} />
             ))}
           </div>
         )}
@@ -105,61 +105,6 @@ export default function AnnouncementsPage() {
   );
 }
 
-function AnnouncementCard({ a, onEdit, onDelete }) {
-  const date = new Date(a.createdAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
-  const targets = [
-    a.targetRole,
-    a.targetCampus,
-    a.targetScholarshipType,
-    a.targetProgram,
-  ].filter(Boolean);
-
-  return (
-    <div className="clay-card p-5 group relative">
-      {a.hasImage && <AnnouncementImage announcementId={a.id} style={{ marginBottom: 12 }} />}
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1">
-          <p className="font-bold text-sm" style={{ color: 'var(--text-strong)' }}>{a.title}</p>
-          <p className="text-sm mt-1 leading-relaxed whitespace-pre-line" style={{ color: 'var(--text)' }}>{a.content}</p>
-          {a.intentAction && ANNOUNCEMENT_INTENTS[a.intentAction] && (
-            <span className="inline-block mt-2 text-xs px-2 py-0.5 rounded-xl font-medium"
-              style={{ background: '#ede9fe', color: '#6d28d9', border: '1px solid #c4b5fd' }}>
-              Action: {ANNOUNCEMENT_INTENTS[a.intentAction].label}
-            </span>
-          )}
-        </div>
-        {a.expiresAt && (
-          <span className="clay-badge shrink-0 text-xs" style={{ background: '#fff3cd', color: '#7d5a00', border: '1.5px solid #f0d060' }}>
-            Expires {new Date(a.expiresAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}
-          </span>
-        )}
-      </div>
-      <div className="flex items-center justify-between mt-3">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs" style={{ color: '#7a8aaa' }}>
-            {date} · {a.createdBy}
-          </span>
-          {targets.length > 0 ? (
-            targets.map(t => (
-              <span key={t} className="clay-badge text-xs" style={{ background: '#dce8ff', color: '#003087', border: '1px solid #80aaee' }}>
-                {t}
-              </span>
-            ))
-          ) : (
-            <span className="clay-badge text-xs" style={{ background: 'var(--bg)', color: '#7a8aaa', border: '1px solid rgba(0,0,0,0.08)' }}>
-              All users
-            </span>
-          )}
-        </div>
-        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button onClick={onEdit} className="text-xs font-medium hover:underline" style={{ color: '#003087' }}>Edit</button>
-          <button onClick={onDelete} className="text-xs font-medium hover:underline" style={{ color: '#e03030' }}>Delete</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function AnnouncementModal({ initial, lookups, token, onClose, onSaved }) {
   const [form, setForm] = useState({
     title:                  initial?.title ?? '',
@@ -174,10 +119,34 @@ function AnnouncementModal({ initial, lookups, token, onClose, onSaved }) {
     intentAction:           initial?.intentAction ?? '',
   });
   const [imageFile, setImageFile] = useState(null);
+  const [imageError, setImageError] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   function set(k, v) { setForm(f => ({ ...f, [k]: v })); }
+
+  const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+  const IMAGE_EXTS = ['png', 'jpg', 'jpeg', 'webp'];
+
+  /* Validate image type + size on the client before upload */
+  function handleImageChange(e) {
+    const f = e.target.files?.[0] ?? null;
+    setImageError('');
+    if (!f) { setImageFile(null); return; }
+    const ext = f.name.split('.').pop()?.toLowerCase();
+    if (!IMAGE_EXTS.includes(ext)) {
+      setImageError('Unsupported file type. Use PNG, JPG, or WEBP.');
+      setImageFile(null); e.target.value = ''; return;
+    }
+    if (f.size > MAX_IMAGE_BYTES) {
+      setImageError(`Image is ${(f.size / 1024 / 1024).toFixed(1)} MB — the maximum is 10 MB.`);
+      setImageFile(null); e.target.value = ''; return;
+    }
+    setImageFile(f);
+  }
+
+  /* A past expiry means the announcement is hidden immediately — warn, don't block */
+  const expiresInPast = form.expiresAt && new Date(form.expiresAt) < new Date();
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -270,6 +239,11 @@ function AnnouncementModal({ initial, lookups, token, onClose, onSaved }) {
 
           <Field label="Expires At (optional)">
             <input type="datetime-local" value={form.expiresAt} onChange={e => set('expiresAt', e.target.value)} className="clay-input" />
+            {expiresInPast && (
+              <p className="text-xs mt-1 font-medium" style={{ color: '#c05000' }}>
+                ⚠ This date is in the past — the announcement will be hidden immediately after saving.
+              </p>
+            )}
           </Field>
 
           <Field label="Intended Action (optional)">
@@ -285,7 +259,19 @@ function AnnouncementModal({ initial, lookups, token, onClose, onSaved }) {
           </Field>
 
           <Field label="Image (optional)">
-            <input type="file" accept=".png,.jpg,.jpeg,.webp" onChange={e => setImageFile(e.target.files?.[0] ?? null)} className="clay-input" />
+            <input type="file" accept=".png,.jpg,.jpeg,.webp" onChange={handleImageChange} className="clay-input" />
+            <p className="text-xs mt-1" style={{ color: '#7a8aaa' }}>
+              PNG, JPG, or WEBP · max 10 MB. Recommended <strong>1200 × 400 px</strong> (3:1 landscape banner) —
+              it’s displayed full-width and cropped to a 260 px-tall banner, so keep key content centered.
+            </p>
+            {imageError && (
+              <p className="text-xs mt-1 font-medium" style={{ color: '#e03030' }}>{imageError}</p>
+            )}
+            {imageFile && !imageError && (
+              <p className="text-xs mt-1" style={{ color: '#2a8a3a' }}>
+                {imageFile.name} · {(imageFile.size / 1024 / 1024).toFixed(1)} MB ready to upload.
+              </p>
+            )}
             {initial?.hasImage && !imageFile && (
               <p className="text-xs mt-1" style={{ color: '#7a8aaa' }}>An image is already attached. Choosing a new file replaces it.</p>
             )}
@@ -293,7 +279,7 @@ function AnnouncementModal({ initial, lookups, token, onClose, onSaved }) {
 
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="clay-btn clay-btn-ghost flex-1 py-2.5 text-sm">Cancel</button>
-            <button type="submit" disabled={submitting} className="clay-btn clay-btn-primary flex-1 py-2.5 text-sm" style={{ opacity: submitting ? 0.65 : 1 }}>
+            <button type="submit" disabled={submitting || !!imageError} className="clay-btn clay-btn-primary flex-1 py-2.5 text-sm" style={{ opacity: (submitting || imageError) ? 0.65 : 1 }}>
               {submitting ? 'Saving…' : 'Save'}
             </button>
           </div>

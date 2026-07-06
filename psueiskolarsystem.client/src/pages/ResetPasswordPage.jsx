@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { resetPassword } from '../api/auth';
 import { useTitle } from '../hooks/useTitle';
 import { Lock, ShieldCheck, KeyRound, CheckCircle, ArrowLeft, ArrowRight, AlertTriangle } from 'lucide-react';
+import PasswordStrengthMeter from '../components/PasswordStrengthMeter';
 
 const TIPS = [
   { Icon: Lock,        label: 'Strong Password', desc: 'Use 8+ characters with letters and numbers' },
@@ -381,6 +382,7 @@ export default function ResetPasswordPage() {
                         disabled={!email || !token}
                       />
                     </div>
+                    <PasswordStrengthMeter password={newPassword} />
                   </div>
 
                   {/* Confirm Password */}

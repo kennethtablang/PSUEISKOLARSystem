@@ -97,7 +97,7 @@ export default function ScholarshipTypesPage() {
           ) : displayed.length === 0 ? (
             <p className="text-center py-12 text-sm" style={{ color: '#7a8aaa' }}>No scholarship types found.</p>
           ) : (
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto"><table className="w-full min-w-[640px] text-sm">
               <thead className="clay-table-head">
                 <tr>
                   {['Scholarship Type', 'Min GWA', 'Required Documents', 'Status', ''].map(h => (
@@ -184,7 +184,7 @@ export default function ScholarshipTypesPage() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           )}
         </div>
       </div>

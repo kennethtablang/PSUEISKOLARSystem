@@ -2,8 +2,8 @@
 
 ## Authentication
 - Resend email-verification link (no way to re-request if the first email is lost).
-- Account lockout / cooldown after repeated failed logins (currently unlimited attempts).
-- Password-strength meter on the register and change-password forms.
+- [x] Account lockout / cooldown after repeated failed logins (currently unlimited attempts).
+- [x] Password-strength meter on the register and change-password forms.
 - "Remember me" / refresh-token option — today it's a hard 30-minute inactivity logout with no token refresh.
 
 ## Student Management
@@ -35,7 +35,7 @@
 
 ## Notifications
 - Browser **web-push** notifications in addition to in-app + email.
-- "Mark as unread" and delete individual notifications.
+- [x] "Mark as unread" and delete individual notifications.
 - Finer in-app category muting (beyond the 3 email-preference toggles).
 
 ## Settings
@@ -47,7 +47,7 @@
 ## Others
 - **Global search** across documents, announcements, and users (navbar search covers scholars only).
 - **Announcement scheduling** (publish at a future date/time).
-- Activity-log **export** to Excel/CSV (parity with the scholar/submission exports).
+- [x] Activity-log **export** to Excel/CSV (parity with the scholar/submission exports).
 - In-app help/FAQ page to complement the first-time tutorial.
 
 ---
@@ -56,20 +56,20 @@
 
 ## Bugs
 - **Dark mode gaps:** a few colored surfaces (renewal/alert cards, some inline `#fff`/tinted boxes) stay light in dark mode → reduced contrast.
-- **Dead code:** `components/AnnouncementCard.jsx` is not imported anywhere (pages use their own inline card) — remove or wire it up.
+- [x] **Dead code:** `components/AnnouncementCard.jsx` is not imported anywhere (pages use their own inline card) — remove or wire it up.
 - **Fire-and-forget scoped services:** announcement/message emails and announcement notifications run after the HTTP response using request-scoped services (`DbContext`, `IEmailService`) — risk of a disposed context under load. Move to a background queue or create a fresh scope.
-- Email send failures are silently swallowed with no retry or admin visibility.
+- [x] Email send failures are silently swallowed with no retry or admin visibility.
 
 ## UI/UX
 - Replace `alert()` / `confirm()` calls with in-app **toasts/modals** for a consistent look.
-- Wide tables overflow on small screens — wrap them in `overflow-x-auto` containers.
+- [x] Wide tables overflow on small screens — wrap them in `overflow-x-auto` containers.
 - Messaging on mobile renders both the thread list and conversation — add a single-pane, back-button flow.
 - Add loading **skeletons** and standardize empty states across list pages.
 
 ## Validation
 - Several modals still lack **inline, field-level** validation (they rely on server 400s or `alert`).
-- No client-side size/type feedback before image uploads (server enforces 10 MB + extension).
-- Announcement `ExpiresAt` can be set in the past with no warning.
+- [x] No client-side size/type feedback before image uploads (server enforces 10 MB + extension).
+- [x] Announcement `ExpiresAt` can be set in the past with no warning.
 - Email uniqueness is only caught on submit — no live "email already taken" check.
 - Grade academic-year isn't checked against the active semester.
 
@@ -80,19 +80,28 @@
 - Messaging thread list loads all of a user's messages then groups in memory — paginate/aggregate in SQL.
 
 ## Security
-- **No rate limiting or lockout** on `/api/auth/login` and `forgot-password` — brute-force exposure.
+- [x] **No rate limiting or lockout** on `/api/auth/login` and `forgot-password` — brute-force exposure.
 - File uploads are validated by **extension + size only**, not content/magic bytes — add signature checks (or AV scan) for COR/ID uploads.
-- **Failed** login attempts aren't audit-logged (only successful logins are).
+- [x] **Failed** login attempts aren't audit-logged (only successful logins are).
 - Confirm HTTPS/HSTS is enforced in production (only a dev HTTPS redirect today).
-- `AnalyticsChanged` is broadcast to *all* SignalR clients (incl. scholars) — harmless bare signal, but scope it to staff to avoid needless fan-out.
+- [x] `AnalyticsChanged` is broadcast to *all* SignalR clients (incl. scholars) — harmless bare signal, but scope it to staff to avoid needless fan-out.
 
 ## Code Quality
 - Controllers return **anonymous objects** instead of DTOs — harder to version, document (Swagger), and unit-test; introduce response DTOs.
 - Duplicated code: per-page `ctlStyle`/compact-filter styling, the `ContentTypeFor` image helper (in two controllers), and the near-identical image-upload endpoints (requirement sample vs. announcement) — extract shared helpers.
-- **Magic strings** for notification categories and announcement intent keys — centralize as shared constants/enums (client + server).
-- Consolidate the duplicated announcement-card implementations.
+- [x] **Magic strings** for notification categories and announcement intent keys — centralize as shared constants/enums (client + server).
+- [x] Consolidate the duplicated announcement-card implementations.
 
 ## Others
 - No **deployment/backup guide** or CI pipeline (NFR-2.3 / 5.5 / 6.2).
 - Test coverage is minimal (2 suites) — extend to the deadline report, bulk import, and preference enforcement.
 - No API **versioning** strategy.
+- [x] Add tabbing on the System Settings
+- We still need to fix the dark mode, there are components that are still not affected by the dark mode. 
+- On the tutorial we need a guided tutorial where the system will point out where and what. 
+- [x] We need a details on the upload image on the announcement. We need to put what is the resolution needed for the image to be uploaded. 
+- Remove the other campuses we dont need those. We are focusing on a single campus and that is Lingayen Campus(main campus)
+- [x] We need to add a ask again for the logout function. 
+- When the student is newly register to the system then the first thing that thhe student needs to do is to Setup their account details and information about them. 
+- [x] Add a favicon
+- 

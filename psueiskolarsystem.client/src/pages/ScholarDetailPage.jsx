@@ -200,7 +200,7 @@ export default function ScholarDetailPage() {
               {grades.length === 0 ? (
                 <p className="text-sm" style={{ color: '#7a8aaa' }}>No grades recorded yet.</p>
               ) : (
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto"><table className="w-full min-w-[560px] text-sm">
                   <thead style={{ borderBottom: '1.5px solid rgba(0,0,0,0.07)' }}>
                     <tr>
                       {['Academic Year', 'Sem', 'GWA', 'Status', 'Remarks'].map(h => (
@@ -234,7 +234,7 @@ export default function ScholarDetailPage() {
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </table></div>
               )}
             </div>
           </>

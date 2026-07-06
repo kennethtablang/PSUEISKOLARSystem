@@ -22,10 +22,26 @@ export async function markRead(id, token) {
   if (!res.ok) throw new Error('Failed to mark notification read.');
 }
 
+export async function markUnread(id, token) {
+  const res = await fetch(`${API}/${id}/unread`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error('Failed to mark notification unread.');
+}
+
 export async function markAllRead(token) {
   const res = await fetch(`${API}/read-all`, {
     method: 'PATCH',
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error('Failed to mark all read.');
+}
+
+export async function deleteNotification(id, token) {
+  const res = await fetch(`${API}/${id}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error('Failed to delete notification.');
 }

@@ -30,6 +30,13 @@ export default function SettingsPage() {
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
   const [seeding, setSeeding]       = useState(false);
   const [seedResult, setSeedResult] = useState(null);
+  const [tab, setTab] = useState('period');
+
+  const TABS = [
+    { key: 'period',     label: 'Academic Period', Icon: CalendarDays },
+    { key: 'maintenance', label: 'Maintenance',    Icon: Archive },
+    { key: 'appearance', label: 'Appearance',      Icon: Monitor },
+  ];
 
   async function handleSeed() {
     if (!confirm('Seed sample coordinators, scholars, grades, and announcements? This is safe to run more than once — it will not duplicate existing sample data.')) return;
@@ -117,6 +124,29 @@ export default function SettingsPage() {
           <p className="text-sm text-center py-12" style={{ color: '#7a8aaa' }}>Loading…</p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+            {/* Tab bar */}
+            <div className="flex gap-2 flex-wrap" role="tablist">
+              {TABS.map(({ key, label, Icon }) => {
+                const active = tab === key;
+                return (
+                  <button
+                    key={key}
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => setTab(key)}
+                    className="clay-btn px-4 py-2.5 text-sm font-bold flex items-center gap-2"
+                    style={active
+                      ? { background: 'rgba(0,37,112,0.12)', color: '#003087', border: '1.5px solid rgba(0,37,112,0.3)' }
+                      : { color: 'var(--text)' }}>
+                    <Icon size={15} strokeWidth={2.3} /> {label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* ── Academic Period tab ── */}
+            {tab === 'period' && (<>
 
             {/* Current period display */}
             <div className="clay-card p-6">
@@ -252,6 +282,11 @@ export default function SettingsPage() {
               </form>
             </div>
 
+            </>)}
+
+            {/* ── Maintenance tab ── */}
+            {tab === 'maintenance' && (<>
+
             {/* Database maintenance — archive inactive scholars */}
             <div className="clay-card p-6">
               <div className="flex items-center gap-3 mb-5">
@@ -312,30 +347,6 @@ export default function SettingsPage() {
               )}
             </div>
 
-            {/* Appearance / theme */}
-            <div className="clay-card p-6">
-              <div className="flex items-center gap-3 mb-5">
-                <div style={{ width: 44, height: 44, borderRadius: 13, flexShrink: 0, background: 'rgba(0,48,135,0.08)', border: '1px solid rgba(0,48,135,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Monitor size={20} color="#003087" strokeWidth={2} />
-                </div>
-                <div>
-                  <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-strong)' }}>Appearance</p>
-                  <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Choose light, dark, or match your device.</p>
-                </div>
-              </div>
-              <div className="flex gap-2 flex-wrap">
-                {[['light', Sun, 'Light'], ['dark', Moon, 'Dark'], ['system', Monitor, 'System']].map(([val, Icon, label]) => (
-                  <button key={val} onClick={() => setTheme(val)}
-                    className="clay-btn px-4 py-2.5 text-sm flex items-center gap-2"
-                    style={theme === val
-                      ? { background: 'rgba(0,37,112,0.12)', color: '#003087', border: '1.5px solid rgba(0,37,112,0.3)' }
-                      : { color: 'var(--text)' }}>
-                    <Icon size={15} strokeWidth={2.3} /> {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
             {/* Sample data seeder */}
             <div className="clay-card p-6">
               <div className="flex items-center gap-3 mb-5">
@@ -376,6 +387,34 @@ export default function SettingsPage() {
                 </div>
               )}
             </div>
+
+            </>)}
+
+            {/* ── Appearance tab ── */}
+            {tab === 'appearance' && (
+            <div className="clay-card p-6">
+              <div className="flex items-center gap-3 mb-5">
+                <div style={{ width: 44, height: 44, borderRadius: 13, flexShrink: 0, background: 'rgba(0,48,135,0.08)', border: '1px solid rgba(0,48,135,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Monitor size={20} color="#003087" strokeWidth={2} />
+                </div>
+                <div>
+                  <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-strong)' }}>Appearance</p>
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Choose light, dark, or match your device.</p>
+                </div>
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                {[['light', Sun, 'Light'], ['dark', Moon, 'Dark'], ['system', Monitor, 'System']].map(([val, Icon, label]) => (
+                  <button key={val} onClick={() => setTheme(val)}
+                    className="clay-btn px-4 py-2.5 text-sm flex items-center gap-2"
+                    style={theme === val
+                      ? { background: 'rgba(0,37,112,0.12)', color: '#003087', border: '1.5px solid rgba(0,37,112,0.3)' }
+                      : { color: 'var(--text)' }}>
+                    <Icon size={15} strokeWidth={2.3} /> {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            )}
 
           </div>
         )}

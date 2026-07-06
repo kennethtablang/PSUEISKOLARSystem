@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
 import { useTheme } from '../context/ThemeContext';
 import NotificationBell from './NotificationBell';
+import ConfirmDialog from './ConfirmDialog';
 import {
   LayoutDashboard, GraduationCap, FileCheck, Users, Bell,
   FolderOpen, User, LogOut, BarChart2, Search,
@@ -118,6 +119,7 @@ export default function Layout({ children }) {
   );
   const [mobileOpen, setMobileOpen] = useState(false);
   const [navSearch, setNavSearch] = useState('');
+  const [confirmLogout, setConfirmLogout] = useState(false);
 
   /* Persist desktop collapsed state */
   useEffect(() => {
@@ -135,6 +137,11 @@ export default function Layout({ children }) {
   }, [isDesktop]);
 
   function handleSignOut() {
+    setConfirmLogout(true);
+  }
+
+  function confirmSignOut() {
+    setConfirmLogout(false);
     signOut();
     navigate('/login', { replace: true });
   }
@@ -573,6 +580,17 @@ export default function Layout({ children }) {
 
         {children}
       </main>
+
+      <ConfirmDialog
+        open={confirmLogout}
+        title="Sign out?"
+        message="You’ll be returned to the login page and will need to sign in again to continue."
+        confirmLabel="Sign out"
+        cancelLabel="Stay signed in"
+        danger
+        onConfirm={confirmSignOut}
+        onCancel={() => setConfirmLogout(false)}
+      />
     </div>
   );
 }

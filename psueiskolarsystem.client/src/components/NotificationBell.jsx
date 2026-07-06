@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, FileCheck, Megaphone, Clock, MessageSquare, UserCog, CheckCheck } from 'lucide-react';
 import { useNotifications } from '../context/NotificationContext';
+import { NOTIFICATION_CATEGORIES } from '../constants/notifications';
 
 /* Relative "time ago" from a UTC timestamp */
 function timeAgo(iso) {
@@ -17,12 +18,13 @@ function timeAgo(iso) {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
+const C = NOTIFICATION_CATEGORIES;
 const CATEGORY_META = {
-  DocumentStatus: { Icon: FileCheck, color: '#0369a1', bg: 'rgba(3,105,161,0.1)' },
-  Announcement:   { Icon: Megaphone, color: '#b45309', bg: 'rgba(245,184,0,0.14)' },
-  Deadline:       { Icon: Clock,     color: '#c2410c', bg: 'rgba(234,88,12,0.12)' },
-  Message:        { Icon: MessageSquare, color: '#4338ca', bg: 'rgba(67,56,202,0.1)' },
-  Account:        { Icon: UserCog,   color: '#334155', bg: 'rgba(51,65,85,0.1)' },
+  [C.DocumentStatus]: { Icon: FileCheck, color: '#0369a1', bg: 'rgba(3,105,161,0.1)' },
+  [C.Announcement]:   { Icon: Megaphone, color: '#b45309', bg: 'rgba(245,184,0,0.14)' },
+  [C.Deadline]:       { Icon: Clock,     color: '#c2410c', bg: 'rgba(234,88,12,0.12)' },
+  [C.Message]:        { Icon: MessageSquare, color: '#4338ca', bg: 'rgba(67,56,202,0.1)' },
+  [C.Account]:        { Icon: UserCog,   color: '#334155', bg: 'rgba(51,65,85,0.1)' },
 };
 const DEFAULT_META = { Icon: Bell, color: '#003087', bg: 'rgba(0,48,135,0.08)' };
 

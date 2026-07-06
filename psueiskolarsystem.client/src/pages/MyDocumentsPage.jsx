@@ -144,6 +144,17 @@ export default function MyDocumentsPage() {
   }
 
   async function handleUpload(requirementId, file) {
+    // Client-side type/size feedback before hitting the server (mirrors server limits)
+    const allowedExts = ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx'];
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    if (!allowedExts.includes(ext)) {
+      alert(`Unsupported file type ".${ext}". Accepted: PDF, JPG, PNG, DOC, DOCX.`);
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      alert(`This file is ${(file.size / 1024 / 1024).toFixed(1)} MB — the maximum is 10 MB.`);
+      return;
+    }
     setUploading(requirementId);
     try {
       await uploadDocument(file, requirementId, period.academicYear, period.semester, token);

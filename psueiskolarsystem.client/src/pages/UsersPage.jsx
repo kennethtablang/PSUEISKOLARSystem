@@ -132,7 +132,7 @@ export default function UsersPage() {
           ) : displayed.length === 0 ? (
             <p className="text-center py-12 text-sm" style={{ color: '#7a8aaa' }}>No users found.</p>
           ) : (
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto"><table className="w-full min-w-[640px] text-sm">
               <thead className="clay-table-head">
                 <tr>
                   {['Name', 'Email', 'Role', 'Campus', 'Status', ''].map(h => (
@@ -172,7 +172,7 @@ export default function UsersPage() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           )}
         </div>
 
@@ -303,7 +303,7 @@ function ImportScholarsModal({ token, onClose, onDone }) {
             </div>
 
             <div className="clay-card overflow-hidden mb-4" style={{ maxHeight: 300, overflowY: 'auto' }}>
-              <table className="w-full text-xs">
+              <div className="overflow-x-auto"><table className="w-full min-w-[520px] text-xs">
                 <thead className="clay-table-head">
                   <tr>
                     {['#', 'Email', 'Result'].map(h => (
@@ -325,7 +325,7 @@ function ImportScholarsModal({ token, onClose, onDone }) {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table></div>
             </div>
 
             <div className="flex gap-3">

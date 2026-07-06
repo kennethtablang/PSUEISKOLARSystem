@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { registerScholar } from '../api/auth';
 import { useTitle } from '../hooks/useTitle';
-import { Mail, Lock, User, UserCheck, FolderUp, TrendingUp, Bell, ArrowRight, ArrowLeft, AlertTriangle, GraduationCap, CheckCircle, XCircle, MailCheck } from 'lucide-react';
+import { Mail, Lock, User, UserCheck, FolderUp, TrendingUp, Bell, ArrowRight, ArrowLeft, AlertTriangle, GraduationCap, MailCheck } from 'lucide-react';
+import PasswordStrengthMeter, { getPasswordStrength } from '../components/PasswordStrengthMeter';
 
 const HIGHLIGHTS = [
   { Icon: UserCheck,  label: 'Scholar Profiling',   desc: 'Academic records and personal information' },
@@ -10,44 +11,6 @@ const HIGHLIGHTS = [
   { Icon: TrendingUp, label: 'Grade Monitoring',    desc: 'GWA tracking and requirement alerts' },
   { Icon: Bell,       label: 'Announcements',       desc: 'Deadlines and notices in one place' },
 ];
-
-function getPasswordStrength(pw) {
-  const checks = {
-    length:    pw.length >= 8,
-    uppercase: /[A-Z]/.test(pw),
-    lowercase: /[a-z]/.test(pw),
-    digit:     /[0-9]/.test(pw),
-    special:   /[^A-Za-z0-9]/.test(pw),
-  };
-  const passed = Object.values(checks).filter(Boolean).length;
-  return { checks, passed, total: 5 };
-}
-
-function PasswordRequirements({ password }) {
-  const { checks } = getPasswordStrength(password);
-  if (!password) return null;
-
-  const rules = [
-    { key: 'length',    label: 'At least 8 characters' },
-    { key: 'uppercase', label: 'One uppercase letter (A–Z)' },
-    { key: 'lowercase', label: 'One lowercase letter (a–z)' },
-    { key: 'digit',     label: 'One number (0–9)' },
-    { key: 'special',   label: 'One special character (!@#$…)' },
-  ];
-
-  return (
-    <div className="mt-2 space-y-1">
-      {rules.map(({ key, label }) => (
-        <div key={key} className="flex items-center gap-1.5 text-xs">
-          {checks[key]
-            ? <CheckCircle size={12} color="#16a34a" strokeWidth={2.5} />
-            : <XCircle    size={12} color="#dc2626" strokeWidth={2.5} />}
-          <span style={{ color: checks[key] ? '#16a34a' : '#9aaabb' }}>{label}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 export default function RegisterPage() {
   const [form, setForm] = useState({
@@ -383,7 +346,7 @@ export default function RegisterPage() {
                         autoComplete="new-password"
                       />
                     </div>
-                    <PasswordRequirements password={form.password} />
+                    <PasswordStrengthMeter password={form.password} />
                   </div>
 
                   {/* Confirm Password */}

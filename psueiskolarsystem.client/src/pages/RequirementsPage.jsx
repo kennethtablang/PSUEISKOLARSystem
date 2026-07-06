@@ -98,7 +98,7 @@ export default function RequirementsPage() {
           ) : displayed.length === 0 ? (
             <p className="text-center py-12 text-sm" style={{ color: '#7a8aaa' }}>No requirements found.</p>
           ) : (
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto"><table className="w-full min-w-[640px] text-sm">
               <thead className="clay-table-head">
                 <tr>
                   {['Requirement', 'Status', 'Sample', ''].map(h => (
@@ -168,7 +168,7 @@ export default function RequirementsPage() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           )}
         </div>
       </div>

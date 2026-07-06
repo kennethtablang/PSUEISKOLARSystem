@@ -154,7 +154,7 @@ function ManageTab({ requirements, deadlineByReq, onSet, onClear }) {
 
   return (
     <div className="clay-card overflow-hidden">
-      <table className="w-full text-sm">
+      <div className="overflow-x-auto"><table className="w-full min-w-[640px] text-sm">
         <thead className="clay-table-head">
           <tr>
             {['Requirement', 'Due Date', 'Status', ''].map(h => (
@@ -204,7 +204,7 @@ function ManageTab({ requirements, deadlineByReq, onSet, onClear }) {
             );
           })}
         </tbody>
-      </table>
+      </table></div>
     </div>
   );
 }

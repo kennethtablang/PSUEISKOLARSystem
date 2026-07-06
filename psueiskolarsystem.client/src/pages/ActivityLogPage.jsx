@@ -1,9 +1,9 @@
 import { useEffect, useState, useCallback } from 'react';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
-import { getAuditLog, getDistinctActions } from '../api/auditLog';
+import { getAuditLog, getDistinctActions, exportAuditLog } from '../api/auditLog';
 import { useTitle } from '../hooks/useTitle';
-import { Activity, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
+import { Activity, ChevronLeft, ChevronRight, RefreshCw, Download } from 'lucide-react';
 
 const ACTION_COLORS = {
   Login:          { bg: '#dce8ff', color: '#003087' },
@@ -81,6 +81,18 @@ export default function ActivityLogPage() {
     setPage(1);
   }
 
+  const [exporting, setExporting] = useState(false);
+  async function handleExport() {
+    setExporting(true);
+    try {
+      await exportAuditLog(token, { search: search || undefined, action: actionFilter || undefined });
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setExporting(false);
+    }
+  }
+
   const totalPages = data ? Math.ceil(data.total / PAGE_SIZE) : 1;
 
   return (
@@ -96,14 +108,26 @@ export default function ActivityLogPage() {
             </p>
             <span className="page-title-bar" />
           </div>
-          <button
-            onClick={() => load()}
-            title="Refresh"
-            className="clay-btn clay-btn-ghost px-3 py-2.5 flex items-center gap-2 text-sm"
-          >
-            <RefreshCw size={14} strokeWidth={2.2} />
-            Refresh
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={handleExport}
+              disabled={exporting}
+              title="Export to Excel"
+              className="clay-btn clay-btn-ghost px-3 py-2.5 flex items-center gap-2 text-sm"
+              style={{ opacity: exporting ? 0.65 : 1 }}
+            >
+              <Download size={14} strokeWidth={2.2} />
+              {exporting ? 'Exporting…' : 'Export'}
+            </button>
+            <button
+              onClick={() => load()}
+              title="Refresh"
+              className="clay-btn clay-btn-ghost px-3 py-2.5 flex items-center gap-2 text-sm"
+            >
+              <RefreshCw size={14} strokeWidth={2.2} />
+              Refresh
+            </button>
+          </div>
         </div>
 
         {/* Filters */}
@@ -152,7 +176,7 @@ export default function ActivityLogPage() {
               <p className="text-sm" style={{ color: '#7a8aaa' }}>No events found.</p>
             </div>
           ) : (
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto"><table className="w-full min-w-[640px] text-sm">
               <thead className="clay-table-head">
                 <tr>
                   {['Timestamp', 'User', 'Action', 'Details'].map(h => (
@@ -182,7 +206,7 @@ export default function ActivityLogPage() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           )}
         </div>
 

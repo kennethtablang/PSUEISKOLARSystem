@@ -6,6 +6,7 @@ import { exportScholarData } from '../api/scholars';
 import { useTutorial } from '../context/TutorialContext';
 import { User, Mail, Shield, Lock, KeyRound, CheckCircle, AlertCircle, ShieldCheck, ShieldOff, X, Bell, Download, Sparkles } from 'lucide-react';
 import { useTitle } from '../hooks/useTitle';
+import PasswordStrengthMeter from '../components/PasswordStrengthMeter';
 
 const ROLE_BADGE = {
   Administrator:           { cls: 'badge-admin',   label: 'Administrator' },
@@ -246,6 +247,7 @@ export default function ProfilePage() {
                       autoComplete={ac}
                     />
                   </div>
+                  {label === 'New Password' && <PasswordStrengthMeter password={val} />}
                 </div>
               ))}
               <button type="submit" disabled={savingPw} className="clay-btn clay-btn-primary w-full">

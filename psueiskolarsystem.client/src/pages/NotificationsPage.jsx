@@ -3,19 +3,21 @@ import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
-import { getNotifications, markRead, markAllRead } from '../api/notifications';
+import { getNotifications, markRead, markUnread, markAllRead, deleteNotification } from '../api/notifications';
 import { useTitle } from '../hooks/useTitle';
-import { Bell, FileCheck, Megaphone, Clock, MessageSquare, UserCog, CheckCheck } from 'lucide-react';
+import { NOTIFICATION_CATEGORIES, NOTIFICATION_FILTER_CATEGORIES } from '../constants/notifications';
+import { Bell, FileCheck, Megaphone, Clock, MessageSquare, UserCog, CheckCheck, Undo2, Trash2 } from 'lucide-react';
 
+const C = NOTIFICATION_CATEGORIES;
 const CATEGORY_META = {
-  DocumentStatus: { Icon: FileCheck, color: '#0369a1', bg: 'rgba(3,105,161,0.1)', label: 'Document' },
-  Announcement:   { Icon: Megaphone, color: '#b45309', bg: 'rgba(245,184,0,0.14)', label: 'Announcement' },
-  Deadline:       { Icon: Clock,     color: '#c2410c', bg: 'rgba(234,88,12,0.12)', label: 'Deadline' },
-  Message:        { Icon: MessageSquare, color: '#4338ca', bg: 'rgba(67,56,202,0.1)', label: 'Message' },
-  Account:        { Icon: UserCog,   color: '#334155', bg: 'rgba(51,65,85,0.1)', label: 'Account' },
+  [C.DocumentStatus]: { Icon: FileCheck, color: '#0369a1', bg: 'rgba(3,105,161,0.1)', label: 'Document' },
+  [C.Announcement]:   { Icon: Megaphone, color: '#b45309', bg: 'rgba(245,184,0,0.14)', label: 'Announcement' },
+  [C.Deadline]:       { Icon: Clock,     color: '#c2410c', bg: 'rgba(234,88,12,0.12)', label: 'Deadline' },
+  [C.Message]:        { Icon: MessageSquare, color: '#4338ca', bg: 'rgba(67,56,202,0.1)', label: 'Message' },
+  [C.Account]:        { Icon: UserCog,   color: '#334155', bg: 'rgba(51,65,85,0.1)', label: 'Account' },
 };
 const DEFAULT_META = { Icon: Bell, color: '#003087', bg: 'rgba(0,48,135,0.08)', label: 'General' };
-const FILTERS = ['', 'DocumentStatus', 'Announcement', 'Deadline', 'Message'];
+const FILTERS = ['', ...NOTIFICATION_FILTER_CATEGORIES];
 
 function timeAgo(iso) {
   const secs = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
@@ -65,6 +67,18 @@ export default function NotificationsPage() {
     refresh();
   }
 
+  async function handleMarkUnread(n) {
+    try { await markUnread(n.id, token); } catch { /* best effort */ }
+    setItems(prev => prev.map(x => x.id === n.id ? { ...x, isRead: false } : x));
+    refresh();
+  }
+
+  async function handleDelete(n) {
+    try { await deleteNotification(n.id, token); } catch { /* best effort */ }
+    setItems(prev => prev.filter(x => x.id !== n.id));
+    refresh();
+  }
+
   return (
     <Layout>
       <div className="p-8 max-w-3xl">
@@ -111,8 +125,10 @@ export default function NotificationsPage() {
             const meta = CATEGORY_META[n.category] ?? DEFAULT_META;
             const { Icon } = meta;
             return (
-              <button key={n.id} onClick={() => handleClick(n)}
-                className="w-full text-left flex items-start gap-3 px-5 py-4"
+              <div key={n.id} role="button" tabIndex={0}
+                onClick={() => handleClick(n)}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick(n); } }}
+                className="group w-full text-left flex items-start gap-3 px-5 py-4 cursor-pointer"
                 style={{ borderBottom: '1px solid rgba(0,48,135,0.05)', background: n.isRead ? 'transparent' : 'rgba(0,48,135,0.035)' }}
               >
                 <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: meta.bg }}>
@@ -126,7 +142,25 @@ export default function NotificationsPage() {
                   <p className="text-sm mt-0.5" style={{ color: '#5a6a85' }}>{n.message}</p>
                   <p className="text-xs mt-1" style={{ color: '#9aa6bc', fontWeight: 600 }}>{timeAgo(n.createdAt)}</p>
                 </div>
-              </button>
+                <div className="flex items-center gap-1 shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                  {n.isRead && (
+                    <button
+                      onClick={e => { e.stopPropagation(); handleMarkUnread(n); }}
+                      title="Mark as unread"
+                      className="p-1.5 rounded-lg hover:bg-black/5"
+                      style={{ color: '#7a8aaa' }}>
+                      <Undo2 size={15} strokeWidth={2.2} />
+                    </button>
+                  )}
+                  <button
+                    onClick={e => { e.stopPropagation(); handleDelete(n); }}
+                    title="Delete notification"
+                    className="p-1.5 rounded-lg hover:bg-black/5"
+                    style={{ color: '#c04040' }}>
+                    <Trash2 size={15} strokeWidth={2.2} />
+                  </button>
+                </div>
+              </div>
             );
           })}
         </div>

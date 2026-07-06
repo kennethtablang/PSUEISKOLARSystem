@@ -171,7 +171,7 @@ export default function DocumentReviewPage() {
           ) : filtered.length === 0 ? (
             <p className="text-center py-12 text-sm" style={{ color: '#7a8aaa' }}>No submissions match the current filters.</p>
           ) : (
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-sm">
               <thead className="clay-table-head">
                 <tr>
                   <th className="px-4 py-3">
@@ -224,7 +224,7 @@ export default function DocumentReviewPage() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           )}
         </div>
 
