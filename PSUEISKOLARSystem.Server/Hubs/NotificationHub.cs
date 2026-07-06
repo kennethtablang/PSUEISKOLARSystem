@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
+using PSUEISKOLARSystem.Server.Models.Enums;
 
 namespace PSUEISKOLARSystem.Server.Hubs
 {
@@ -9,5 +10,18 @@ namespace PSUEISKOLARSystem.Server.Hubs
     [Authorize]
     public class NotificationHub : Hub
     {
+        // Staff (admins + coordinators) join this group so staff-only broadcasts
+        // such as "AnalyticsChanged" aren't fanned out to scholar clients.
+        public const string StaffGroup = "staff";
+
+        public override async Task OnConnectedAsync()
+        {
+            if (Context.User is { } user &&
+                (user.IsInRole(UserRoles.Administrator) || user.IsInRole(UserRoles.ScholarshipCoordinator)))
+            {
+                await Groups.AddToGroupAsync(Context.ConnectionId, StaffGroup);
+            }
+            await base.OnConnectedAsync();
+        }
     }
 }

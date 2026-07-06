@@ -47,7 +47,9 @@ namespace PSUEISKOLARSystem.Server.Services
                 await PushAsync(notification);
         }
 
-        public Task BroadcastAsync(string eventName) => hub.Clients.All.SendAsync(eventName);
+        // Staff-scoped broadcast (e.g. "AnalyticsChanged"): only admins/coordinators
+        // join the staff group on connect, so scholar clients aren't needlessly notified.
+        public Task BroadcastAsync(string eventName) => hub.Clients.Group(NotificationHub.StaffGroup).SendAsync(eventName);
 
         private Task PushAsync(Notification n) =>
             hub.Clients.User(n.RecipientId).SendAsync("ReceiveNotification", new

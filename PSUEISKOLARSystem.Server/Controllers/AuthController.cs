@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using PSUEISKOLARSystem.Server.Data;
 using PSUEISKOLARSystem.Server.DTOs.Auth;
 using PSUEISKOLARSystem.Server.Exceptions;
@@ -15,6 +16,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
     public class AuthController(IAuthService authService, ApplicationDbContext db) : ControllerBase
     {
         [HttpPost("login")]
+        [EnableRateLimiting("auth")]
         public async Task<ActionResult<AuthResponseDto>> Login(LoginRequestDto request)
         {
             try
@@ -83,6 +85,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
         }
 
         [HttpPost("forgot-password")]
+        [EnableRateLimiting("auth")]
         public async Task<IActionResult> ForgotPassword(ForgotPasswordRequestDto request)
         {
             var found = await authService.ForgotPasswordAsync(request.Email);
@@ -118,6 +121,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
         }
 
         [HttpPost("login-2fa")]
+        [EnableRateLimiting("auth")]
         public async Task<ActionResult<AuthResponseDto>> Login2fa(TwoFactorLoginRequestDto request)
         {
             try

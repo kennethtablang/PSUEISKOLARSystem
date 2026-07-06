@@ -86,6 +86,25 @@ namespace PSUEISKOLARSystem.Server.Controllers
             return NoContent();
         }
 
+        // PATCH /api/notifications/{id}/unread
+        [HttpPatch("{id}/unread")]
+        public async Task<IActionResult> MarkUnread(int id)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            var notification = await db.Notifications
+                .FirstOrDefaultAsync(n => n.Id == id && n.RecipientId == userId);
+            if (notification is null) return NotFound();
+
+            if (notification.IsRead)
+            {
+                notification.IsRead = false;
+                notification.ReadAt = null;
+                await db.SaveChangesAsync();
+            }
+
+            return NoContent();
+        }
+
         // PATCH /api/notifications/read-all
         [HttpPatch("read-all")]
         public async Task<IActionResult> MarkAllRead()
@@ -99,6 +118,20 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     .SetProperty(n => n.IsRead, true)
                     .SetProperty(n => n.ReadAt, now));
 
+            return NoContent();
+        }
+
+        // DELETE /api/notifications/{id}
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> Delete(int id)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            var notification = await db.Notifications
+                .FirstOrDefaultAsync(n => n.Id == id && n.RecipientId == userId);
+            if (notification is null) return NotFound();
+
+            db.Notifications.Remove(notification);
+            await db.SaveChangesAsync();
             return NoContent();
         }
     }

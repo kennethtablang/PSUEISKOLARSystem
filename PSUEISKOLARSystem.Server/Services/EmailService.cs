@@ -7,9 +7,43 @@ using PSUEISKOLARSystem.Server.Settings;
 
 namespace PSUEISKOLARSystem.Server.Services
 {
-    public class EmailService(IOptions<EmailSettings> options) : IEmailService
+    public class EmailService(IOptions<EmailSettings> options, ILogger<EmailService> logger) : IEmailService
     {
         private readonly EmailSettings _s = options.Value;
+
+        // Central SMTP send with a short retry and logging so failures are visible
+        // (previously call sites swallowed exceptions with no trace).
+        private async Task SendMessageAsync(MimeMessage message)
+        {
+            const int maxAttempts = 3;
+            var recipients = string.Join(", ", message.To.Mailboxes.Select(m => m.Address));
+
+            for (var attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    using var client = new SmtpClient();
+                    await client.ConnectAsync(_s.SmtpHost, _s.SmtpPort, SecureSocketOptions.StartTls);
+                    await client.AuthenticateAsync(_s.Username, _s.Password);
+                    await client.SendAsync(message);
+                    await client.DisconnectAsync(true);
+
+                    if (attempt > 1)
+                        logger.LogInformation("Email '{Subject}' to {Recipients} sent on attempt {Attempt}.", message.Subject, recipients, attempt);
+                    return;
+                }
+                catch (Exception ex) when (attempt < maxAttempts)
+                {
+                    logger.LogWarning(ex, "Email '{Subject}' to {Recipients} failed on attempt {Attempt}/{Max}; retrying.", message.Subject, recipients, attempt, maxAttempts);
+                    await Task.Delay(TimeSpan.FromSeconds(2 * attempt));
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Email '{Subject}' to {Recipients} failed after {Max} attempts.", message.Subject, recipients, maxAttempts);
+                    throw;
+                }
+            }
+        }
 
         public async Task SendPasswordResetEmailAsync(string toEmail, string toName, string resetLink)
         {
@@ -98,11 +132,7 @@ namespace PSUEISKOLARSystem.Server.Services
                     """
             }.ToMessageBody();
 
-            using var client = new SmtpClient();
-            await client.ConnectAsync(_s.SmtpHost, _s.SmtpPort, SecureSocketOptions.StartTls);
-            await client.AuthenticateAsync(_s.Username, _s.Password);
-            await client.SendAsync(message);
-            await client.DisconnectAsync(true);
+            await SendMessageAsync(message);
         }
 
         public async Task SendEmailVerificationAsync(string toEmail, string toName, string verifyLink)
@@ -201,11 +231,7 @@ namespace PSUEISKOLARSystem.Server.Services
                     """
             }.ToMessageBody();
 
-            using var client = new SmtpClient();
-            await client.ConnectAsync(_s.SmtpHost, _s.SmtpPort, SecureSocketOptions.StartTls);
-            await client.AuthenticateAsync(_s.Username, _s.Password);
-            await client.SendAsync(message);
-            await client.DisconnectAsync(true);
+            await SendMessageAsync(message);
         }
 
         public async Task SendTwoFactorCodeAsync(string toEmail, string toName, string code)
@@ -282,11 +308,7 @@ namespace PSUEISKOLARSystem.Server.Services
                     """
             }.ToMessageBody();
 
-            using var client = new SmtpClient();
-            await client.ConnectAsync(_s.SmtpHost, _s.SmtpPort, SecureSocketOptions.StartTls);
-            await client.AuthenticateAsync(_s.Username, _s.Password);
-            await client.SendAsync(message);
-            await client.DisconnectAsync(true);
+            await SendMessageAsync(message);
         }
 
         public async Task SendDocumentUploadConfirmationAsync(string toEmail, string toName, string requirementName, string academicYear, int semester)
@@ -360,11 +382,7 @@ namespace PSUEISKOLARSystem.Server.Services
                     """
             }.ToMessageBody();
 
-            using var client = new SmtpClient();
-            await client.ConnectAsync(_s.SmtpHost, _s.SmtpPort, SecureSocketOptions.StartTls);
-            await client.AuthenticateAsync(_s.Username, _s.Password);
-            await client.SendAsync(message);
-            await client.DisconnectAsync(true);
+            await SendMessageAsync(message);
         }
 
         public async Task SendAnnouncementEmailAsync(string toEmail, string toName, string title, string content)
@@ -433,11 +451,7 @@ namespace PSUEISKOLARSystem.Server.Services
                     """
             }.ToMessageBody();
 
-            using var client = new SmtpClient();
-            await client.ConnectAsync(_s.SmtpHost, _s.SmtpPort, SecureSocketOptions.StartTls);
-            await client.AuthenticateAsync(_s.Username, _s.Password);
-            await client.SendAsync(message);
-            await client.DisconnectAsync(true);
+            await SendMessageAsync(message);
         }
 
         public async Task SendScholarWelcomeAsync(string toEmail, string toName, string tempPassword, string verifyLink)
@@ -521,11 +535,7 @@ namespace PSUEISKOLARSystem.Server.Services
                     """
             }.ToMessageBody();
 
-            using var client = new SmtpClient();
-            await client.ConnectAsync(_s.SmtpHost, _s.SmtpPort, SecureSocketOptions.StartTls);
-            await client.AuthenticateAsync(_s.Username, _s.Password);
-            await client.SendAsync(message);
-            await client.DisconnectAsync(true);
+            await SendMessageAsync(message);
         }
 
         // HTML-encode any value that carries user-authored or free-text content before it
@@ -597,11 +607,7 @@ namespace PSUEISKOLARSystem.Server.Services
                     """
             }.ToMessageBody();
 
-            using var client = new SmtpClient();
-            await client.ConnectAsync(_s.SmtpHost, _s.SmtpPort, SecureSocketOptions.StartTls);
-            await client.AuthenticateAsync(_s.Username, _s.Password);
-            await client.SendAsync(message);
-            await client.DisconnectAsync(true);
+            await SendMessageAsync(message);
         }
 
         public async Task SendDocumentStatusEmailAsync(string toEmail, string toName, string requirementName, string status, string? feedback)
@@ -690,11 +696,7 @@ namespace PSUEISKOLARSystem.Server.Services
                     """
             }.ToMessageBody();
 
-            using var client = new SmtpClient();
-            await client.ConnectAsync(_s.SmtpHost, _s.SmtpPort, SecureSocketOptions.StartTls);
-            await client.AuthenticateAsync(_s.Username, _s.Password);
-            await client.SendAsync(message);
-            await client.DisconnectAsync(true);
+            await SendMessageAsync(message);
         }
     }
 }

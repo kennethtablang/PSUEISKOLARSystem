@@ -1,4 +1,5 @@
 using System.Text;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -37,6 +38,11 @@ namespace PSUEISKOLARSystem.Server
                     options.Password.RequireUppercase = true;
                     options.Password.RequireNonAlphanumeric = true;
                     options.User.RequireUniqueEmail = true;
+
+                    // Lockout / brute-force protection: 5 failed attempts → 15-minute cooldown.
+                    options.Lockout.MaxFailedAccessAttempts = 5;
+                    options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
+                    options.Lockout.AllowedForNewUsers = true;
                 })
                 .AddEntityFrameworkStores<ApplicationDbContext>()
                 .AddDefaultTokenProviders();
@@ -114,6 +120,22 @@ namespace PSUEISKOLARSystem.Server
                 });
             });
 
+            // Rate limiting for sensitive auth endpoints (anti brute-force / abuse).
+            // Partitioned by client IP: max 10 requests per minute per IP on the "auth" policy.
+            builder.Services.AddRateLimiter(options =>
+            {
+                options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+                options.AddPolicy("auth", httpContext =>
+                    RateLimitPartition.GetFixedWindowLimiter(
+                        partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                        factory: _ => new FixedWindowRateLimiterOptions
+                        {
+                            PermitLimit = 10,
+                            Window = TimeSpan.FromMinutes(1),
+                            QueueLimit = 0,
+                        }));
+            });
+
             var app = builder.Build();
 
             using (var scope = app.Services.CreateScope())
@@ -138,6 +160,8 @@ namespace PSUEISKOLARSystem.Server
             }
 
             app.UseHttpsRedirection();
+
+            app.UseRateLimiter();
 
             app.UseAuthentication();
             app.UseAuthorization();

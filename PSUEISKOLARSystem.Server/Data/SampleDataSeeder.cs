@@ -110,7 +110,7 @@ namespace PSUEISKOLARSystem.Server.Data
                     Title = "Submit your Certificate of Registration",
                     Content = "All scholars must submit their COR for the current semester.",
                     TargetRole = UserRoles.Scholar,
-                    IntentAction = "SubmitDocuments",
+                    IntentAction = AnnouncementIntents.SubmitDocuments,
                     CreatedById = admin.Id,
                 });
                 annCount += 2;

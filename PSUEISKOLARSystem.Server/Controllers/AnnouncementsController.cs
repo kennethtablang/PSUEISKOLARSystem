@@ -96,6 +96,9 @@ namespace PSUEISKOLARSystem.Server.Controllers
         [Authorize(Roles = $"{UserRoles.Administrator},{UserRoles.ScholarshipCoordinator}")]
         public async Task<IActionResult> Create(AnnouncementRequest dto)
         {
+            if (!string.IsNullOrWhiteSpace(dto.IntentAction) && !AnnouncementIntents.IsValid(dto.IntentAction))
+                return BadRequest(new { message = $"Unknown intended action '{dto.IntentAction}'." });
+
             var announcement = new Announcement
             {
                 Title = dto.Title,
@@ -125,7 +128,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     scholars.Select(s => s.Id),
                     announcement.Title,
                     preview,
-                    "Announcement",
+                    NotificationCategories.Announcement,
                     "/dashboard");
 
                 // Email only scholars who opted in to announcement emails (FR-20).
@@ -188,6 +191,9 @@ namespace PSUEISKOLARSystem.Server.Controllers
         [Authorize(Roles = $"{UserRoles.Administrator},{UserRoles.ScholarshipCoordinator}")]
         public async Task<IActionResult> Update(int id, AnnouncementRequest dto)
         {
+            if (!string.IsNullOrWhiteSpace(dto.IntentAction) && !AnnouncementIntents.IsValid(dto.IntentAction))
+                return BadRequest(new { message = $"Unknown intended action '{dto.IntentAction}'." });
+
             var announcement = await db.Announcements.FindAsync(id);
             if (announcement is null) return NotFound();
 

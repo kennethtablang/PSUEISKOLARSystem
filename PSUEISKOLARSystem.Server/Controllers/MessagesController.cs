@@ -151,7 +151,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     recipientIds,
                     $"New message from {senderName}",
                     preview,
-                    "Message",
+                    NotificationCategories.Message,
                     "/messages");
 
                 // When a coordinator/admin messages a scholar, also email the scholar (FR add-on).

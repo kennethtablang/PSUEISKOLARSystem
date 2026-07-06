@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using PSUEISKOLARSystem.Server.Data;
 using PSUEISKOLARSystem.Server.Interfaces;
+using PSUEISKOLARSystem.Server.Models.Enums;
 
 namespace PSUEISKOLARSystem.Server.Services
 {
@@ -69,7 +70,7 @@ namespace PSUEISKOLARSystem.Server.Services
                     targetIds,
                     $"Deadline approaching: {d.Requirement.Name}",
                     $"Your \"{d.Requirement.Name}\" is due {d.DueDate:MMM d, yyyy}. Please submit before the deadline.",
-                    "Deadline",
+                    NotificationCategories.Deadline,
                     "/my-documents");
 
                 d.RemindersSentAt = now;

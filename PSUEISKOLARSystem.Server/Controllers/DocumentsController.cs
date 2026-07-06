@@ -282,7 +282,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 $"Document {status}",
                 $"Your \"{requirementName}\" submission was marked {status}." +
                     (string.IsNullOrWhiteSpace(dto.FeedbackNote) ? "" : $" Note: {dto.FeedbackNote}"),
-                "DocumentStatus",
+                NotificationCategories.DocumentStatus,
                 "/my-documents");
 
             _ = notifications.BroadcastAsync("AnalyticsChanged");
@@ -346,7 +346,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     $"Document {status}",
                     $"Your \"{requirementName}\" submission was marked {status}." +
                         (string.IsNullOrWhiteSpace(dto.FeedbackNote) ? "" : $" Note: {dto.FeedbackNote}"),
-                    "DocumentStatus",
+                    NotificationCategories.DocumentStatus,
                     "/my-documents");
 
                 if (submission.Scholar?.Email is not null && submission.Scholar.EmailDocumentStatus)

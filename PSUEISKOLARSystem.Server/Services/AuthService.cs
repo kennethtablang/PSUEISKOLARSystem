@@ -33,11 +33,62 @@ namespace PSUEISKOLARSystem.Server.Services
                 .Include(u => u.Campus)
                 .FirstOrDefaultAsync(u => u.Email == request.Email);
 
-            if (user is null || !user.IsActive || !await userManager.CheckPasswordAsync(user, request.Password))
+            // Unknown or deactivated account — fail generically without revealing which.
+            if (user is null || !user.IsActive)
+            {
+                dbContext.AuditLogs.Add(new AuditLog
+                {
+                    UserId  = user?.Id ?? "(unknown)",
+                    Action  = "LoginFailed",
+                    Details = $"Failed login for '{request.Email}': {(user is null ? "no such account" : "account inactive")}",
+                });
+                await dbContext.SaveChangesAsync();
                 throw new UnauthorizedException("Invalid email or password.");
+            }
+
+            // Enforce lockout before checking the password (brute-force protection).
+            if (await userManager.IsLockedOutAsync(user))
+            {
+                dbContext.AuditLogs.Add(new AuditLog
+                {
+                    UserId  = user.Id,
+                    Action  = "LoginFailed",
+                    Details = $"Login blocked for '{request.Email}': account locked out",
+                });
+                await dbContext.SaveChangesAsync();
+                throw new UnauthorizedException("Account is temporarily locked due to too many failed attempts. Please try again in a few minutes.");
+            }
+
+            if (!await userManager.CheckPasswordAsync(user, request.Password))
+            {
+                await userManager.AccessFailedAsync(user);   // increments the counter; locks at the threshold
+                var lockedNow = await userManager.IsLockedOutAsync(user);
+                dbContext.AuditLogs.Add(new AuditLog
+                {
+                    UserId  = user.Id,
+                    Action  = "LoginFailed",
+                    Details = $"Failed login for '{request.Email}': incorrect password{(lockedNow ? " (account now locked out)" : "")}",
+                });
+                await dbContext.SaveChangesAsync();
+                throw new UnauthorizedException(lockedNow
+                    ? "Account is temporarily locked due to too many failed attempts. Please try again in a few minutes."
+                    : "Invalid email or password.");
+            }
+
+            // Correct password — clear any accumulated failed attempts.
+            await userManager.ResetAccessFailedCountAsync(user);
 
             if (!user.EmailConfirmed)
+            {
+                dbContext.AuditLogs.Add(new AuditLog
+                {
+                    UserId  = user.Id,
+                    Action  = "LoginFailed",
+                    Details = $"Failed login for '{request.Email}': email not verified",
+                });
+                await dbContext.SaveChangesAsync();
                 throw new UnauthorizedException("Your email address has not been verified. Please check your inbox and click the verification link before signing in.");
+            }
 
             if (user.TwoFactorEnabled)
             {
@@ -239,6 +290,13 @@ namespace PSUEISKOLARSystem.Server.Services
             if (!isValid)
             {
                 await userManager.AccessFailedAsync(user);
+                dbContext.AuditLogs.Add(new AuditLog
+                {
+                    UserId  = user.Id,
+                    Action  = "LoginFailed",
+                    Details = $"Failed 2FA verification for '{user.Email}': invalid code",
+                });
+                await dbContext.SaveChangesAsync();
                 throw new UnauthorizedException("Invalid authentication code.");
             }
 
