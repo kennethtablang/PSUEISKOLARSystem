@@ -11,6 +11,12 @@ import { TableSkeleton, EmptyState } from '../components/ListState';
 import { useTitle } from '../hooks/useTitle';
 import { ctlStyle } from '../constants/ui';
 import { useToast, useConfirm } from '../context/UIContext';
+import PasswordStrengthMeter, { getPasswordStrength } from '../components/PasswordStrengthMeter';
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+function FieldError({ children }) {
+  return children ? <p className="text-xs mt-1 font-medium" style={{ color: '#dc2626' }}>{children}</p> : null;
+}
 
 const ROLES = ['Administrator', 'ScholarshipCoordinator', 'Scholar'];
 
@@ -394,8 +400,13 @@ function CreateUserModal({ campuses, token, onClose, onCreated }) {
 
   function set(field, value) { setForm(f => ({ ...f, [field]: value })); }
 
+  const emailError = form.email && !EMAIL_RE.test(form.email.trim()) ? 'Enter a valid email address.' : '';
+  const passwordOk = getPasswordStrength(form.password).passed === 5;
+  const canSubmit = form.firstName.trim() && form.lastName.trim() && !emailError && form.email && passwordOk;
+
   async function handleSubmit(e) {
     e.preventDefault();
+    if (!canSubmit) return;
     setError('');
     setSubmitting(true);
     try {
@@ -433,9 +444,11 @@ function CreateUserModal({ campuses, token, onClose, onCreated }) {
         </Field>
         <Field label="Email Address">
           <input type="email" required value={form.email} onChange={e => set('email', e.target.value)} className="clay-input" placeholder="juan@psu.edu.ph" />
+          <FieldError>{emailError}</FieldError>
         </Field>
         <Field label="Password">
           <input type="password" required minLength={8} value={form.password} onChange={e => set('password', e.target.value)} className="clay-input" placeholder="Min. 8 characters" />
+          <PasswordStrengthMeter password={form.password} />
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Role">
@@ -450,7 +463,7 @@ function CreateUserModal({ campuses, token, onClose, onCreated }) {
             </select>
           </Field>
         </div>
-        <ModalButtons onClose={onClose} submitting={submitting} label="Create User" />
+        <ModalButtons onClose={onClose} submitting={submitting} disabled={!canSubmit} label="Create User" />
       </form>
     </ClayModal>
   );
@@ -471,8 +484,12 @@ function EditUserModal({ user, campuses, token, onClose, onSaved }) {
 
   function set(field, value) { setForm(f => ({ ...f, [field]: value })); }
 
+  const emailError = form.email && !EMAIL_RE.test(form.email.trim()) ? 'Enter a valid email address.' : '';
+  const canSubmit = form.firstName.trim() && form.lastName.trim() && form.email && !emailError;
+
   async function handleSubmit(e) {
     e.preventDefault();
+    if (!canSubmit) return;
     setError('');
     setSubmitting(true);
     try {
@@ -509,6 +526,7 @@ function EditUserModal({ user, campuses, token, onClose, onSaved }) {
         </Field>
         <Field label="Email / Login">
           <input required type="email" value={form.email} onChange={e => set('email', e.target.value)} className="clay-input" />
+          <FieldError>{emailError}</FieldError>
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Role">
@@ -523,7 +541,7 @@ function EditUserModal({ user, campuses, token, onClose, onSaved }) {
             </select>
           </Field>
         </div>
-        <ModalButtons onClose={onClose} submitting={submitting} label="Save Changes" />
+        <ModalButtons onClose={onClose} submitting={submitting} disabled={!canSubmit} label="Save Changes" />
       </form>
     </ClayModal>
   );
@@ -559,11 +577,12 @@ export function Field({ label, children }) {
   );
 }
 
-export function ModalButtons({ onClose, submitting, label }) {
+export function ModalButtons({ onClose, submitting, label, disabled = false }) {
+  const off = submitting || disabled;
   return (
     <div className="flex gap-3 pt-2">
       <button type="button" onClick={onClose} className="clay-btn clay-btn-ghost flex-1 py-2.5 text-sm">Cancel</button>
-      <button type="submit" disabled={submitting} className="clay-btn clay-btn-primary flex-1 py-2.5 text-sm" style={{ opacity: submitting ? 0.65 : 1 }}>
+      <button type="submit" disabled={off} className="clay-btn clay-btn-primary flex-1 py-2.5 text-sm" style={{ opacity: off ? 0.65 : 1 }}>
         {submitting ? 'Saving…' : label}
       </button>
     </div>

@@ -228,14 +228,16 @@ function ScholarshipTypeModal({ initial, allRequirements, token, onClose, onSave
     }));
   }
 
+  const gwaVal = parseFloat(form.minimumGwa);
+  const gwaError = form.minimumGwa !== '' && (isNaN(gwaVal) || gwaVal < 1 || gwaVal > 5)
+    ? 'Minimum GWA must be between 1.00 and 5.00.' : '';
+  const canSubmit = form.name.trim() && form.minimumGwa !== '' && !gwaError;
+
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
+    if (!canSubmit) return;
     const gwa = parseFloat(form.minimumGwa);
-    if (isNaN(gwa) || gwa < 1 || gwa > 5) {
-      setError('Minimum GWA must be between 1.00 and 5.00');
-      return;
-    }
     setSubmitting(true);
     try {
       const payload = {
@@ -312,9 +314,11 @@ function ScholarshipTypeModal({ initial, allRequirements, token, onClose, onSave
             className="clay-input"
             style={{ maxWidth: 120 }}
           />
-          <p className="text-xs mt-1" style={{ color: '#7a8aaa' }}>
-            Scholars below this GWA will be flagged. (1.00 = highest, 5.00 = lowest)
-          </p>
+          {gwaError
+            ? <p className="text-xs mt-1 font-medium" style={{ color: '#dc2626' }}>{gwaError}</p>
+            : <p className="text-xs mt-1" style={{ color: '#7a8aaa' }}>
+                Scholars below this GWA will be flagged. (1.00 = highest, 5.00 = lowest)
+              </p>}
         </Field>
 
         <div>
@@ -369,6 +373,7 @@ function ScholarshipTypeModal({ initial, allRequirements, token, onClose, onSave
         <ModalButtons
           onClose={onClose}
           submitting={submitting}
+          disabled={!canSubmit}
           label={initial ? 'Save Changes' : 'Create Scholarship Type'}
         />
       </form>

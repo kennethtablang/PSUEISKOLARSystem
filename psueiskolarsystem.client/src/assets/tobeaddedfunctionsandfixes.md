@@ -67,7 +67,7 @@
 - [x] Add loading **skeletons** and standardize empty states across list pages.
 
 ## Validation
-- Several modals still lack **inline, field-level** validation (they rely on server 400s or `alert`).
+- [x] Several modals still lack **inline, field-level** validation (they rely on server 400s or `alert`).
 - [x] No client-side size/type feedback before image uploads (server enforces 10 MB + extension).
 - [x] Announcement `ExpiresAt` can be set in the past with no warning.
 - [x] Email uniqueness is only caught on submit — no live "email already taken" check.
