@@ -5,6 +5,7 @@ import { getRequirements, createRequirement, updateRequirement, deleteRequiremen
   uploadRequirementSample, getRequirementSample, deleteRequirementSample } from '../api/documents';
 import { useTitle } from '../hooks/useTitle';
 import { ClayModal, ErrorBox, Field, ModalButtons } from './UsersPage';
+import { TableSkeleton, EmptyState } from '../components/ListState';
 import { ImageIcon, X } from 'lucide-react';
 
 export default function RequirementsPage() {
@@ -94,9 +95,9 @@ export default function RequirementsPage() {
 
         <div className="clay-card overflow-hidden">
           {loading ? (
-            <p className="text-center py-12 text-sm" style={{ color: '#7a8aaa' }}>Loading…</p>
+            <TableSkeleton />
           ) : displayed.length === 0 ? (
-            <p className="text-center py-12 text-sm" style={{ color: '#7a8aaa' }}>No requirements found.</p>
+            <EmptyState title="No requirements found" message="Add a document requirement to get started." />
           ) : (
             <div className="overflow-x-auto"><table className="w-full min-w-[640px] text-sm">
               <thead className="clay-table-head">

@@ -7,6 +7,7 @@ import { getCampuses } from '../api/campuses';
 import { downloadImportTemplate, importScholars, triggerDownload } from '../api/userImport';
 import { Upload, Download, CheckCircle2, XCircle } from 'lucide-react';
 import Pagination from '../components/Pagination';
+import { TableSkeleton, EmptyState } from '../components/ListState';
 import { useTitle } from '../hooks/useTitle';
 import { ctlStyle } from '../constants/ui';
 
@@ -148,9 +149,9 @@ export default function UsersPage() {
 
         <div className="clay-card overflow-hidden">
           {loading ? (
-            <p className="text-center py-12 text-sm" style={{ color: '#7a8aaa' }}>Loading…</p>
+            <TableSkeleton />
           ) : users.length === 0 ? (
-            <p className="text-center py-12 text-sm" style={{ color: '#7a8aaa' }}>No users found.</p>
+            <EmptyState title="No users found" message="Try adjusting your filters, or add a new user." />
           ) : (
             <div className="overflow-x-auto"><table className="w-full min-w-[640px] text-sm">
               <thead className="clay-table-head">

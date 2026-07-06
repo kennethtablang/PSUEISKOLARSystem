@@ -8,6 +8,7 @@ import {
 import { getRequirements } from '../api/documents';
 import { useTitle } from '../hooks/useTitle';
 import { ErrorBox, Field, ModalButtons } from './UsersPage';
+import { TableSkeleton, EmptyState } from '../components/ListState';
 
 export default function ScholarshipTypesPage() {
   useTitle('Scholarship Types');
@@ -93,9 +94,9 @@ export default function ScholarshipTypesPage() {
 
         <div className="clay-card overflow-hidden">
           {loading ? (
-            <p className="text-center py-12 text-sm" style={{ color: '#7a8aaa' }}>Loading…</p>
+            <TableSkeleton />
           ) : displayed.length === 0 ? (
-            <p className="text-center py-12 text-sm" style={{ color: '#7a8aaa' }}>No scholarship types found.</p>
+            <EmptyState title="No scholarship types found" message="Create a scholarship type to get started." />
           ) : (
             <div className="overflow-x-auto"><table className="w-full min-w-[640px] text-sm">
               <thead className="clay-table-head">

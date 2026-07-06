@@ -225,16 +225,16 @@ export default function DashboardPage() {
         {user?.role !== 'Scholar' && renewal?.count > 0 && (
           <Link to="/scholars?status=Lapsed" className="block mb-8">
             <div className="rounded-3xl p-5 flex items-center gap-4"
-              style={{ background: '#fff2ec', boxShadow: '6px 6px 16px rgba(163,177,198,0.5), -4px -4px 12px rgba(255,255,255,0.85)' }}>
+              style={{ background: 'rgba(240,120,50,0.13)', border: '1.5px solid rgba(240,120,50,0.3)', boxShadow: '4px 4px 14px rgba(0,0,0,0.06)' }}>
               <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0"
-                style={{ background: 'rgba(255,255,255,0.6)' }}>
+                style={{ background: 'rgba(240,120,50,0.18)' }}>
                 <RefreshCw size={20} strokeWidth={2} style={{ color: '#c05000' }} />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-black" style={{ color: 'var(--text-strong)' }}>
                   {renewal.count} scholar{renewal.count !== 1 ? 's' : ''} need renewal attention
                 </p>
-                <p className="text-xs mt-0.5" style={{ color: '#7a3010' }}>
+                <p className="text-xs mt-0.5" style={{ color: '#c86020' }}>
                   Scholars marked Lapsed or Suspended — review their standing.
                 </p>
               </div>
@@ -361,13 +361,13 @@ export default function DashboardPage() {
 
             {/* Incomplete items list */}
             {compliance.incompleteItems.length > 0 && (
-              <div className="clay-card p-5" style={{ background: '#fffbe8', border: '1.5px solid #f5d060' }}>
-                <p className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: '#7a5500' }}>
+              <div className="clay-card p-5" style={{ background: 'rgba(245,200,60,0.13)', border: '1.5px solid rgba(245,200,60,0.4)' }}>
+                <p className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: '#b58600' }}>
                   Needs Resubmission
                 </p>
                 <ul className="space-y-1.5">
                   {compliance.incompleteItems.map(name => (
-                    <li key={name} className="flex items-center gap-2 text-sm" style={{ color: '#7a5500' }}>
+                    <li key={name} className="flex items-center gap-2 text-sm" style={{ color: '#b58600' }}>
                       <AlertTriangle size={13} strokeWidth={2.5} />
                       {name}
                     </li>

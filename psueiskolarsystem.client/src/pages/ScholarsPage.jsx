@@ -6,6 +6,7 @@ import { getScholars } from '../api/scholars';
 import { getCampuses } from '../api/campuses';
 import { getPrograms, getScholarshipTypes } from '../api/lookups';
 import Pagination from '../components/Pagination';
+import { TableSkeleton, EmptyState } from '../components/ListState';
 import { useTitle } from '../hooks/useTitle';
 import { ctlStyle } from '../constants/ui';
 
@@ -148,9 +149,9 @@ export default function ScholarsPage() {
 
         <div className="clay-card overflow-hidden">
           {loading ? (
-            <p className="text-center py-12 text-sm" style={{ color: '#7a8aaa' }}>Loading…</p>
+            <TableSkeleton />
           ) : scholars.length === 0 ? (
-            <p className="text-center py-12 text-sm" style={{ color: '#7a8aaa' }}>No scholars found.</p>
+            <EmptyState title="No scholars found" message="Try adjusting your filters." />
           ) : (
             <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-sm">
               <thead className="clay-table-head">

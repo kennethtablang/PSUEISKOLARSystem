@@ -55,16 +55,16 @@
 # To Be Fixed
 
 ## Bugs
-- **Dark mode gaps:** a few colored surfaces (renewal/alert cards, some inline `#fff`/tinted boxes) stay light in dark mode → reduced contrast.
+- [x] **Dark mode gaps:** a few colored surfaces (renewal/alert cards, some inline `#fff`/tinted boxes) stay light in dark mode → reduced contrast.
 - [x] **Dead code:** `components/AnnouncementCard.jsx` is not imported anywhere (pages use their own inline card) — remove or wire it up.
-- **Fire-and-forget scoped services:** announcement/message emails and announcement notifications run after the HTTP response using request-scoped services (`DbContext`, `IEmailService`) — risk of a disposed context under load. Move to a background queue or create a fresh scope.
+- [x] **Fire-and-forget scoped services:** announcement/message emails and announcement notifications run after the HTTP response using request-scoped services (`DbContext`, `IEmailService`) — risk of a disposed context under load. Move to a background queue or create a fresh scope.
 - [x] Email send failures are silently swallowed with no retry or admin visibility.
 
 ## UI/UX
 - Replace `alert()` / `confirm()` calls with in-app **toasts/modals** for a consistent look.
 - [x] Wide tables overflow on small screens — wrap them in `overflow-x-auto` containers.
 - Messaging on mobile renders both the thread list and conversation — add a single-pane, back-button flow.
-- Add loading **skeletons** and standardize empty states across list pages.
+- [x] Add loading **skeletons** and standardize empty states across list pages.
 
 ## Validation
 - Several modals still lack **inline, field-level** validation (they rely on server 400s or `alert`).
@@ -104,4 +104,6 @@
 - [x] We need to add a ask again for the logout function. 
 - When the student is newly register to the system then the first thing that thhe student needs to do is to Setup their account details and information about them. 
 - [x] Add a favicon
+- Work on the overall transitions and animations all over the system
+- Check responsiveness of the system
 - 

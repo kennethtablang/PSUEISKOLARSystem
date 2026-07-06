@@ -332,13 +332,13 @@ export default function MyDocumentsPage() {
         {preview && (
           <div
             className="flex flex-col"
-            style={{ width: '50%', minHeight: 0, background: '#f4f6fa' }}
+            style={{ width: '50%', minHeight: 0, background: 'var(--bg)' }}
           >
             {/* Panel header */}
             <div className="flex items-center justify-between gap-3 px-5 py-3 shrink-0"
               style={{
-                background: '#fff',
-                borderBottom: '1.5px solid #d8e2f0',
+                background: 'var(--surface-modal)',
+                borderBottom: '1.5px solid rgba(0,48,135,0.12)',
                 boxShadow: '0 2px 0 rgba(0,37,112,0.04)',
               }}>
               <div className="flex items-center gap-2.5 min-w-0">

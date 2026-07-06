@@ -19,7 +19,8 @@ namespace PSUEISKOLARSystem.Server.Controllers
         ApplicationDbContext db,
         INotificationService notifications,
         IEmailService emailService,
-        IHubContext<NotificationHub> hub) : ControllerBase
+        IHubContext<NotificationHub> hub,
+        IServiceScopeFactory scopeFactory) : ControllerBase
     {
         private string UserId => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
         private bool IsStaff => User.IsInRole(UserRoles.Administrator) || User.IsInRole(UserRoles.ScholarshipCoordinator);
@@ -215,9 +216,15 @@ namespace PSUEISKOLARSystem.Server.Controllers
             return Ok(new { count });
         }
 
+        // Runs after the response returns — use a fresh scope, not the request-scoped emailService.
         private async Task SendMessageEmailSafeAsync(string email, string name, string senderName, string preview)
         {
-            try { await emailService.SendMessageEmailAsync(email, name, senderName, preview); }
+            try
+            {
+                using var scope = scopeFactory.CreateScope();
+                var scopedEmail = scope.ServiceProvider.GetRequiredService<IEmailService>();
+                await scopedEmail.SendMessageEmailAsync(email, name, senderName, preview);
+            }
             catch { /* fire-and-forget */ }
         }
 

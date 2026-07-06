@@ -13,7 +13,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
     [ApiController]
     [Route("api/[controller]")]
     [Authorize]
-    public class AnnouncementsController(ApplicationDbContext db, IEmailService emailService, INotificationService notifications, IFileStorageService storage) : ControllerBase
+    public class AnnouncementsController(ApplicationDbContext db, IEmailService emailService, INotificationService notifications, IFileStorageService storage, IServiceScopeFactory scopeFactory) : ControllerBase
     {
         [HttpGet]
         public async Task<IActionResult> GetAll()
@@ -164,13 +164,18 @@ namespace PSUEISKOLARSystem.Server.Controllers
             return scholars.Select(u => new TargetedScholar(u.Id, u.Email!, u.FullName, u.EmailAnnouncements)).ToList();
         }
 
+        // Runs after the HTTP response returns, so it must NOT use the request-scoped
+        // emailService (its scope is disposed by then). Resolve a fresh one in a new scope.
         private async Task SendAnnouncementEmailsAsync(List<TargetedScholar> scholars, string title, string content)
         {
+            using var scope = scopeFactory.CreateScope();
+            var scopedEmail = scope.ServiceProvider.GetRequiredService<IEmailService>();
+
             foreach (var scholar in scholars)
             {
                 try
                 {
-                    await emailService.SendAnnouncementEmailAsync(scholar.Email, scholar.FullName, title, content);
+                    await scopedEmail.SendAnnouncementEmailAsync(scholar.Email, scholar.FullName, title, content);
                 }
                 catch { /* don't let one failed email abort the rest */ }
             }

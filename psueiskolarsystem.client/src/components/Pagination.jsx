@@ -12,7 +12,7 @@ export default function Pagination({ page, totalPages, total, pageSize, onPageCh
           value={pageSize}
           onChange={e => onPageSizeChange(Number(e.target.value))}
           className="rounded-lg px-2 py-1"
-          style={{ border: '1px solid rgba(0,48,135,0.14)', background: '#fff', color: 'var(--text-strong)', fontWeight: 600 }}
+          style={{ border: '1px solid rgba(0,48,135,0.14)', background: 'var(--surface-2)', color: 'var(--text-strong)', fontWeight: 600 }}
         >
           {PAGE_SIZES.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
@@ -24,7 +24,7 @@ export default function Pagination({ page, totalPages, total, pageSize, onPageCh
           onClick={() => onPageChange(page - 1)}
           disabled={page <= 1}
           className="w-8 h-8 rounded-lg flex items-center justify-center"
-          style={{ border: '1px solid rgba(0,48,135,0.14)', background: '#fff', opacity: page <= 1 ? 0.4 : 1, cursor: page <= 1 ? 'default' : 'pointer' }}
+          style={{ border: '1px solid rgba(0,48,135,0.14)', background: 'var(--surface-2)', opacity: page <= 1 ? 0.4 : 1, cursor: page <= 1 ? 'default' : 'pointer' }}
         >
           <ChevronLeft size={15} strokeWidth={2.4} color="#003087" />
         </button>
@@ -35,7 +35,7 @@ export default function Pagination({ page, totalPages, total, pageSize, onPageCh
           onClick={() => onPageChange(page + 1)}
           disabled={page >= totalPages}
           className="w-8 h-8 rounded-lg flex items-center justify-center"
-          style={{ border: '1px solid rgba(0,48,135,0.14)', background: '#fff', opacity: page >= totalPages ? 0.4 : 1, cursor: page >= totalPages ? 'default' : 'pointer' }}
+          style={{ border: '1px solid rgba(0,48,135,0.14)', background: 'var(--surface-2)', opacity: page >= totalPages ? 0.4 : 1, cursor: page >= totalPages ? 'default' : 'pointer' }}
         >
           <ChevronRight size={15} strokeWidth={2.4} color="#003087" />
         </button>

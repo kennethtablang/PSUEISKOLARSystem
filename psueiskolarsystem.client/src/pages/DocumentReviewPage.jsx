@@ -6,6 +6,7 @@ import { getActiveSemester } from '../api/settings';
 import { useTitle } from '../hooks/useTitle';
 import { CheckCircle2, XCircle } from 'lucide-react';
 import Pagination from '../components/Pagination';
+import { TableSkeleton, EmptyState } from '../components/ListState';
 import { ctlStyle } from '../constants/ui';
 
 const STATUSES = ['', 'Pending', 'Verified', 'Incomplete'];
@@ -166,9 +167,9 @@ export default function DocumentReviewPage() {
 
         <div className="clay-card overflow-hidden">
           {loading ? (
-            <p className="text-center py-12 text-sm" style={{ color: '#7a8aaa' }}>Loading…</p>
+            <TableSkeleton />
           ) : filtered.length === 0 ? (
-            <p className="text-center py-12 text-sm" style={{ color: '#7a8aaa' }}>No submissions match the current filters.</p>
+            <EmptyState title="No submissions found" message="No submissions match the current filters." />
           ) : (
             <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-sm">
               <thead className="clay-table-head">
