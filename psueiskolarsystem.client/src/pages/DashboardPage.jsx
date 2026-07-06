@@ -4,6 +4,7 @@ import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { getAnnouncements } from '../api/announcements';
 import AnnouncementCard from '../components/AnnouncementCard';
+import CollapsibleSection from '../components/CollapsibleSection';
 import { getScholarProfile, getScholars } from '../api/scholars';
 import { getUsers } from '../api/users';
 import { getRecentActivity } from '../api/auditLog';
@@ -406,8 +407,7 @@ export default function DashboardPage() {
 
         {/* Recent activity (staff) */}
         {user?.role !== 'Scholar' && activity.length > 0 && (
-          <div>
-            <h2 className="text-base font-black mb-4" style={{ color: 'var(--text-strong)' }}>Recent Activity</h2>
+          <CollapsibleSection id="recent-activity" title="Recent Activity">
             <div className="clay-card divide-y" style={{ borderColor: 'transparent' }}>
               {activity.map(a => (
                 <div key={a.id} className="flex items-start gap-3 px-5 py-3.5" style={{ borderTop: '1px solid rgba(0,48,135,0.05)' }}>
@@ -424,12 +424,11 @@ export default function DashboardPage() {
                 </div>
               ))}
             </div>
-          </div>
+          </CollapsibleSection>
         )}
 
         {/* Announcements */}
-        <div>
-          <h2 className="text-base font-black mb-4" style={{ color: 'var(--text-strong)' }}>Announcements</h2>
+        <CollapsibleSection id="announcements" title="Announcements">
           {announcements.length === 0 ? (
             <div className="clay-card p-8 text-center">
               <Inbox size={32} strokeWidth={1.5} className="mx-auto mb-3" style={{ color: '#b0bdd0' }} />
@@ -440,7 +439,7 @@ export default function DashboardPage() {
               {announcements.map(a => <AnnouncementCard key={a.id} a={a} variant="feed" />)}
             </div>
           )}
-        </div>
+        </CollapsibleSection>
       </div>
     </Layout>
   );

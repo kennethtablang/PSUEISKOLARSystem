@@ -95,10 +95,10 @@ export default function MessagesPage() {
     <Layout>
       <div className="flex h-full" style={{ minHeight: 0 }}>
 
-        {/* ── Thread list ── */}
-        <div className="flex flex-col shrink-0"
-          style={{ width: 320, borderRight: '1.5px solid #d8e2f0', display: selected ? undefined : 'flex' }}>
-          <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: '1.5px solid #eef2f9' }}>
+        {/* ── Thread list (single-pane on mobile: hidden once a thread is open) ── */}
+        <div className={`flex-col shrink-0 w-full lg:w-80 ${selected ? 'hidden lg:flex' : 'flex'}`}
+          style={{ borderRight: '1.5px solid var(--surface-inset)' }}>
+          <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: '1.5px solid var(--surface-inset)' }}>
             <div>
               <h1 className="text-lg font-black" style={{ color: 'var(--text-strong)' }}>Messages</h1>
               <p className="text-xs" style={{ color: '#7a8aaa' }}>{isStaff ? 'Scholar conversations' : 'Chat with your coordinator'}</p>
@@ -147,8 +147,8 @@ export default function MessagesPage() {
           </div>
         </div>
 
-        {/* ── Conversation ── */}
-        <div className="flex-1 flex flex-col" style={{ minWidth: 0, background: 'var(--bg)' }}>
+        {/* ── Conversation (single-pane on mobile: shown only when a thread is open) ── */}
+        <div className={`flex-1 flex-col ${selected ? 'flex' : 'hidden lg:flex'}`} style={{ minWidth: 0, background: 'var(--bg)' }}>
           {!selected ? (
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center">
@@ -160,7 +160,7 @@ export default function MessagesPage() {
             <>
               {/* Header */}
               <div className="px-5 py-3.5 flex items-center gap-3" style={{ background: 'var(--surface-2)', borderBottom: '1.5px solid var(--surface-inset)' }}>
-                <button onClick={() => setSelected(null)} className="lg:hidden w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: '#eef2f9' }}>
+                <button onClick={() => setSelected(null)} className="lg:hidden w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'var(--surface-inset)' }}>
                   <ArrowLeft size={16} color="#003087" />
                 </button>
                 <div className="min-w-0">

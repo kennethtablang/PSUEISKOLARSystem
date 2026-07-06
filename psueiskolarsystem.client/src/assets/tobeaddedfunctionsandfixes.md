@@ -25,7 +25,7 @@
 ## Dashboard
 - [x] Admin/coordinator: a **recent-activity feed** sourced from the audit log.
 - [x] Scholar: a stronger "next action" nudge when documents are Incomplete/missing (beyond the current CTA).
-- Collapsible/configurable dashboard widgets.
+- [x] Collapsible/configurable dashboard widgets.
 
 ## Reports
 - **PDF export** of reports (only Excel today; the SRS says "e.g. PDF/Excel").
@@ -63,7 +63,7 @@
 ## UI/UX
 - Replace `alert()` / `confirm()` calls with in-app **toasts/modals** for a consistent look.
 - [x] Wide tables overflow on small screens — wrap them in `overflow-x-auto` containers.
-- Messaging on mobile renders both the thread list and conversation — add a single-pane, back-button flow.
+- [x] Messaging on mobile renders both the thread list and conversation — add a single-pane, back-button flow.
 - [x] Add loading **skeletons** and standardize empty states across list pages.
 
 ## Validation
@@ -93,8 +93,8 @@
 - [x] Consolidate the duplicated announcement-card implementations.
 
 ## Others
-- No **deployment/backup guide** or CI pipeline (NFR-2.3 / 5.5 / 6.2).
-- Test coverage is minimal (2 suites) — extend to the deadline report, bulk import, and preference enforcement.
+- [x] No **deployment/backup guide** or CI pipeline (NFR-2.3 / 5.5 / 6.2).
+- [x] Test coverage is minimal (2 suites) — extend to the deadline report, bulk import, and preference enforcement.
 - No API **versioning** strategy.
 - [x] Add tabbing on the System Settings
 - We still need to fix the dark mode, there are components that are still not affected by the dark mode. 
@@ -102,7 +102,7 @@
 - [x] We need a details on the upload image on the announcement. We need to put what is the resolution needed for the image to be uploaded. 
 - Remove the other campuses we dont need those. We are focusing on a single campus and that is Lingayen Campus(main campus)
 - [x] We need to add a ask again for the logout function. 
-- When the student is newly register to the system then the first thing that thhe student needs to do is to Setup their account details and information about them. 
+- [x] When the student is newly register to the system then the first thing that thhe student needs to do is to Setup their account details and information about them. 
 - [x] Add a favicon
 - [x] Work on the overall transitions and animations all over the system
 - Check responsiveness of the system

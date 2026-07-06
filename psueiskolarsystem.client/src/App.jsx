@@ -5,6 +5,7 @@ import { NotificationProvider } from './context/NotificationContext';
 import { TutorialProvider } from './context/TutorialContext';
 import { ThemeProvider } from './context/ThemeContext';
 import ConsentGate from './components/ConsentGate';
+import OnboardingGate from './components/OnboardingGate';
 import { Clock } from 'lucide-react';
 import ProtectedRoute from './components/ProtectedRoute';
 import LandingPage from './pages/LandingPage';
@@ -43,6 +44,7 @@ export default function App() {
       <TutorialProvider>
         <SessionExpiredModal />
         <ConsentGate />
+        <OnboardingGate />
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
