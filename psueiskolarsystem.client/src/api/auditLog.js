@@ -11,6 +11,14 @@ export async function getAuditLog(token, { page = 1, pageSize = 50, search, acti
   return res.json();
 }
 
+export async function getRecentActivity(token, take = 8) {
+  const res = await fetch(`${API}/recent?take=${take}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error('Failed to load recent activity.');
+  return res.json();
+}
+
 export async function exportAuditLog(token, { search, action } = {}) {
   const params = new URLSearchParams();
   if (search) params.set('search', search);

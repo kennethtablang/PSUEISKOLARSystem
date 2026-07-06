@@ -1,14 +1,15 @@
 const API = '/api/users';
 
-export async function getUsers(token, { role, campusId } = {}) {
-  const params = new URLSearchParams();
+export async function getUsers(token, { role, campusId, search, page = 1, pageSize = 20 } = {}) {
+  const params = new URLSearchParams({ page, pageSize });
   if (role) params.set('role', role);
   if (campusId) params.set('campusId', campusId);
+  if (search) params.set('search', search);
   const res = await fetch(`${API}?${params}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error('Failed to load users.');
-  return res.json();
+  return res.json(); // { total, page, pageSize, items }
 }
 
 export async function updateUser(id, data, token) {

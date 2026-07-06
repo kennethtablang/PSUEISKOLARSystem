@@ -22,24 +22,51 @@ namespace PSUEISKOLARSystem.Server.Controllers
         ApplicationDbContext db) : ControllerBase
     {
         [HttpGet]
-        public async Task<IActionResult> GetAll([FromQuery] string? role, [FromQuery] int? campusId)
+        public async Task<IActionResult> GetAll(
+            [FromQuery] string? role,
+            [FromQuery] int? campusId,
+            [FromQuery] string? search,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 20)
         {
+            page     = Math.Max(1, page);
+            pageSize = Math.Clamp(pageSize, 5, 100);
+
             var query = db.Users.Include(u => u.Campus).AsQueryable();
 
             if (campusId.HasValue)
                 query = query.Where(u => u.CampusId == campusId);
 
-            var users = await query.OrderBy(u => u.LastName).ThenBy(u => u.FirstName).ToListAsync();
+            // Filter by role in SQL (join through AspNetUserRoles) instead of loading everyone.
+            if (!string.IsNullOrWhiteSpace(role))
+            {
+                var roleId = await db.Roles.Where(r => r.Name == role).Select(r => r.Id).FirstOrDefaultAsync();
+                var idsInRole = db.UserRoles.Where(ur => ur.RoleId == roleId).Select(ur => ur.UserId);
+                query = query.Where(u => idsInRole.Contains(u.Id));
+            }
 
-            var result = new List<object>();
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var s = search.Trim().ToLower();
+                query = query.Where(u =>
+                    EF.Functions.Like((u.FirstName + " " + u.LastName).ToLower(), $"%{s}%") ||
+                    (u.Email != null && EF.Functions.Like(u.Email.ToLower(), $"%{s}%")));
+            }
+
+            var total = await query.CountAsync();
+
+            var users = await query
+                .OrderBy(u => u.LastName).ThenBy(u => u.FirstName)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            // Roles fetched only for the current page (bounded), not every user.
+            var items = new List<UserDto>();
             foreach (var u in users)
             {
                 var roles = await userManager.GetRolesAsync(u);
-                var userRole = roles.FirstOrDefault() ?? string.Empty;
-
-                if (!string.IsNullOrEmpty(role) && userRole != role) continue;
-
-                result.Add(new UserDto
+                items.Add(new UserDto
                 {
                     Id = u.Id,
                     FirstName = u.FirstName,
@@ -47,14 +74,14 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     LastName = u.LastName,
                     FullName = u.FullName,
                     Email = u.Email ?? string.Empty,
-                    Role = userRole,
+                    Role = roles.FirstOrDefault() ?? string.Empty,
                     CampusId = u.CampusId,
                     CampusName = u.Campus?.Name,
                     IsActive = u.IsActive,
                 });
             }
 
-            return Ok(result);
+            return Ok(new { total, page, pageSize, items });
         }
 
         [HttpGet("{id}")]

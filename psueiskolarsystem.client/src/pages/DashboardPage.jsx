@@ -6,12 +6,13 @@ import { getAnnouncements } from '../api/announcements';
 import AnnouncementCard from '../components/AnnouncementCard';
 import { getScholarProfile, getScholars } from '../api/scholars';
 import { getUsers } from '../api/users';
+import { getRecentActivity } from '../api/auditLog';
 import { getAnalyticsOverview } from '../api/analytics';
 import { getSubmissions, getRequirements } from '../api/documents';
 import { getActiveSemester } from '../api/settings';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { getDeadlines } from '../api/deadlines';
-import { GraduationCap, ClipboardList, AlertTriangle, BarChart2, Inbox, Clock, FileCheck, ArrowRight, RefreshCw, CalendarClock, MessageSquare, Megaphone, FolderOpen, User } from 'lucide-react';
+import { GraduationCap, ClipboardList, AlertTriangle, BarChart2, Inbox, Clock, FileCheck, ArrowRight, RefreshCw, CalendarClock, MessageSquare, Megaphone, FolderOpen, User, Activity } from 'lucide-react';
 import { useTitle } from '../hooks/useTitle';
 
 export default function DashboardPage() {
@@ -24,6 +25,7 @@ export default function DashboardPage() {
   const [renewal, setRenewal] = useState(null); // { count } of lapsed/suspended scholars
   const [overview, setOverview] = useState(null); // full analytics overview (admin/coord)
   const [deadlines, setDeadlines] = useState([]); // upcoming deadlines (scholar)
+  const [activity, setActivity] = useState([]); // recent audit-log activity (staff)
 
   useEffect(() => {
     getAnnouncements(token).then(setAnnouncements).catch(() => {});
@@ -33,6 +35,7 @@ export default function DashboardPage() {
       loadScholarGwa();
     } else {
       loadRenewal();
+      getRecentActivity(token).then(setActivity).catch(() => {});
     }
   }, []);
 
@@ -49,14 +52,14 @@ export default function DashboardPage() {
   async function loadStats() {
     try {
       if (user?.role === 'Administrator') {
-        const [users, ov] = await Promise.all([
-          getUsers(token),
+        const [coords, ov] = await Promise.all([
+          getUsers(token, { role: 'ScholarshipCoordinator', pageSize: 100 }),
           getAnalyticsOverview(token),
         ]);
         setOverview(ov);
         setStats({
           totalScholars: ov.totalScholars,
-          coordinators: users.filter(u => u.role === 'ScholarshipCoordinator' && u.isActive).length,
+          coordinators: (coords.items ?? []).filter(u => u.isActive).length,
           flagged: ov.nonCompliant,
           pendingReview: ov.submissions.pending,
         });
@@ -143,6 +146,32 @@ export default function DashboardPage() {
           </p>
           <span className="page-title-bar" />
         </div>
+
+        {/* Scholar: prominent next-action nudge when documents need attention */}
+        {user?.role === 'Scholar' && compliance && (() => {
+          const missing = Math.max(0, (compliance.totalRequired ?? 0) - (compliance.verifiedCount ?? 0));
+          const incomplete = compliance.incompleteItems?.length ?? 0;
+          if (missing === 0 && incomplete === 0) return null;
+          const primary = incomplete > 0
+            ? `${incomplete} document${incomplete !== 1 ? 's' : ''} need${incomplete === 1 ? 's' : ''} resubmission`
+            : `${missing} required document${missing !== 1 ? 's' : ''} still to submit`;
+          return (
+            <Link to="/my-documents"
+              className="flex items-center gap-4 p-4 rounded-2xl mb-8"
+              style={{ background: 'linear-gradient(135deg, #c05000, #e07020)', color: '#fff', textDecoration: 'none' }}>
+              <div className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0" style={{ background: 'rgba(255,255,255,0.18)' }}>
+                <AlertTriangle size={22} strokeWidth={2.4} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-black">Action needed: {primary}</p>
+                <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.8)' }}>
+                  Submit before your deadline to keep your scholarship compliant. Tap to review now.
+                </p>
+              </div>
+              <ArrowRight size={20} strokeWidth={2.4} className="shrink-0" />
+            </Link>
+          );
+        })()}
 
         {/* Admin / Coordinator stats */}
         {stats && user?.role !== 'Scholar' && (
@@ -375,6 +404,29 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {/* Recent activity (staff) */}
+        {user?.role !== 'Scholar' && activity.length > 0 && (
+          <div>
+            <h2 className="text-base font-black mb-4" style={{ color: 'var(--text-strong)' }}>Recent Activity</h2>
+            <div className="clay-card divide-y" style={{ borderColor: 'transparent' }}>
+              {activity.map(a => (
+                <div key={a.id} className="flex items-start gap-3 px-5 py-3.5" style={{ borderTop: '1px solid rgba(0,48,135,0.05)' }}>
+                  <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(0,48,135,0.08)' }}>
+                    <Activity size={15} strokeWidth={2.2} color="#003087" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm" style={{ color: 'var(--text-strong)' }}>
+                      <span className="font-semibold">{a.userName}</span>{' '}
+                      <span style={{ color: 'var(--text)' }}>{a.details || a.action}</span>
+                    </p>
+                    <p className="text-xs mt-0.5" style={{ color: '#9aa6bc' }}>{relativeTime(a.timestampUtc)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Announcements */}
         <div>
           <h2 className="text-base font-black mb-4" style={{ color: 'var(--text-strong)' }}>Announcements</h2>
@@ -392,6 +444,18 @@ export default function DashboardPage() {
       </div>
     </Layout>
   );
+}
+
+function relativeTime(iso) {
+  const secs = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  if (secs < 60) return 'just now';
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
 }
 
 function StatCard({ label, value, Icon, color, iconColor }) {

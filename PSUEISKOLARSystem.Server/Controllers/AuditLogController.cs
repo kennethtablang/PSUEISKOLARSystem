@@ -9,10 +9,46 @@ namespace PSUEISKOLARSystem.Server.Controllers
 {
     [ApiController]
     [Route("api/audit-log")]
-    [Authorize(Roles = UserRoles.Administrator)]
+    [Authorize]
     public class AuditLogController(ApplicationDbContext db) : ControllerBase
     {
+        // GET /api/audit-log/recent — compact recent-activity feed for staff dashboards.
+        // Available to coordinators too (unlike the full log), so allow both roles here.
+        [HttpGet("recent")]
+        [Authorize(Roles = $"{UserRoles.Administrator},{UserRoles.ScholarshipCoordinator}")]
+        public async Task<IActionResult> Recent([FromQuery] int take = 8)
+        {
+            take = Math.Clamp(take, 1, 25);
+
+            var logs = await db.AuditLogs
+                .OrderByDescending(l => l.TimestampUtc)
+                .Take(take)
+                .ToListAsync();
+
+            var userIds = logs.Select(l => l.UserId).Distinct().ToList();
+            var users = await db.Users
+                .Where(u => userIds.Contains(u.Id))
+                .Select(u => new { u.Id, u.FirstName, u.LastName })
+                .ToDictionaryAsync(u => u.Id);
+
+            var items = logs.Select(l =>
+            {
+                users.TryGetValue(l.UserId, out var u);
+                return new
+                {
+                    l.Id,
+                    UserName = u != null ? $"{u.FirstName} {u.LastName}".Trim() : "System",
+                    l.Action,
+                    l.Details,
+                    l.TimestampUtc,
+                };
+            });
+
+            return Ok(items);
+        }
+
         [HttpGet]
+        [Authorize(Roles = UserRoles.Administrator)]
         public async Task<IActionResult> GetAll(
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 50,
@@ -73,6 +109,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
         // GET /api/audit-log/export.xlsx?search=&action=
         // Exports the full filtered activity log (no paging) to Excel.
         [HttpGet("export.xlsx")]
+        [Authorize(Roles = UserRoles.Administrator)]
         public async Task<IActionResult> Export(
             [FromQuery] string? search = null,
             [FromQuery] string? action = null)
@@ -138,6 +175,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
         }
 
         [HttpGet("actions")]
+        [Authorize(Roles = UserRoles.Administrator)]
         public async Task<IActionResult> GetDistinctActions()
         {
             var actions = await db.AuditLogs

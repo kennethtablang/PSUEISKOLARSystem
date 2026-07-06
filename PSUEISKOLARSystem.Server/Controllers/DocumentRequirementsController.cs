@@ -13,15 +13,6 @@ namespace PSUEISKOLARSystem.Server.Controllers
     [Authorize]
     public class DocumentRequirementsController(ApplicationDbContext db, IFileStorageService storage) : ControllerBase
     {
-        private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
-        { ".png", ".jpg", ".jpeg", ".webp" };
-
-        private static string ContentTypeFor(string fileName) => Path.GetExtension(fileName).ToLowerInvariant() switch
-        {
-            ".png" => "image/png",
-            ".webp" => "image/webp",
-            _ => "image/jpeg",
-        };
         [HttpGet]
         public async Task<IActionResult> GetAll([FromQuery] int? scholarshipTypeId)
         {
@@ -69,7 +60,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             if (file is null || file.Length == 0)
                 return BadRequest(new { message = "No image uploaded." });
             var ext = Path.GetExtension(file.FileName);
-            if (!ImageExtensions.Contains(ext))
+            if (!ImageFileTypes.Extensions.Contains(ext))
                 return BadRequest(new { message = "Sample must be an image (PNG, JPG, or WEBP)." });
 
             try
@@ -96,7 +87,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
             try
             {
-                var (stream, contentType) = await storage.GetAsync(req.SampleImagePath, ContentTypeFor(req.SampleImagePath));
+                var (stream, contentType) = await storage.GetAsync(req.SampleImagePath, ImageFileTypes.ContentTypeFor(req.SampleImagePath));
                 Response.Headers["X-Content-Type-Options"] = "nosniff";
                 return File(stream, contentType, enableRangeProcessing: true);
             }

@@ -9,7 +9,7 @@ import {
   LayoutDashboard, GraduationCap, FileCheck, Users, Bell,
   FolderOpen, User, LogOut, BarChart2, Search,
   ChevronLeft, Settings, Menu, X, ClipboardList, Activity, Award, CalendarClock, MessageSquare,
-  Sun, Moon, Monitor,
+  Sun, Moon, Monitor, HelpCircle,
 } from 'lucide-react';
 
 /* ── Responsive hook ─────────────────────────────── */
@@ -42,6 +42,7 @@ const navByRole = {
     { section: 'System' },
     { to: '/settings',      label: 'Settings',      Icon: Settings  },
     { to: '/activity-log',  label: 'Activity Log',  Icon: Activity  },
+    { to: '/help',          label: 'Help & FAQ',    Icon: HelpCircle },
   ],
   ScholarshipCoordinator: [
     { to: '/dashboard',       label: 'Dashboard',       Icon: LayoutDashboard },
@@ -53,6 +54,8 @@ const navByRole = {
     { to: '/announcements',   label: 'Announcements',    Icon: Bell },
     { to: '/messages',        label: 'Messages',         Icon: MessageSquare },
     { to: '/analytics',       label: 'Data Visualization', Icon: BarChart2 },
+    { section: 'System' },
+    { to: '/help',            label: 'Help & FAQ',       Icon: HelpCircle },
   ],
   Scholar: [
     { to: '/dashboard',    label: 'Dashboard',    Icon: LayoutDashboard },
@@ -60,6 +63,7 @@ const navByRole = {
     { to: '/my-documents', label: 'My Documents', Icon: FolderOpen },
     { to: '/messages',     label: 'Messages',     Icon: MessageSquare },
     { to: '/my-profile',   label: 'My Profile',   Icon: User },
+    { to: '/help',         label: 'Help & FAQ',   Icon: HelpCircle },
   ],
 };
 

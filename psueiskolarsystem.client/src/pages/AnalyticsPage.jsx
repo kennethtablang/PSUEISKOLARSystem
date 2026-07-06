@@ -22,16 +22,23 @@ export default function AnalyticsPage() {
   const [data, setData] = useState(null);
   const [campuses, setCampuses] = useState([]);
   const [campusId, setCampusId] = useState('');
+  const [period, setPeriod] = useState(''); // '' = all-time, else "AY__semester"
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [exporting, setExporting] = useState(null); // 'scholars' | 'submissions' | null
   const [lastUpdated, setLastUpdated] = useState(null);
   const campusRef = useRef(campusId);
+  const periodRef = useRef(period);
 
   const refetch = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const d = await getAnalyticsOverview(token, { campusId: campusRef.current || undefined });
+      const [ay, sem] = (periodRef.current || '').split('__');
+      const d = await getAnalyticsOverview(token, {
+        campusId: campusRef.current || undefined,
+        academicYear: ay || undefined,
+        semester: sem || undefined,
+      });
       setData(d);
       setLastUpdated(new Date());
       setError('');
@@ -58,8 +65,9 @@ export default function AnalyticsPage() {
     getCampuses(token).then(setCampuses).catch(() => {});
   }, []);
 
-  // Refetch when campus filter changes.
+  // Refetch when campus or period filter changes.
   useEffect(() => { campusRef.current = campusId; refetch(); }, [campusId, refetch]);
+  useEffect(() => { periodRef.current = period; refetch(); }, [period, refetch]);
 
   // Real-time: refetch (silently) on server broadcast, plus a periodic fallback.
   useEffect(() => {
@@ -111,6 +119,19 @@ export default function AnalyticsPage() {
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <LiveBadge lastUpdated={lastUpdated} />
+            {(data?.availablePeriods?.length ?? 0) > 0 && (
+              <select
+                value={period}
+                onChange={e => setPeriod(e.target.value)}
+                className="clay-input text-sm"
+                style={{ minWidth: 180 }}
+              >
+                <option value="">All Periods</option>
+                {data.availablePeriods.map(p => (
+                  <option key={p.label} value={`${p.academicYear}__${p.semester}`}>{p.label}</option>
+                ))}
+              </select>
+            )}
             {campuses.length > 0 && (
               <select
                 value={campusId}

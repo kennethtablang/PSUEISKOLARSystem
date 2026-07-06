@@ -7,8 +7,7 @@ import { getCampuses } from '../api/campuses';
 import { getPrograms, getScholarshipTypes } from '../api/lookups';
 import Pagination from '../components/Pagination';
 import { useTitle } from '../hooks/useTitle';
-
-const ctlStyle = { height: 36, minHeight: 36, fontSize: 12.5, padding: '0 10px' };
+import { ctlStyle } from '../constants/ui';
 
 const GWA_BADGE = (meets) => {
   if (meets === null || meets === undefined) return 'bg-[#e8edf5] text-[#7a8aaa]';

@@ -18,18 +18,18 @@
 - Bulk-assign a requirement to multiple scholarship types at once.
 
 ## User Management
-- **Server-side pagination + filtering** for the Users list (currently returns *all* users and paginates on the client — see Performance).
+- [x] **Server-side pagination + filtering** for the Users list (currently returns *all* users and paginates on the client — see Performance).
 - [x] Resend credentials / trigger a password reset for a user from the admin panel.
 - Allow a coordinator to cover multiple campuses (currently a single `CampusId`).
 
 ## Dashboard
-- Admin/coordinator: a **recent-activity feed** sourced from the audit log.
-- Scholar: a stronger "next action" nudge when documents are Incomplete/missing (beyond the current CTA).
+- [x] Admin/coordinator: a **recent-activity feed** sourced from the audit log.
+- [x] Scholar: a stronger "next action" nudge when documents are Incomplete/missing (beyond the current CTA).
 - Collapsible/configurable dashboard widgets.
 
 ## Reports
 - **PDF export** of reports (only Excel today; the SRS says "e.g. PDF/Excel").
-- Date-range / academic-period filter on analytics (currently all-time + campus only).
+- [x] Date-range / academic-period filter on analytics (currently all-time + campus only).
 - Cross-campus **comparison view** (side-by-side compliance per campus).
 - Scheduled / emailed report digests.
 
@@ -48,7 +48,7 @@
 - **Global search** across documents, announcements, and users (navbar search covers scholars only).
 - **Announcement scheduling** (publish at a future date/time).
 - [x] Activity-log **export** to Excel/CSV (parity with the scholar/submission exports).
-- In-app help/FAQ page to complement the first-time tutorial.
+- [x] In-app help/FAQ page to complement the first-time tutorial.
 
 ---
 
@@ -74,10 +74,10 @@
 - [x] Grade academic-year isn't checked against the active semester.
 
 ## Performance
-- `GET /api/users` loads **all** users into memory (client-side paging) — add server pagination.
-- `AnalyticsController.Overview` materializes all scholars + all submissions before aggregating — push counts down to SQL.
-- Deadline **report** runs per-requirement queries (N+1) — batch the submission/applicable-scholar lookups.
-- Messaging thread list loads all of a user's messages then groups in memory — paginate/aggregate in SQL.
+- [x] `GET /api/users` loads **all** users into memory (client-side paging) — add server pagination.
+- [x] `AnalyticsController.Overview` materializes all scholars + all submissions before aggregating — push counts down to SQL.
+- [x] Deadline **report** runs per-requirement queries (N+1) — batch the submission/applicable-scholar lookups.
+- [x] Messaging thread list loads all of a user's messages then groups in memory — paginate/aggregate in SQL.
 
 ## Security
 - [x] **No rate limiting or lockout** on `/api/auth/login` and `forgot-password` — brute-force exposure.
@@ -88,7 +88,7 @@
 
 ## Code Quality
 - Controllers return **anonymous objects** instead of DTOs — harder to version, document (Swagger), and unit-test; introduce response DTOs.
-- Duplicated code: per-page `ctlStyle`/compact-filter styling, the `ContentTypeFor` image helper (in two controllers), and the near-identical image-upload endpoints (requirement sample vs. announcement) — extract shared helpers.
+- [x] Duplicated code: per-page `ctlStyle`/compact-filter styling, the `ContentTypeFor` image helper (in two controllers), and the near-identical image-upload endpoints (requirement sample vs. announcement) — extract shared helpers.
 - [x] **Magic strings** for notification categories and announcement intent keys — centralize as shared constants/enums (client + server).
 - [x] Consolidate the duplicated announcement-card implementations.
 

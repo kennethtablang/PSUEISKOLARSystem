@@ -132,19 +132,28 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 .OrderBy(d => d.DueDate)
                 .ToListAsync();
 
+            var requirementIds = deadlines.Select(d => d.RequirementId).Distinct().ToList();
+
+            // Batch: all submissions for the period + all applicable scholars, in two queries total.
+            var submissionsByReq = (await db.DocumentSubmissions
+                    .Include(s => s.Scholar)
+                    .Where(s => requirementIds.Contains(s.RequirementId) &&
+                                s.AcademicYear == academicYear &&
+                                s.Semester == semester)
+                    .ToListAsync())
+                .GroupBy(s => s.RequirementId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            var applicableByReq = await DeadlineHelper.GetApplicableScholarsBatchAsync(db, requirementIds);
+
             var report = new List<object>();
 
             foreach (var d in deadlines)
             {
-                var submissions = await db.DocumentSubmissions
-                    .Include(s => s.Scholar)
-                    .Where(s => s.RequirementId == d.RequirementId &&
-                                s.AcademicYear == academicYear &&
-                                s.Semester == semester)
-                    .ToListAsync();
+                var submissions = submissionsByReq.TryGetValue(d.RequirementId, out var subs) ? subs : [];
 
                 var submittedIds = submissions.Select(s => s.ScholarId).ToHashSet();
-                var applicable = await DeadlineHelper.GetApplicableScholarsAsync(db, d.RequirementId);
+                var applicable = applicableByReq.TryGetValue(d.RequirementId, out var app) ? app : [];
 
                 var lateSubmissions = submissions
                     .Where(s => s.SubmittedAt > d.DueDate)

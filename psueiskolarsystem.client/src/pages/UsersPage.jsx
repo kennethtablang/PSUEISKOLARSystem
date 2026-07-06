@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { getUsers, updateUser, setUserStatus, deleteUser, sendPasswordReset } from '../api/users';
@@ -8,8 +8,7 @@ import { downloadImportTemplate, importScholars, triggerDownload } from '../api/
 import { Upload, Download, CheckCircle2, XCircle } from 'lucide-react';
 import Pagination from '../components/Pagination';
 import { useTitle } from '../hooks/useTitle';
-
-const ctlStyle = { height: 36, minHeight: 36, fontSize: 12.5, padding: '0 10px' };
+import { ctlStyle } from '../constants/ui';
 
 const ROLES = ['Administrator', 'ScholarshipCoordinator', 'Scholar'];
 
@@ -23,6 +22,7 @@ export default function UsersPage() {
   useTitle('User Management');
   const { token } = useAuth();
   const [users, setUsers]           = useState([]);
+  const [total, setTotal]           = useState(0);
   const [campuses, setCampuses]     = useState([]);
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState('');
@@ -32,6 +32,7 @@ export default function UsersPage() {
   const [filterRole, setFilterRole] = useState('');
   const [filterCampus, setFilterCampus] = useState('');
   const [search, setSearch]         = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage]             = useState(1);
   const [pageSize, setPageSize]     = useState(20);
 
@@ -39,34 +40,40 @@ export default function UsersPage() {
     getCampuses(token).then(setCampuses).catch(() => {});
   }, []);
 
-  async function load() {
+  /* Debounce the search box so we don't hit the server on every keystroke */
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 350);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  const load = useCallback(async (p = page) => {
     setLoading(true);
     setError('');
     try {
-      const u = await getUsers(token, {
+      const data = await getUsers(token, {
         role:     filterRole   || undefined,
         campusId: filterCampus || undefined,
+        search:   debouncedSearch || undefined,
+        page:     p,
+        pageSize,
       });
-      setUsers(u);
+      setUsers(data.items);
+      setTotal(data.total);
+      setPage(data.page);
     } catch (e) {
       setError(e.message);
     } finally {
       setLoading(false);
     }
-  }
+  }, [token, filterRole, filterCampus, debouncedSearch, pageSize, page]);
 
-  useEffect(() => { load(); }, [filterRole, filterCampus]);
+  /* Reset to page 1 whenever filters/search change */
+  useEffect(() => { setPage(1); }, [debouncedSearch, filterRole, filterCampus, pageSize]);
 
-  const displayed = search
-    ? users.filter(u =>
-        u.fullName.toLowerCase().includes(search.toLowerCase()) ||
-        u.email.toLowerCase().includes(search.toLowerCase()))
-    : users;
+  /* Load whenever the query inputs change */
+  useEffect(() => { load(page); /* eslint-disable-next-line */ }, [page, debouncedSearch, filterRole, filterCampus, pageSize]);
 
-  const totalPages = Math.max(1, Math.ceil(displayed.length / pageSize));
-  const paged = displayed.slice((page - 1) * pageSize, page * pageSize);
-
-  useEffect(() => { setPage(1); }, [search, filterRole, filterCampus, pageSize]);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   async function handleToggleStatus(user) {
     try {
@@ -79,7 +86,7 @@ export default function UsersPage() {
     if (!confirm(`Delete ${user.fullName}? This cannot be undone.`)) return;
     try {
       await deleteUser(user.id, token);
-      setUsers(prev => prev.filter(u => u.id !== user.id));
+      load(page); // reload the page so totals/paging stay correct
     } catch (e) { alert(e.message); }
   }
 
@@ -105,7 +112,7 @@ export default function UsersPage() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="page-title">User Management</h1>
-            <p className="page-subtitle">{displayed.length} user{displayed.length !== 1 ? 's' : ''}</p>
+            <p className="page-subtitle">{total} user{total !== 1 ? 's' : ''}</p>
             <span className="page-title-bar" />
           </div>
           <div className="flex items-center gap-3">
@@ -142,7 +149,7 @@ export default function UsersPage() {
         <div className="clay-card overflow-hidden">
           {loading ? (
             <p className="text-center py-12 text-sm" style={{ color: '#7a8aaa' }}>Loading…</p>
-          ) : displayed.length === 0 ? (
+          ) : users.length === 0 ? (
             <p className="text-center py-12 text-sm" style={{ color: '#7a8aaa' }}>No users found.</p>
           ) : (
             <div className="overflow-x-auto"><table className="w-full min-w-[640px] text-sm">
@@ -154,7 +161,7 @@ export default function UsersPage() {
                 </tr>
               </thead>
               <tbody>
-                {paged.map(u => (
+                {users.map(u => (
                   <tr key={u.id} className="clay-table-row">
                     <td className="px-5 py-3.5 font-semibold" style={{ color: 'var(--text-strong)' }}>{u.fullName}</td>
                     <td className="px-5 py-3.5" style={{ color: 'var(--text)' }}>{u.email}</td>
@@ -192,11 +199,11 @@ export default function UsersPage() {
           )}
         </div>
 
-        {!loading && displayed.length > 0 && (
+        {!loading && total > 0 && (
           <Pagination
             page={page}
             totalPages={totalPages}
-            total={displayed.length}
+            total={total}
             pageSize={pageSize}
             onPageChange={setPage}
             onPageSizeChange={setPageSize}

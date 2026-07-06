@@ -15,15 +15,6 @@ namespace PSUEISKOLARSystem.Server.Controllers
     [Authorize]
     public class AnnouncementsController(ApplicationDbContext db, IEmailService emailService, INotificationService notifications, IFileStorageService storage) : ControllerBase
     {
-        private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
-        { ".png", ".jpg", ".jpeg", ".webp" };
-
-        private static string ContentTypeFor(string fileName) => System.IO.Path.GetExtension(fileName).ToLowerInvariant() switch
-        {
-            ".png" => "image/png",
-            ".webp" => "image/webp",
-            _ => "image/jpeg",
-        };
         [HttpGet]
         public async Task<IActionResult> GetAll()
         {
@@ -220,7 +211,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             if (announcement is null) return NotFound();
             if (file is null || file.Length == 0)
                 return BadRequest(new { message = "No image uploaded." });
-            if (!ImageExtensions.Contains(System.IO.Path.GetExtension(file.FileName)))
+            if (!ImageFileTypes.Extensions.Contains(System.IO.Path.GetExtension(file.FileName)))
                 return BadRequest(new { message = "Image must be PNG, JPG, or WEBP." });
 
             try
@@ -246,7 +237,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             if (announcement?.ImagePath is null) return NotFound();
             try
             {
-                var (stream, contentType) = await storage.GetAsync(announcement.ImagePath, ContentTypeFor(announcement.ImagePath));
+                var (stream, contentType) = await storage.GetAsync(announcement.ImagePath, ImageFileTypes.ContentTypeFor(announcement.ImagePath));
                 Response.Headers["X-Content-Type-Options"] = "nosniff";
                 return File(stream, contentType, enableRangeProcessing: true);
             }

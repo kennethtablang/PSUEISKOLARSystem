@@ -28,36 +28,59 @@ namespace PSUEISKOLARSystem.Server.Controllers
         [HttpGet("threads")]
         public async Task<IActionResult> Threads([FromQuery] string? scholarId)
         {
-            var query = db.Messages
-                .Include(m => m.Scholar)
-                .Include(m => m.Requirement)
-                .AsQueryable();
+            var baseQuery = db.Messages.AsQueryable();
 
             if (!IsStaff)
-                query = query.Where(m => m.ScholarId == UserId);          // scholars see only their own
+                baseQuery = baseQuery.Where(m => m.ScholarId == UserId);   // scholars see only their own
             else if (!string.IsNullOrEmpty(scholarId))
-                query = query.Where(m => m.ScholarId == scholarId);
+                baseQuery = baseQuery.Where(m => m.ScholarId == scholarId);
 
-            var all = await query.OrderByDescending(m => m.CreatedAt).ToListAsync();
-
-            var threads = all
+            // Aggregate per thread in SQL — last-message time + unread counts — instead of
+            // pulling every message into memory.
+            var grouped = await baseQuery
                 .GroupBy(m => new { m.ScholarId, m.RequirementId })
+                .Select(g => new
+                {
+                    g.Key.ScholarId,
+                    g.Key.RequirementId,
+                    LastAt = g.Max(m => m.CreatedAt),
+                    UnreadStaff = g.Count(x => !x.ReadByStaff),
+                    UnreadScholar = g.Count(x => !x.ReadByScholar),
+                })
+                .ToListAsync();
+
+            if (grouped.Count == 0) return Ok(Array.Empty<object>());
+
+            // Fetch only the last message of each thread (not the whole history).
+            var lastAts = grouped.Select(g => g.LastAt).Distinct().ToList();
+            var lastMsgs = await baseQuery
+                .Where(m => lastAts.Contains(m.CreatedAt))
+                .Include(m => m.Scholar)
+                .Include(m => m.Requirement)
+                .ToListAsync();
+
+            var lastByKey = lastMsgs
+                .GroupBy(m => new { m.ScholarId, m.RequirementId })
+                .ToDictionary(g => (g.Key.ScholarId, g.Key.RequirementId),
+                              g => g.OrderByDescending(m => m.CreatedAt).First());
+
+            var threads = grouped
+                .OrderByDescending(g => g.LastAt)
                 .Select(g =>
                 {
-                    var last = g.First(); // list is already newest-first
+                    lastByKey.TryGetValue((g.ScholarId, g.RequirementId), out var last);
                     return new
                     {
-                        last.ScholarId,
-                        ScholarName = last.Scholar.FullName,
-                        last.RequirementId,
-                        RequirementName = last.Requirement != null ? last.Requirement.Name : null,
-                        LastBody = last.Body,
-                        LastAt = last.CreatedAt,
-                        LastSenderId = last.SenderId,
-                        Unread = g.Count(x => IsStaff ? !x.ReadByStaff : !x.ReadByScholar),
+                        g.ScholarId,
+                        ScholarName = last?.Scholar.FullName,
+                        g.RequirementId,
+                        RequirementName = last?.Requirement != null ? last.Requirement.Name : null,
+                        LastBody = last?.Body,
+                        LastAt = g.LastAt,
+                        LastSenderId = last?.SenderId,
+                        Unread = IsStaff ? g.UnreadStaff : g.UnreadScholar,
                     };
                 })
-                .OrderByDescending(t => t.LastAt)
                 .ToList();
 
             return Ok(threads);

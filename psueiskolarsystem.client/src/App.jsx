@@ -29,6 +29,7 @@ import SettingsPage from './pages/SettingsPage';
 import ActivityLogPage from './pages/ActivityLogPage';
 import UnauthorizedPage from './pages/UnauthorizedPage';
 import ProfilePage from './pages/ProfilePage';
+import HelpPage from './pages/HelpPage';
 
 const admin = ['Administrator'];
 const adminCoord = ['Administrator', 'ScholarshipCoordinator'];
@@ -67,6 +68,7 @@ export default function App() {
           <Route path="/messages"     element={<ProtectedRoute><MessagesPage /></ProtectedRoute>} />
           <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
           <Route path="/profile"      element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+          <Route path="/help"         element={<ProtectedRoute><HelpPage /></ProtectedRoute>} />
 
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>

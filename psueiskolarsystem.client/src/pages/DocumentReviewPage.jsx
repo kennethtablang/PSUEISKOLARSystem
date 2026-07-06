@@ -6,8 +6,7 @@ import { getActiveSemester } from '../api/settings';
 import { useTitle } from '../hooks/useTitle';
 import { CheckCircle2, XCircle } from 'lucide-react';
 import Pagination from '../components/Pagination';
-
-const ctlStyle = { height: 36, minHeight: 36, fontSize: 12.5, padding: '0 10px' };
+import { ctlStyle } from '../constants/ui';
 
 const STATUSES = ['', 'Pending', 'Verified', 'Incomplete'];
 const STATUS_STYLE = {
