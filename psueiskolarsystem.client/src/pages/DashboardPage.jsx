@@ -143,7 +143,7 @@ export default function DashboardPage() {
             Welcome back, {user?.fullName?.split(' ')[0]}
           </h1>
           <p className="page-subtitle">
-            {user?.campusName ?? 'PSU'} · {user?.role === 'ScholarshipCoordinator' ? 'Coordinator' : user?.role}
+            PSU Lingayen Campus · {user?.role === 'ScholarshipCoordinator' ? 'Coordinator' : user?.role}
           </p>
           <span className="page-title-bar" />
         </div>

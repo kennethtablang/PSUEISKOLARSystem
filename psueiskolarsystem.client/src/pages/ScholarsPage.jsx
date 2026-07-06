@@ -3,7 +3,6 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { getScholars } from '../api/scholars';
-import { getCampuses } from '../api/campuses';
 import { getPrograms, getScholarshipTypes } from '../api/lookups';
 import Pagination from '../components/Pagination';
 import { TableSkeleton, EmptyState } from '../components/ListState';
@@ -34,7 +33,6 @@ export default function ScholarsPage() {
   const [pageSize, setPageSize] = useState(20);
 
   const [scholars, setScholars] = useState([]);
-  const [campuses, setCampuses] = useState([]);
   const [programs, setPrograms] = useState([]);
   const [scholarshipTypes, setScholarshipTypes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -43,7 +41,6 @@ export default function ScholarsPage() {
 
   const [filters, setFilters] = useState({
     search: initialSearch,
-    campusId: '',
     programId: '',
     scholarshipTypeId: '',
     meetsRequirement: '',
@@ -56,7 +53,6 @@ export default function ScholarsPage() {
     try {
       const data = await getScholars(token, {
         search: f.search || undefined,
-        campusId: f.campusId || undefined,
         programId: f.programId || undefined,
         scholarshipTypeId: f.scholarshipTypeId || undefined,
         meetsRequirement: f.meetsRequirement !== '' ? f.meetsRequirement : undefined,
@@ -74,8 +70,8 @@ export default function ScholarsPage() {
   }
 
   useEffect(() => {
-    Promise.all([getCampuses(token), getPrograms(token), getScholarshipTypes(token)])
-      .then(([c, p, st]) => { setCampuses(c); setPrograms(p); setScholarshipTypes(st); });
+    Promise.all([getPrograms(token), getScholarshipTypes(token)])
+      .then(([p, st]) => { setPrograms(p); setScholarshipTypes(st); });
     loadScholars();
   }, []);
 
@@ -95,11 +91,7 @@ export default function ScholarsPage() {
     loadScholars(filters, 1, n);
   }
 
-  const subtitle = (() => {
-    const count = `${paging.total} scholar${paging.total !== 1 ? 's' : ''}`;
-    const campus = campuses.find(c => String(c.id) === String(filters.campusId));
-    return campus ? `${count} · ${campus.name}` : `${count} · All Campuses`;
-  })();
+  const subtitle = `${paging.total} scholar${paging.total !== 1 ? 's' : ''} · PSU Lingayen Campus`;
 
   return (
     <Layout>
@@ -122,10 +114,6 @@ export default function ScholarsPage() {
             className={inputCls}
             style={{ ...ctlStyle, width: 220 }}
           />
-          <select value={filters.campusId} onChange={e => setFilter('campusId', e.target.value)} className={inputCls} style={{ ...ctlStyle, width: 'auto' }}>
-            <option value="">All Campuses</option>
-            {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
           <select value={filters.programId} onChange={e => setFilter('programId', e.target.value)} className={inputCls} style={{ ...ctlStyle, width: 'auto' }}>
             <option value="">All Programs</option>
             {programs.map(p => <option key={p.id} value={p.id}>{p.code}</option>)}
@@ -156,7 +144,7 @@ export default function ScholarsPage() {
             <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-sm">
               <thead className="clay-table-head">
                 <tr>
-                  {['Scholar', 'Student ID', 'Campus', 'Program', 'Scholarship', 'GWA', 'Status', ''].map(h => (
+                  {['Scholar', 'Student ID', 'Program', 'Scholarship', 'GWA', 'Status', ''].map(h => (
                     <th key={h} className="text-left px-5 py-3 text-xs font-bold uppercase tracking-wider" style={{ color: '#7a8aaa' }}>{h}</th>
                   ))}
                 </tr>
@@ -169,7 +157,6 @@ export default function ScholarsPage() {
                       <p className="text-xs" style={{ color: '#7a8aaa' }}>{s.email}</p>
                     </td>
                     <td className="px-5 py-3.5 font-mono" style={{ color: 'var(--text)' }}>{s.studentId}</td>
-                    <td className="px-5 py-3.5 text-xs" style={{ color: 'var(--text)' }}>{s.campusName ?? '—'}</td>
                     <td className="px-5 py-3.5" style={{ color: 'var(--text)' }}>{s.programCode ?? '—'}</td>
                     <td className="px-5 py-3.5 max-w-[140px] truncate" style={{ color: 'var(--text)' }}>{s.scholarshipTypeName ?? '—'}</td>
                     <td className="px-5 py-3.5">

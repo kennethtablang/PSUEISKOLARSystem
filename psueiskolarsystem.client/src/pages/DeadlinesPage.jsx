@@ -259,7 +259,7 @@ function ReportCard({ row }) {
               <ul className="space-y-1">
                 {row.missingScholars.map(s => (
                   <li key={s.id} className="text-xs" style={{ color: 'var(--text)' }}>
-                    {s.fullName}{s.campusName ? <span style={{ color: '#9aaabb' }}> · {s.campusName}</span> : ''}
+                    {s.fullName}
                   </li>
                 ))}
               </ul>

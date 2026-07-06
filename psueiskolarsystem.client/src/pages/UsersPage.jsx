@@ -3,7 +3,6 @@ import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { getUsers, updateUser, setUserStatus, deleteUser, sendPasswordReset } from '../api/users';
 import { register } from '../api/auth';
-import { getCampuses } from '../api/campuses';
 import { downloadImportTemplate, importScholars, triggerDownload } from '../api/userImport';
 import { Upload, Download, CheckCircle2, XCircle } from 'lucide-react';
 import Pagination from '../components/Pagination';
@@ -33,23 +32,17 @@ export default function UsersPage() {
   const confirm = useConfirm();
   const [users, setUsers]           = useState([]);
   const [total, setTotal]           = useState(0);
-  const [campuses, setCampuses]     = useState([]);
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState('');
   const [showModal, setShowModal]   = useState(false);
   const [editing, setEditing]       = useState(null);     // null = create, object = edit
   const [showImport, setShowImport] = useState(false);
   const [filterRole, setFilterRole] = useState('');
-  const [filterCampus, setFilterCampus] = useState('');
   const [filterStatus, setFilterStatus] = useState(''); // '' | 'true' (active) | 'false' (archived)
   const [search, setSearch]         = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage]             = useState(1);
   const [pageSize, setPageSize]     = useState(20);
-
-  useEffect(() => {
-    getCampuses(token).then(setCampuses).catch(() => {});
-  }, []);
 
   /* Debounce the search box so we don't hit the server on every keystroke */
   useEffect(() => {
@@ -63,7 +56,6 @@ export default function UsersPage() {
     try {
       const data = await getUsers(token, {
         role:     filterRole   || undefined,
-        campusId: filterCampus || undefined,
         search:   debouncedSearch || undefined,
         isActive: filterStatus || undefined,
         page:     p,
@@ -77,13 +69,13 @@ export default function UsersPage() {
     } finally {
       setLoading(false);
     }
-  }, [token, filterRole, filterCampus, filterStatus, debouncedSearch, pageSize, page]);
+  }, [token, filterRole, filterStatus, debouncedSearch, pageSize, page]);
 
   /* Reset to page 1 whenever filters/search change */
-  useEffect(() => { setPage(1); }, [debouncedSearch, filterRole, filterCampus, filterStatus, pageSize]);
+  useEffect(() => { setPage(1); }, [debouncedSearch, filterRole, filterStatus, pageSize]);
 
   /* Load whenever the query inputs change */
-  useEffect(() => { load(page); /* eslint-disable-next-line */ }, [page, debouncedSearch, filterRole, filterCampus, filterStatus, pageSize]);
+  useEffect(() => { load(page); /* eslint-disable-next-line */ }, [page, debouncedSearch, filterRole, filterStatus, pageSize]);
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
@@ -150,10 +142,6 @@ export default function UsersPage() {
             <option value="">All Roles</option>
             {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
           </select>
-          <select value={filterCampus} onChange={e => setFilterCampus(e.target.value)} className="clay-input" style={{ ...ctlStyle, width: 'auto' }}>
-            <option value="">All Campuses</option>
-            {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
           <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="clay-input" style={{ ...ctlStyle, width: 'auto' }}>
             <option value="">All Statuses</option>
             <option value="true">Active</option>
@@ -172,7 +160,7 @@ export default function UsersPage() {
             <div className="overflow-x-auto"><table className="w-full min-w-[640px] text-sm">
               <thead className="clay-table-head">
                 <tr>
-                  {['Name', 'Email', 'Role', 'Campus', 'Status', ''].map(h => (
+                  {['Name', 'Email', 'Role', 'Status', ''].map(h => (
                     <th key={h} className="text-left px-5 py-3 text-xs font-bold uppercase tracking-wider" style={{ color: '#7a8aaa' }}>{h}</th>
                   ))}
                 </tr>
@@ -184,9 +172,6 @@ export default function UsersPage() {
                     <td className="px-5 py-3.5" style={{ color: 'var(--text)' }}>{u.email}</td>
                     <td className="px-5 py-3.5">
                       <span className={`clay-badge ${ROLE_BADGE_CLASS[u.role] ?? ''}`}>{u.role}</span>
-                    </td>
-                    <td className="px-5 py-3.5 text-sm" style={{ color: 'var(--text)' }}>
-                      {u.campusName ?? <span style={{ color: '#b0bdd0', fontStyle: 'italic' }}>—</span>}
                     </td>
                     <td className="px-5 py-3.5">
                       <span className={`clay-badge ${u.isActive ? 'badge-active' : 'badge-inactive'}`}>
@@ -233,14 +218,12 @@ export default function UsersPage() {
         editing ? (
           <EditUserModal
             user={editing}
-            campuses={campuses}
             token={token}
             onClose={() => setShowModal(false)}
             onSaved={() => { setShowModal(false); load(); }}
           />
         ) : (
           <CreateUserModal
-            campuses={campuses}
             token={token}
             onClose={() => setShowModal(false)}
             onCreated={() => { setShowModal(false); load(); }}
@@ -393,8 +376,8 @@ function SummaryStat({ label, value, color }) {
 }
 
 /* ── Create User Modal ─────────────────────────────── */
-function CreateUserModal({ campuses, token, onClose, onCreated }) {
-  const [form, setForm] = useState({ firstName: '', middleName: '', lastName: '', email: '', password: '', role: 'Scholar', campusId: '' });
+function CreateUserModal({ token, onClose, onCreated }) {
+  const [form, setForm] = useState({ firstName: '', middleName: '', lastName: '', email: '', password: '', role: 'Scholar' });
   const [error, setError]         = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -417,7 +400,6 @@ function CreateUserModal({ campuses, token, onClose, onCreated }) {
         email:      form.email,
         password:   form.password,
         role:       form.role,
-        campusId:   form.campusId ? parseInt(form.campusId) : null,
       }, token);
       onCreated();
     } catch (err) {
@@ -450,19 +432,11 @@ function CreateUserModal({ campuses, token, onClose, onCreated }) {
           <input type="password" required minLength={8} value={form.password} onChange={e => set('password', e.target.value)} className="clay-input" placeholder="Min. 8 characters" />
           <PasswordStrengthMeter password={form.password} />
         </Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Role">
-            <select required value={form.role} onChange={e => set('role', e.target.value)} className="clay-input">
-              {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
-            </select>
-          </Field>
-          <Field label="Campus">
-            <select value={form.campusId} onChange={e => set('campusId', e.target.value)} className="clay-input">
-              <option value="">— Select —</option>
-              {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </Field>
-        </div>
+        <Field label="Role">
+          <select required value={form.role} onChange={e => set('role', e.target.value)} className="clay-input">
+            {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+          </select>
+        </Field>
         <ModalButtons onClose={onClose} submitting={submitting} disabled={!canSubmit} label="Create User" />
       </form>
     </ClayModal>
@@ -470,14 +444,13 @@ function CreateUserModal({ campuses, token, onClose, onCreated }) {
 }
 
 /* ── Edit User Modal ───────────────────────────────── */
-function EditUserModal({ user, campuses, token, onClose, onSaved }) {
+function EditUserModal({ user, token, onClose, onSaved }) {
   const [form, setForm] = useState({
     firstName:  user.firstName  ?? '',
     middleName: user.middleName ?? '',
     lastName:   user.lastName   ?? '',
     email:      user.email      ?? '',
     role:       user.role       ?? 'Scholar',
-    campusId:   user.campusId   ? String(user.campusId) : '',
   });
   const [error, setError]         = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -499,7 +472,6 @@ function EditUserModal({ user, campuses, token, onClose, onSaved }) {
         lastName:   form.lastName.trim(),
         email:      form.email.trim(),
         role:       form.role,
-        campusId:   form.campusId ? parseInt(form.campusId) : null,
       }, token);
       onSaved();
     } catch (err) {
@@ -528,19 +500,11 @@ function EditUserModal({ user, campuses, token, onClose, onSaved }) {
           <input required type="email" value={form.email} onChange={e => set('email', e.target.value)} className="clay-input" />
           <FieldError>{emailError}</FieldError>
         </Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Role">
-            <select required value={form.role} onChange={e => set('role', e.target.value)} className="clay-input">
-              {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
-            </select>
-          </Field>
-          <Field label="Campus">
-            <select value={form.campusId} onChange={e => set('campusId', e.target.value)} className="clay-input">
-              <option value="">— None —</option>
-              {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </Field>
-        </div>
+        <Field label="Role">
+          <select required value={form.role} onChange={e => set('role', e.target.value)} className="clay-input">
+            {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+          </select>
+        </Field>
         <ModalButtons onClose={onClose} submitting={submitting} disabled={!canSubmit} label="Save Changes" />
       </form>
     </ClayModal>

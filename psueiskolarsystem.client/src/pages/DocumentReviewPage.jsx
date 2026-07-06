@@ -195,7 +195,7 @@ export default function DocumentReviewPage() {
                     </td>
                     <td className="px-5 py-3.5">
                       <p className="font-semibold" style={{ color: 'var(--text-strong)' }}>{s.scholarName}</p>
-                      <p className="text-xs" style={{ color: '#7a8aaa' }}>{s.campusName ?? s.scholarEmail}</p>
+                      <p className="text-xs" style={{ color: '#7a8aaa' }}>{s.scholarEmail}</p>
                     </td>
                     <td className="px-5 py-3.5" style={{ color: 'var(--text)' }}>{s.requirementName}</td>
                     <td className="px-5 py-3.5">

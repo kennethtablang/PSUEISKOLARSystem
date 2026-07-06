@@ -20,7 +20,7 @@ export default function AnnouncementCard({ a, variant = 'feed', onEdit, onDelete
     : null;
   const isUrgent = variant === 'feed' && daysLeft !== null && daysLeft <= 7;
 
-  const targets = [a.targetRole, a.targetCampus, a.targetScholarshipType, a.targetProgram].filter(Boolean);
+  const targets = [a.targetRole, a.targetScholarshipType, a.targetProgram].filter(Boolean);
 
   return (
     <div

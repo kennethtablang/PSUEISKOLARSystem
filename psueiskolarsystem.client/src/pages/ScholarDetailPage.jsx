@@ -51,7 +51,7 @@ export default function ScholarDetailPage() {
       <div class="sub">Generated ${new Date().toLocaleString()} · by ${esc(currentUser?.fullName)}</div>
       <div class="grid">
         ${field('Full Name', profile.fullName)}${field('Student ID', profile.studentId)}${field('Status', profile.lifecycleStatus)}
-        ${field('Program', profile.programName)}${field('Campus', profile.campusName)}${field('Scholarship', profile.scholarshipTypeName)}
+        ${field('Program', profile.programName)}${field('Scholarship', profile.scholarshipTypeName)}
         ${field('Year Level', 'Year ' + profile.yearLevel)}${field('Latest GWA', profile.latestGwa?.toFixed(2))}${field('Min. GWA', profile.minimumGwa?.toFixed(2))}
         ${field('Compliance', profile.meetsRequirement == null ? 'No GWA' : profile.meetsRequirement ? 'Compliant' : 'Below threshold')}${field('Contact', profile.contactNumber)}${field('Email', profile.email)}
       </div>
@@ -175,7 +175,6 @@ export default function ScholarDetailPage() {
                 <Detail label="Student ID" value={profile.studentId} />
                 <Detail label="Year Level" value={`Year ${profile.yearLevel}`} />
                 <Detail label="Program" value={profile.programName ?? '—'} />
-                <Detail label="Campus" value={profile.campusName ?? '—'} />
                 <Detail label="Scholarship Type" value={profile.scholarshipTypeName ?? '—'} />
                 <Detail label="Type Category" value={profile.scholarshipTypeCategory ?? '—'} />
                 <Detail label="Min. GWA Required" value={profile.minimumGwa?.toFixed(2) ?? '—'} />

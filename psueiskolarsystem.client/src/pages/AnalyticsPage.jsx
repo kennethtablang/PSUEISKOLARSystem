@@ -4,7 +4,6 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/UIContext';
 import { useNotifications } from '../context/NotificationContext';
 import { getAnalyticsOverview } from '../api/analytics';
-import { getCampuses } from '../api/campuses';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
@@ -22,14 +21,11 @@ export default function AnalyticsPage() {
   const toast = useToast();
   const { subscribeToAnalytics } = useNotifications();
   const [data, setData] = useState(null);
-  const [campuses, setCampuses] = useState([]);
-  const [campusId, setCampusId] = useState('');
   const [period, setPeriod] = useState(''); // '' = all-time, else "AY__semester"
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [exporting, setExporting] = useState(null); // 'scholars' | 'submissions' | null
   const [lastUpdated, setLastUpdated] = useState(null);
-  const campusRef = useRef(campusId);
   const periodRef = useRef(period);
 
   const refetch = useCallback(async (silent = false) => {
@@ -37,7 +33,6 @@ export default function AnalyticsPage() {
     try {
       const [ay, sem] = (periodRef.current || '').split('__');
       const d = await getAnalyticsOverview(token, {
-        campusId: campusRef.current || undefined,
         academicYear: ay || undefined,
         semester: sem || undefined,
       });
@@ -54,7 +49,7 @@ export default function AnalyticsPage() {
   async function handleExport(type) {
     setExporting(type);
     try {
-      if (type === 'scholars') await exportScholars(token, { campusId: campusId || undefined });
+      if (type === 'scholars') await exportScholars(token, {});
       else await exportSubmissions(token);
     } catch (e) {
       toast(e.message, 'error');
@@ -63,12 +58,7 @@ export default function AnalyticsPage() {
     }
   }
 
-  useEffect(() => {
-    getCampuses(token).then(setCampuses).catch(() => {});
-  }, []);
-
-  // Refetch when campus or period filter changes.
-  useEffect(() => { campusRef.current = campusId; refetch(); }, [campusId, refetch]);
+  // Refetch when the period filter changes.
   useEffect(() => { periodRef.current = period; refetch(); }, [period, refetch]);
 
   // Real-time: refetch (silently) on server broadcast, plus a periodic fallback.
@@ -113,9 +103,7 @@ export default function AnalyticsPage() {
           <div>
             <h1 className="page-title">Data Visualization &amp; Reports</h1>
             <p className="page-subtitle">
-              Descriptive analytics — {campusId
-                ? (campuses.find(c => String(c.id) === String(campusId))?.name ?? 'Selected Campus')
-                : 'All Campuses'}
+              Descriptive analytics for PSU Lingayen Campus
             </p>
             <span className="page-title-bar" />
           </div>
@@ -131,19 +119,6 @@ export default function AnalyticsPage() {
                 <option value="">All Periods</option>
                 {data.availablePeriods.map(p => (
                   <option key={p.label} value={`${p.academicYear}__${p.semester}`}>{p.label}</option>
-                ))}
-              </select>
-            )}
-            {campuses.length > 0 && (
-              <select
-                value={campusId}
-                onChange={e => setCampusId(e.target.value)}
-                className="clay-input text-sm"
-                style={{ minWidth: 180 }}
-              >
-                <option value="">All Campuses</option>
-                {campuses.map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
             )}

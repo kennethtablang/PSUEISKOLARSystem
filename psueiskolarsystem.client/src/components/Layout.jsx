@@ -219,7 +219,7 @@ export default function Layout({ children }) {
               e-Iskolar
             </p>
             <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.38)', fontWeight: 500, marginTop: 2 }}>
-              {user?.campusName ?? 'Pangasinan State University'}
+              PSU Lingayen Campus
             </p>
           </div>
         </div>

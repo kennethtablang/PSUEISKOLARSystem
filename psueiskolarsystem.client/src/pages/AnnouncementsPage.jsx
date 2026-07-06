@@ -5,7 +5,6 @@ import { useConfirm } from '../context/UIContext';
 import { getAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement,
   uploadAnnouncementImage, ANNOUNCEMENT_INTENTS } from '../api/announcements';
 import AnnouncementCard from '../components/AnnouncementCard';
-import { getCampuses } from '../api/campuses';
 import { getPrograms, getScholarshipTypes } from '../api/lookups';
 import { useTitle } from '../hooks/useTitle';
 
@@ -17,7 +16,7 @@ export default function AnnouncementsPage() {
   const { token } = useAuth();
   const confirm = useConfirm();
   const [announcements, setAnnouncements] = useState([]);
-  const [lookups, setLookups] = useState({ campuses: [], scholarshipTypes: [], programs: [] });
+  const [lookups, setLookups] = useState({ scholarshipTypes: [], programs: [] });
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -32,14 +31,13 @@ export default function AnnouncementsPage() {
   async function load() {
     setLoading(true);
     try {
-      const [a, campuses, scholarshipTypes, programs] = await Promise.all([
+      const [a, scholarshipTypes, programs] = await Promise.all([
         getAnnouncements(token),
-        getCampuses(token),
         getScholarshipTypes(token),
         getPrograms(token),
       ]);
       setAnnouncements(a);
-      setLookups({ campuses, scholarshipTypes, programs });
+      setLookups({ scholarshipTypes, programs });
     } finally {
       setLoading(false);
     }
@@ -112,7 +110,6 @@ function AnnouncementModal({ initial, lookups, token, onClose, onSaved }) {
     title:                  initial?.title ?? '',
     content:                initial?.content ?? '',
     targetRole:             initial?.targetRole ?? '',
-    targetCampusId:         initial?.targetCampusId?.toString() ?? '',
     targetScholarshipTypeId: initial?.targetScholarshipTypeId?.toString() ?? '',
     targetProgramId:        initial?.targetProgramId?.toString() ?? '',
     expiresAt:              initial?.expiresAt
@@ -159,7 +156,6 @@ function AnnouncementModal({ initial, lookups, token, onClose, onSaved }) {
         title:                  form.title,
         content:                form.content,
         targetRole:             form.targetRole || null,
-        targetCampusId:         form.targetCampusId ? parseInt(form.targetCampusId) : null,
         targetScholarshipTypeId: form.targetScholarshipTypeId ? parseInt(form.targetScholarshipTypeId) : null,
         targetProgramId:        form.targetProgramId ? parseInt(form.targetProgramId) : null,
         expiresAt:              form.expiresAt || null,
@@ -214,13 +210,6 @@ function AnnouncementModal({ initial, lookups, token, onClose, onSaved }) {
             <Field label="Role">
               <select value={form.targetRole} onChange={e => set('targetRole', e.target.value)} className="clay-input">
                 {ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
-              </select>
-            </Field>
-
-            <Field label="Campus">
-              <select value={form.targetCampusId} onChange={e => set('targetCampusId', e.target.value)} className="clay-input">
-                <option value="">All Campuses</option>
-                {lookups.campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </Field>
 
