@@ -18,7 +18,5 @@ namespace PSUEISKOLARSystem.Server.DTOs.Users
 
         [Required]
         public string Role { get; set; } = string.Empty;
-
-        public int? CampusId { get; set; }
     }
 }
