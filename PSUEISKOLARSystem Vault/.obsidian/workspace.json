@@ -1,0 +1,220 @@
+{
+  "main": {
+    "id": "8422a0d6111bd98d",
+    "type": "split",
+    "children": [
+      {
+        "id": "52991cc64bc57613",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "f70ca5afb0a9fdd2",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "Overview/Project Overview.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "Project Overview"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "8f19b1adcdad10db",
+    "type": "split",
+    "children": [
+      {
+        "id": "3f54e417dfa0acd9",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "e01dc5feae86274d",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "b77b902d75a166db",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "4faf556eef5466a8",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 217.5
+  },
+  "right": {
+    "id": "4b336d5d934027b7",
+    "type": "split",
+    "children": [
+      {
+        "id": "1760cebe265b2112",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "759443b35138d880",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "Overview/Project Overview.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks for Project Overview"
+            }
+          },
+          {
+            "id": "3d00e6f658385ff2",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "Overview/Project Overview.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links from Project Overview"
+            }
+          },
+          {
+            "id": "66bdff0b0f3c1fc8",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "1f655b1df3f5d933",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "All properties"
+            }
+          },
+          {
+            "id": "e85fda7900a586b3",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "Overview/Project Overview.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline of Project Overview"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false,
+      "bases:Create new base": false
+    }
+  },
+  "active": "f70ca5afb0a9fdd2",
+  "lastOpenFiles": [
+    "Home.md",
+    "Overview/Project Overview.md",
+    "Overview/Project Overview.md.tmp.24232.cfe37af684cb",
+    "Welcome.md",
+    "Welcome.md.tmp.24232.2a3fe4bded4c",
+    "Features/Authentication & Security.md",
+    "Overview/Glossary.md",
+    "Overview/Glossary.md.tmp.24232.26b5fc0000d4",
+    "Ops/Roadmap & Status.md",
+    "Ops/Roadmap & Status.md.tmp.24232.cd4a775bd47b",
+    "Ops/Deployment & Ops.md",
+    "Ops/Deployment & Ops.md.tmp.24232.d292d37b9453",
+    "Ops",
+    "Reference/Conventions & Patterns.md",
+    "Reference/Conventions & Patterns.md.tmp.24232.45838c39bb2f",
+    "Reference/API Reference.md",
+    "Reference/API Reference.md.tmp.24232.e80b95544f5d",
+    "Reference",
+    "Features/Messaging & Search.md",
+    "Features/Messaging & Search.md.tmp.24232.4d1e91b2643a",
+    "Features/Analytics & Reports.md",
+    "Features/Announcements & Notifications.md",
+    "Features/Documents & Compliance.md",
+    "Untitled.canvas",
+    "create a link.md",
+    "Architecture/Data Model.md",
+    "Architecture/Frontend Architecture.md",
+    "Architecture/Backend Architecture.md",
+    "Authentication & Security.md",
+    "Architecture/Tech Stack.md",
+    "Overview/User Roles & Permissions.md"
+  ]
+}
