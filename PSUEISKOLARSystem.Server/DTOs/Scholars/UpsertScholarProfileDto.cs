@@ -23,5 +23,10 @@ namespace PSUEISKOLARSystem.Server.DTOs.Scholars
 
         [MaxLength(500)]
         public string? Address { get; set; }
+
+        // Recorded on the scholarship ledger when staff transfer a scholar between
+        // scholarships, so the history explains itself.
+        [MaxLength(200)]
+        public string? ScholarshipChangeReason { get; set; }
     }
 }

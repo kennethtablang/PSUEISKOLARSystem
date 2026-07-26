@@ -6,8 +6,9 @@ namespace PSUEISKOLARSystem.Server.DTOs.Scholars
         public string UserId { get; set; } = string.Empty;
         public string FullName { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
-        public string? CampusName { get; set; }
-        public int? CampusId { get; set; }
+
+        // True when a profile photo exists; fetch it from /api/avatars/{userId}.
+        public bool HasAvatar { get; set; }
 
         public string StudentId { get; set; } = string.Empty;
         public int? ProgramId { get; set; }
@@ -27,5 +28,15 @@ namespace PSUEISKOLARSystem.Server.DTOs.Scholars
 
         public decimal? LatestGwa { get; set; }
         public bool? MeetsRequirement { get; set; }
+
+        // Admin verification of the registration: Pending | Approved | Rejected.
+        public string ApprovalStatus { get; set; } = string.Empty;
+        public string? ApprovalNote { get; set; }
+        public DateTime? ApprovalDecidedAt { get; set; }
+
+        // Scholarship ledger: when the current scholarship was assigned, and how many
+        // scholarships this scholar has ever been registered under (1 is the norm).
+        public DateTime? ScholarshipAssignedAt { get; set; }
+        public int ScholarshipRecordCount { get; set; }
     }
 }
