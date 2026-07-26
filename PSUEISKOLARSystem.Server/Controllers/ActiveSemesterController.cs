@@ -35,11 +35,10 @@ namespace PSUEISKOLARSystem.Server.Controllers
         [Authorize(Roles = UserRoles.Administrator)]
         public async Task<IActionResult> Update(ActiveSemesterRequest dto)
         {
-            if (dto.Semester is not (1 or 2))
-                return BadRequest(new { message = "Semester must be 1 or 2." });
-
-            if (string.IsNullOrWhiteSpace(dto.AcademicYear))
-                return BadRequest(new { message = "Academic year is required." });
+            // This value is the reference every other period check compares against, so it has
+            // to be a well-formed period rather than any non-empty string.
+            if (!AcademicPeriod.TryParse(dto.AcademicYear, dto.Semester, out var period, out var error))
+                return BadRequest(new { message = error });
 
             var config = await db.ActiveSemesters.FirstOrDefaultAsync();
             if (config is null)
@@ -48,8 +47,8 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 db.ActiveSemesters.Add(config);
             }
 
-            config.AcademicYear = dto.AcademicYear.Trim();
-            config.Semester = dto.Semester;
+            config.AcademicYear = period.AcademicYear;
+            config.Semester = period.Semester;
             config.UpdatedAt = DateTime.UtcNow;
             config.UpdatedById = User.FindFirstValue(ClaimTypes.NameIdentifier);
             db.Audit(this, "SetActiveSemester", $"Set active semester to {config.AcademicYear} Semester {config.Semester}");

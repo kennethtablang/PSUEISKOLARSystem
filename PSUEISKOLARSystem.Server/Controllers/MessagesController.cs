@@ -112,8 +112,11 @@ namespace PSUEISKOLARSystem.Server.Controllers
             {
                 m.Id,
                 m.SenderId,
-                SenderName = m.Sender.FullName,
-                Mine = m.SenderId == UserId,
+                // An automatic acknowledgement is attributed to the office, not to the admin
+                // account that happens to own the FK.
+                SenderName = m.IsAutoReply ? "Scholarship Office" : m.Sender.FullName,
+                Mine = !m.IsAutoReply && m.SenderId == UserId,
+                m.IsAutoReply,
                 m.Body,
                 m.CreatedAt,
             });
@@ -140,6 +143,10 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 !await db.DocumentRequirements.AnyAsync(r => r.Id == dto.RequirementId))
                 return BadRequest(new { message = "Requirement not found." });
 
+            // "First message in this thread" has to be decided before the new one is stored.
+            var isFirstInThread = !await db.Messages
+                .AnyAsync(m => m.ScholarId == scholarId && m.RequirementId == dto.RequirementId);
+
             var message = new Message
             {
                 ScholarId = scholarId,
@@ -151,6 +158,11 @@ namespace PSUEISKOLARSystem.Server.Controllers
             };
             db.Messages.Add(message);
             await db.SaveChangesAsync();
+
+            // Acknowledge a scholar opening a conversation, once per thread.
+            var autoReply = !IsStaff && isFirstInThread
+                ? await TryPostAutoReplyAsync(scholarId, dto.RequirementId)
+                : null;
 
             var senderName = (await db.Users.FindAsync(UserId))?.FullName ?? "Someone";
             var preview = message.Body.Length > 140 ? message.Body[..140] + "…" : message.Body;
@@ -203,15 +215,75 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 Mine = true,
                 message.Body,
                 message.CreatedAt,
+                // The client appends this straight after the scholar's own message.
+                AutoReply = autoReply,
             });
+        }
+
+        /// <summary>
+        /// Posts the configured acknowledgement into a thread a scholar has just opened.
+        /// Returns the message shape the client should append, or null when auto-reply is off
+        /// or no account exists to attribute it to.
+        /// </summary>
+        private async Task<object?> TryPostAutoReplyAsync(string scholarId, int? requirementId)
+        {
+            var settings = await MessagingSettingsStore.GetAsync(db);
+            if (!settings.AutoReplyEnabled || string.IsNullOrWhiteSpace(settings.AutoReplyMessage))
+                return null;
+
+            // Message.SenderId is a required FK, so the acknowledgement is attributed to the
+            // admin who configured it (falling back to any active administrator). The scholar
+            // sees "Scholarship Office"; the row keeps a real author for auditing.
+            var senderId = settings.UpdatedById;
+            if (senderId is null || !await db.Users.AnyAsync(u => u.Id == senderId && u.IsActive))
+            {
+                var adminRoleId = await db.Roles
+                    .Where(r => r.Name == UserRoles.Administrator)
+                    .Select(r => r.Id)
+                    .FirstOrDefaultAsync();
+
+                senderId = await db.Users
+                    .Where(u => u.IsActive && db.UserRoles.Any(ur => ur.UserId == u.Id && ur.RoleId == adminRoleId))
+                    .OrderBy(u => u.CreatedAt)
+                    .Select(u => u.Id)
+                    .FirstOrDefaultAsync();
+            }
+
+            if (string.IsNullOrEmpty(senderId)) return null;   // nobody to attribute it to
+
+            var reply = new Message
+            {
+                ScholarId = scholarId,
+                RequirementId = requirementId,
+                SenderId = senderId,
+                Body = settings.AutoReplyMessage.Trim(),
+                IsAutoReply = true,
+                ReadByScholar = false,   // the scholar should see it land
+                ReadByStaff = true,      // no human action needed
+            };
+
+            db.Messages.Add(reply);
+            await db.SaveChangesAsync();
+
+            return new
+            {
+                reply.Id,
+                reply.SenderId,
+                SenderName = "Scholarship Office",
+                Mine = false,
+                IsAutoReply = true,
+                reply.Body,
+                reply.CreatedAt,
+            };
         }
 
         // GET /api/messages/unread-count
         [HttpGet("unread-count")]
         public async Task<IActionResult> UnreadCount()
         {
+            // Automatic acknowledgements never count as something a human must read.
             int count = IsStaff
-                ? await db.Messages.CountAsync(m => !m.ReadByStaff && m.SenderId != UserId)
+                ? await db.Messages.CountAsync(m => !m.ReadByStaff && !m.IsAutoReply && m.SenderId != UserId)
                 : await db.Messages.CountAsync(m => m.ScholarId == UserId && !m.ReadByScholar && m.SenderId != UserId);
             return Ok(new { count });
         }

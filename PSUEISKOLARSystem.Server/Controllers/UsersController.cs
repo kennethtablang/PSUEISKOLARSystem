@@ -10,6 +10,7 @@ using PSUEISKOLARSystem.Server.Exceptions;
 using PSUEISKOLARSystem.Server.Interfaces;
 using PSUEISKOLARSystem.Server.Models;
 using PSUEISKOLARSystem.Server.Models.Enums;
+using PSUEISKOLARSystem.Server.Services;
 
 namespace PSUEISKOLARSystem.Server.Controllers
 {
@@ -19,27 +20,32 @@ namespace PSUEISKOLARSystem.Server.Controllers
     public class UsersController(
         UserManager<ApplicationUser> userManager,
         IAuthService authService,
+        IFileStorageService storage,
         ApplicationDbContext db) : ControllerBase
     {
         [HttpGet]
         public async Task<IActionResult> GetAll(
             [FromQuery] string? role,
-            [FromQuery] int? campusId,
             [FromQuery] string? search,
             [FromQuery] bool? isActive,
+            [FromQuery] string? approvalStatus,
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 20)
         {
             page     = Math.Max(1, page);
             pageSize = Math.Clamp(pageSize, 5, 100);
 
-            var query = db.Users.Include(u => u.Campus).AsQueryable();
-
-            if (campusId.HasValue)
-                query = query.Where(u => u.CampusId == campusId);
+            var query = db.Users.AsQueryable();
 
             if (isActive.HasValue)
                 query = query.Where(u => u.IsActive == isActive);
+
+            if (!string.IsNullOrWhiteSpace(approvalStatus))
+            {
+                if (!ApprovalStatuses.All.Contains(approvalStatus))
+                    return BadRequest(new { message = "Invalid approval status." });
+                query = query.Where(u => u.ApprovalStatus == approvalStatus);
+            }
 
             // Filter by role in SQL (join through AspNetUserRoles) instead of loading everyone.
             if (!string.IsNullOrWhiteSpace(role))
@@ -79,9 +85,11 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     FullName = u.FullName,
                     Email = u.Email ?? string.Empty,
                     Role = roles.FirstOrDefault() ?? string.Empty,
-                    CampusId = u.CampusId,
-                    CampusName = u.Campus?.Name,
                     IsActive = u.IsActive,
+                    ApprovalStatus = u.ApprovalStatus,
+                    ApprovalNote = u.ApprovalNote,
+                    ApprovalDecidedAt = u.ApprovalDecidedAt,
+                    HasAvatar = u.AvatarPath != null,
                 });
             }
 
@@ -91,7 +99,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(string id)
         {
-            var user = await db.Users.Include(u => u.Campus).FirstOrDefaultAsync(u => u.Id == id);
+            var user = await db.Users.FirstOrDefaultAsync(u => u.Id == id);
             if (user is null) return NotFound(new { message = "User not found." });
 
             var roles = await userManager.GetRolesAsync(user);
@@ -104,9 +112,11 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 FullName = user.FullName,
                 Email = user.Email ?? string.Empty,
                 Role = roles.FirstOrDefault() ?? string.Empty,
-                CampusId = user.CampusId,
-                CampusName = user.Campus?.Name,
                 IsActive = user.IsActive,
+                ApprovalStatus = user.ApprovalStatus,
+                ApprovalNote = user.ApprovalNote,
+                ApprovalDecidedAt = user.ApprovalDecidedAt,
+                HasAvatar = user.AvatarPath != null,
             });
         }
 
@@ -118,9 +128,6 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
             if (!await db.Roles.AnyAsync(r => r.Name == dto.Role))
                 return BadRequest(new { message = $"Role '{dto.Role}' does not exist." });
-
-            if (dto.CampusId.HasValue && !await db.Campuses.AnyAsync(c => c.Id == dto.CampusId))
-                return BadRequest(new { message = $"Campus does not exist." });
 
             // Email / login change — enforce uniqueness, keep the account confirmed.
             var newEmail = dto.Email.Trim();
@@ -139,7 +146,6 @@ namespace PSUEISKOLARSystem.Server.Controllers
             user.FirstName = dto.FirstName.Trim();
             user.MiddleName = string.IsNullOrWhiteSpace(dto.MiddleName) ? null : dto.MiddleName.Trim();
             user.LastName = dto.LastName.Trim();
-            user.CampusId = dto.CampusId;
 
             var currentRoles = await userManager.GetRolesAsync(user);
             await userManager.RemoveFromRolesAsync(user, currentRoles);
@@ -210,6 +216,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             if (user is null) return NotFound(new { message = "User not found." });
 
             var deletedEmail = user.Email;
+            var avatarPath = user.AvatarPath;
 
             // Null out audit FK fields before deleting to avoid FK constraint violations
             // (ClientSetNull on these columns means EF won't cascade automatically)
@@ -221,9 +228,20 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 .Where(ds => ds.ReviewedById == id)
                 .ExecuteUpdateAsync(s => s.SetProperty(ds => ds.ReviewedById, (string?)null));
 
+            await db.ScholarshipAssignments
+                .Where(a => a.AssignedById == id)
+                .ExecuteUpdateAsync(s => s.SetProperty(a => a.AssignedById, (string?)null));
+
+            await db.OneTimeGrants
+                .Where(g => g.RecordedById == id)
+                .ExecuteUpdateAsync(s => s.SetProperty(g => g.RecordedById, (string?)null));
+
             var result = await userManager.DeleteAsync(user);
             if (!result.Succeeded)
                 return BadRequest(new { message = string.Join("; ", result.Errors.Select(e => e.Description)) });
+
+            // The row is gone, so nothing points at the photo any more — remove the file too.
+            if (avatarPath is not null) await storage.DeleteAsync(avatarPath);
 
             var actorId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
             db.AuditLogs.Add(new AuditLog

@@ -39,7 +39,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             var isAdminOrCoord = User.IsInRole(UserRoles.Administrator) || User.IsInRole(UserRoles.ScholarshipCoordinator);
 
             var query = db.DocumentSubmissions
-                .Include(ds => ds.Scholar).ThenInclude(u => u.Campus)
+                .Include(ds => ds.Scholar)
                 .Include(ds => ds.Requirement)
                 .Include(ds => ds.ReviewedBy)
                 .AsQueryable();
@@ -72,7 +72,6 @@ namespace PSUEISKOLARSystem.Server.Controllers
                         ? ds.Scholar.FirstName + " " + ds.Scholar.MiddleName + " " + ds.Scholar.LastName
                         : ds.Scholar.FirstName + " " + ds.Scholar.LastName,
                     ScholarEmail = ds.Scholar.Email,
-                    CampusName = ds.Scholar.Campus != null ? ds.Scholar.Campus.Name : null,
                     ds.RequirementId,
                     RequirementName = ds.Requirement.Name,
                     ds.FileName,
@@ -116,6 +115,47 @@ namespace PSUEISKOLARSystem.Server.Controllers
             IFormFile file)
         {
             var scholarId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+
+            // Registration must be verified by the scholarship office before a scholar can
+            // submit anything (see ScholarApprovalsController).
+            var scholar = await db.Users.FindAsync(scholarId);
+            if (scholar is null) return BadRequest(new { message = "Account not found." });
+            if (scholar.ApprovalStatus != ApprovalStatuses.Approved)
+                return BadRequest(new
+                {
+                    message = scholar.ApprovalStatus == ApprovalStatuses.Rejected
+                        ? "Your scholar registration was not approved, so document submission is locked. Please contact the scholarship office."
+                        : "Your scholar registration is still awaiting verification by the scholarship office. You can submit documents once it has been approved."
+                });
+
+            // The period was previously taken on trust — any string reached the database, which
+            // silently detached submissions from deadlines and compliance stats.
+            if (!AcademicPeriod.TryParse(academicYear, semester, out var period, out var periodError))
+                return BadRequest(new { message = periodError });
+
+            var isStaff = User.IsInRole(UserRoles.Administrator) || User.IsInRole(UserRoles.ScholarshipCoordinator);
+            var active = await db.ActiveSemesters.FirstOrDefaultAsync();
+
+            if (active is not null &&
+                AcademicPeriod.TryParse(active.AcademicYear, active.Semester, out var activePeriod, out _))
+            {
+                if (!isStaff && period != activePeriod)
+                    return BadRequest(new
+                    {
+                        message = $"Documents can only be submitted for the active period " +
+                                  $"({activePeriod.Label}). Contact your coordinator if you need to " +
+                                  $"submit for {period.Label}."
+                    });
+
+                // Staff may backfill a past period on a scholar's behalf, but never a future one.
+                if (isStaff && period > activePeriod)
+                    return BadRequest(new
+                    {
+                        message = $"{period.Label} is later than the active period ({activePeriod.Label})."
+                    });
+            }
+
+            academicYear = period.AcademicYear;   // store the normalised form
 
             var requirement = await db.DocumentRequirements.FindAsync(requirementId);
             if (requirement is null || !requirement.IsActive)
@@ -164,8 +204,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 await db.SaveChangesAsync();
 
                 // Notify scholar (fire-and-forget)
-                var scholar = await db.Users.FindAsync(scholarId);
-                if (scholar?.Email is not null)
+                if (scholar.Email is not null)
                 {
                     _ = emailService.SendDocumentUploadConfirmationAsync(
                         scholar.Email,

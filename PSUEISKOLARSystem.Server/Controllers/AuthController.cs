@@ -211,7 +211,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             return Ok(new { user.ConsentAcceptedAt, user.ConsentVersion });
         }
 
-        // FR-20: per-category email notification preferences.
+        // FR-20: per-category email preferences, plus the finer in-app (bell) muting.
         [HttpPut("notification-preferences")]
         [Authorize]
         public async Task<IActionResult> UpdateNotificationPreferences(NotificationPrefsDto dto)
@@ -220,9 +220,16 @@ namespace PSUEISKOLARSystem.Server.Controllers
             var user = await db.Users.FindAsync(userId);
             if (user is null) return NotFound();
 
+            var unknown = (dto.MutedInAppCategories ?? [])
+                .Where(c => !NotificationMuting.Mutable.Contains(c))
+                .ToList();
+            if (unknown.Count > 0)
+                return BadRequest(new { message = $"These categories can't be muted: {string.Join(", ", unknown)}." });
+
             user.EmailAnnouncements = dto.EmailAnnouncements;
             user.EmailDocumentStatus = dto.EmailDocumentStatus;
             user.EmailDeadlines = dto.EmailDeadlines;
+            user.MutedNotificationCategories = NotificationMuting.Encode(dto.MutedInAppCategories);
             await db.SaveChangesAsync();
             return NoContent();
         }
@@ -248,6 +255,11 @@ namespace PSUEISKOLARSystem.Server.Controllers
             }
         }
 
-        public record NotificationPrefsDto(bool EmailAnnouncements, bool EmailDocumentStatus, bool EmailDeadlines);
+        public record NotificationPrefsDto(
+            bool EmailAnnouncements,
+            bool EmailDocumentStatus,
+            bool EmailDeadlines,
+            // NotificationCategories values to silence in the bell. Account notices can't be muted.
+            List<string>? MutedInAppCategories);
     }
 }

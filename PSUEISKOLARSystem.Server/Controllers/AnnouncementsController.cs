@@ -13,15 +13,13 @@ namespace PSUEISKOLARSystem.Server.Controllers
     [ApiController]
     [Route("api/[controller]")]
     [Authorize]
-    public class AnnouncementsController(ApplicationDbContext db, IEmailService emailService, INotificationService notifications, IFileStorageService storage, IServiceScopeFactory scopeFactory) : ControllerBase
+    public class AnnouncementsController(ApplicationDbContext db, IAnnouncementDelivery delivery, IFileStorageService storage) : ControllerBase
     {
         [HttpGet]
         public async Task<IActionResult> GetAll()
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
             var role = User.FindFirstValue(ClaimTypes.Role);
-            var campusIdClaim = User.FindFirstValue("campusId");
-            int? campusId = campusIdClaim is not null ? int.Parse(campusIdClaim) : null;
 
             var now = DateTime.UtcNow;
 
@@ -44,24 +42,34 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
             var query = db.Announcements
                 .Include(a => a.CreatedBy)
-                .Include(a => a.TargetCampus)
                 .Include(a => a.TargetScholarshipType)
                 .Include(a => a.TargetProgram)
+                .Include(a => a.Recipients)
+                    .ThenInclude(r => r.Scholar)
                 .Where(a =>
                     a.IsActive &&
                     (a.ExpiresAt == null || a.ExpiresAt > now));
 
             if (!isManager)
             {
+                // A scheduled announcement stays invisible to its audience until it is due —
+                // managers still see it in the list, badged as Scheduled.
+                query = query.Where(a => a.PublishAt == null || a.PublishAt <= now);
+
+                // An announcement addressed to named scholars reaches exactly those scholars;
+                // one with no named recipients falls back to the audience filters.
                 query = query.Where(a =>
-                    (a.TargetRole == null || a.TargetRole == role) &&
-                    (a.TargetCampusId == null || a.TargetCampusId == campusId) &&
-                    (a.TargetScholarshipTypeId == null || a.TargetScholarshipTypeId == scholarshipTypeId) &&
-                    (a.TargetProgramId == null || a.TargetProgramId == programId));
+                    a.Recipients.Any()
+                        ? a.Recipients.Any(r => r.ScholarId == userId)
+                        : (a.TargetRole == null || a.TargetRole == role) &&
+                          (a.TargetScholarshipTypeId == null || a.TargetScholarshipTypeId == scholarshipTypeId) &&
+                          (a.TargetProgramId == null || a.TargetProgramId == programId));
             }
 
             var announcements = await query
-                .OrderByDescending(a => a.CreatedAt)
+                // Sort by when the announcement actually reaches people, so a scheduled post
+                // sits at the top of the manager's list until it goes out.
+                .OrderByDescending(a => a.PublishAt ?? a.CreatedAt)
                 .ToListAsync();
 
             return Ok(announcements.Select(a => new
@@ -70,13 +78,20 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 a.Title,
                 a.Content,
                 a.TargetRole,
-                TargetCampus = a.TargetCampus?.Name,
                 TargetScholarshipType = a.TargetScholarshipType?.Name,
                 TargetProgram = a.TargetProgram?.Name,
                 a.ExpiresAt,
+                a.PublishAt,
+                a.IsScheduled,
                 a.IntentAction,
                 HasImage = a.ImagePath != null,
                 a.CreatedAt,
+                // Managers get the named audience back so the editor can prefill it.
+                RecipientIds = isManager ? a.Recipients.Select(r => r.ScholarId).ToList() : [],
+                RecipientNames = isManager
+                    ? a.Recipients.Select(r => r.Scholar.FullName).OrderBy(n => n).ToList()
+                    : [],
+                RecipientCount = a.Recipients.Count,
                 CreatedBy = a.CreatedBy.MiddleName != null
                     ? a.CreatedBy.FirstName + " " + a.CreatedBy.MiddleName + " " + a.CreatedBy.LastName
                     : a.CreatedBy.FirstName + " " + a.CreatedBy.LastName,
@@ -87,108 +102,103 @@ namespace PSUEISKOLARSystem.Server.Controllers
         [Authorize(Roles = $"{UserRoles.Administrator},{UserRoles.ScholarshipCoordinator}")]
         public async Task<IActionResult> Create(AnnouncementRequest dto)
         {
-            if (!string.IsNullOrWhiteSpace(dto.IntentAction) && !AnnouncementIntents.IsValid(dto.IntentAction))
-                return BadRequest(new { message = $"Unknown intended action '{dto.IntentAction}'." });
+            var error = Validate(dto);
+            if (error is not null) return BadRequest(new { message = error });
+
+            var publishAt = NormalizePublishAt(dto.PublishAt);
 
             var announcement = new Announcement
             {
                 Title = dto.Title,
                 Content = dto.Content,
                 TargetRole = string.IsNullOrEmpty(dto.TargetRole) ? null : dto.TargetRole,
-                TargetCampusId = dto.TargetCampusId,
                 TargetScholarshipTypeId = dto.TargetScholarshipTypeId,
                 TargetProgramId = dto.TargetProgramId,
                 ExpiresAt = dto.ExpiresAt,
+                PublishAt = publishAt,
                 IntentAction = string.IsNullOrWhiteSpace(dto.IntentAction) ? null : dto.IntentAction,
                 CreatedById = User.FindFirstValue(ClaimTypes.NameIdentifier)!,
             };
 
             db.Announcements.Add(announcement);
-            db.Audit(this, "CreateAnnouncement", $"Created announcement '{announcement.Title}'");
             await db.SaveChangesAsync();
 
-            // Resolve targeted scholars once, then deliver via both channels.
-            var scholars = await GetTargetedScholarsAsync(announcement);
-            if (scholars.Count > 0)
-            {
-                // Real-time in-app notification (FR-13/FR-14/FR-6.4) — awaited so it persists.
-                var preview = announcement.Content.Length > 200
-                    ? announcement.Content[..200] + "…"
-                    : announcement.Content;
-                await notifications.CreateForManyAsync(
-                    scholars.Select(s => s.Id),
-                    announcement.Title,
-                    preview,
-                    NotificationCategories.Announcement,
-                    "/dashboard");
+            var namedCount = await SetRecipientsAsync(announcement.Id, dto.RecipientIds);
 
-                // Email only scholars who opted in to announcement emails (FR-20).
-                _ = SendAnnouncementEmailsAsync(
-                    scholars.Where(s => s.EmailOptIn).ToList(), announcement.Title, announcement.Content);
-            }
+            db.Audit(this, "CreateAnnouncement",
+                $"Created announcement '{announcement.Title}'" +
+                (namedCount > 0 ? $" for {namedCount} named scholar(s)" : "") +
+                (publishAt is not null ? $", scheduled for {publishAt:yyyy-MM-dd HH:mm} UTC" : ""));
+            await db.SaveChangesAsync();
 
-            return Ok(new { announcement.Id });
+            // Scheduled posts are released by AnnouncementPublisherService when they fall due,
+            // so nothing is notified or emailed here.
+            if (publishAt is null)
+                await delivery.PublishAsync(announcement);
+
+            return Ok(new { announcement.Id, Scheduled = publishAt is not null });
         }
 
-        // Returns the scholars an announcement targets (campus/type/program/role scoped).
-        private async Task<List<TargetedScholar>> GetTargetedScholarsAsync(Announcement a)
+        // Treat a publish time that has already passed as "publish now" — the scheduler would
+        // release it on its next pass anyway, and this way the poster gets immediate feedback.
+        private static DateTime? NormalizePublishAt(DateTime? publishAt) =>
+            publishAt is null || publishAt <= DateTime.UtcNow.AddMinutes(1) ? null : publishAt;
+
+        private static string? Validate(AnnouncementRequest dto)
         {
-            // If the announcement targets a non-scholar role, there are no scholars to reach.
-            if (!string.IsNullOrEmpty(a.TargetRole) && a.TargetRole != UserRoles.Scholar)
-                return [];
-
-            var query = db.Users
-                .Join(db.UserRoles, u => u.Id, ur => ur.UserId, (u, ur) => new { u, ur })
-                .Join(db.Roles, x => x.ur.RoleId, r => r.Id, (x, r) => new { x.u, RoleName = r.Name })
-                .Where(x => x.RoleName == UserRoles.Scholar && x.u.IsActive && x.u.Email != null)
-                .Select(x => x.u)
-                .AsQueryable();
-
-            if (a.TargetCampusId.HasValue)
-                query = query.Where(u => u.CampusId == a.TargetCampusId);
-
-            var scholars = await query.ToListAsync();
-
-            if (a.TargetScholarshipTypeId.HasValue || a.TargetProgramId.HasValue)
-            {
-                var profileQuery = db.ScholarProfiles.AsQueryable();
-                if (a.TargetScholarshipTypeId.HasValue)
-                    profileQuery = profileQuery.Where(sp => sp.ScholarshipTypeId == a.TargetScholarshipTypeId);
-                if (a.TargetProgramId.HasValue)
-                    profileQuery = profileQuery.Where(sp => sp.ProgramId == a.TargetProgramId);
-
-                var matchedUserIds = await profileQuery.Select(sp => sp.UserId).ToListAsync();
-                scholars = scholars.Where(u => matchedUserIds.Contains(u.Id)).ToList();
-            }
-
-            return scholars.Select(u => new TargetedScholar(u.Id, u.Email!, u.FullName, u.EmailAnnouncements)).ToList();
+            if (!string.IsNullOrWhiteSpace(dto.IntentAction) && !AnnouncementIntents.IsValid(dto.IntentAction))
+                return $"Unknown intended action '{dto.IntentAction}'.";
+            if (dto.PublishAt is not null && dto.ExpiresAt is not null && dto.ExpiresAt <= dto.PublishAt)
+                return "The expiry date must come after the scheduled publish time.";
+            return null;
         }
 
-        // Runs after the HTTP response returns, so it must NOT use the request-scoped
-        // emailService (its scope is disposed by then). Resolve a fresh one in a new scope.
-        private async Task SendAnnouncementEmailsAsync(List<TargetedScholar> scholars, string title, string content)
+        /// <summary>
+        /// Replaces an announcement's named recipients. Ids that are not active scholars are
+        /// dropped rather than failing the whole save. Returns how many were stored.
+        /// </summary>
+        private async Task<int> SetRecipientsAsync(int announcementId, List<string>? recipientIds)
         {
-            using var scope = scopeFactory.CreateScope();
-            var scopedEmail = scope.ServiceProvider.GetRequiredService<IEmailService>();
+            var existing = await db.AnnouncementRecipients
+                .Where(r => r.AnnouncementId == announcementId)
+                .ToListAsync();
+            db.AnnouncementRecipients.RemoveRange(existing);
 
-            foreach (var scholar in scholars)
+            var requested = (recipientIds ?? [])
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .Distinct()
+                .ToList();
+
+            if (requested.Count == 0)
             {
-                try
-                {
-                    await scopedEmail.SendAnnouncementEmailAsync(scholar.Email, scholar.FullName, title, content);
-                }
-                catch { /* don't let one failed email abort the rest */ }
+                await db.SaveChangesAsync();
+                return 0;
             }
-        }
 
-        private record TargetedScholar(string Id, string Email, string FullName, bool EmailOptIn);
+            var scholarRoleId = await db.Roles
+                .Where(r => r.Name == UserRoles.Scholar)
+                .Select(r => r.Id)
+                .FirstOrDefaultAsync();
+
+            var valid = await db.Users
+                .Where(u => requested.Contains(u.Id) && u.IsActive &&
+                            db.UserRoles.Any(ur => ur.UserId == u.Id && ur.RoleId == scholarRoleId))
+                .Select(u => u.Id)
+                .ToListAsync();
+
+            db.AnnouncementRecipients.AddRange(
+                valid.Select(id => new AnnouncementRecipient { AnnouncementId = announcementId, ScholarId = id }));
+
+            await db.SaveChangesAsync();
+            return valid.Count;
+        }
 
         [HttpPut("{id}")]
         [Authorize(Roles = $"{UserRoles.Administrator},{UserRoles.ScholarshipCoordinator}")]
         public async Task<IActionResult> Update(int id, AnnouncementRequest dto)
         {
-            if (!string.IsNullOrWhiteSpace(dto.IntentAction) && !AnnouncementIntents.IsValid(dto.IntentAction))
-                return BadRequest(new { message = $"Unknown intended action '{dto.IntentAction}'." });
+            var error = Validate(dto);
+            if (error is not null) return BadRequest(new { message = error });
 
             var announcement = await db.Announcements.FindAsync(id);
             if (announcement is null) return NotFound();
@@ -196,15 +206,45 @@ namespace PSUEISKOLARSystem.Server.Controllers
             announcement.Title = dto.Title;
             announcement.Content = dto.Content;
             announcement.TargetRole = string.IsNullOrEmpty(dto.TargetRole) ? null : dto.TargetRole;
-            announcement.TargetCampusId = dto.TargetCampusId;
             announcement.TargetScholarshipTypeId = dto.TargetScholarshipTypeId;
             announcement.TargetProgramId = dto.TargetProgramId;
             announcement.ExpiresAt = dto.ExpiresAt;
             announcement.IntentAction = string.IsNullOrWhiteSpace(dto.IntentAction) ? null : dto.IntentAction;
 
-            db.Audit(this, "UpdateAnnouncement", $"Updated announcement #{id} '{announcement.Title}'");
+            // Rescheduling only applies while the announcement is still unpublished; once it
+            // has gone out, its publish time is history and the field is left alone.
+            if (announcement.PublishedAt is null)
+                announcement.PublishAt = NormalizePublishAt(dto.PublishAt);
+
+            var namedCount = await SetRecipientsAsync(id, dto.RecipientIds);
+
+            db.Audit(this, "UpdateAnnouncement",
+                $"Updated announcement #{id} '{announcement.Title}'" +
+                (namedCount > 0 ? $" — {namedCount} named scholar(s)" : ""));
             await db.SaveChangesAsync();
             return NoContent();
+        }
+
+        // POST /api/announcements/{id}/publish-now  — release a scheduled announcement early.
+        [HttpPost("{id}/publish-now")]
+        [Authorize(Roles = $"{UserRoles.Administrator},{UserRoles.ScholarshipCoordinator}")]
+        public async Task<IActionResult> PublishNow(int id)
+        {
+            var announcement = await db.Announcements
+                .Include(a => a.Recipients)
+                .FirstOrDefaultAsync(a => a.Id == id);
+            if (announcement is null) return NotFound();
+            if (announcement.PublishedAt is not null)
+                return BadRequest(new { message = "This announcement has already been published." });
+
+            announcement.PublishAt = null;
+            var reached = await delivery.PublishAsync(announcement);
+
+            db.Audit(this, "PublishAnnouncement",
+                $"Published scheduled announcement #{id} '{announcement.Title}' early to {reached} scholar(s)");
+            await db.SaveChangesAsync();
+
+            return Ok(new { published = true, reached });
         }
 
         // POST /api/announcements/{id}/image  — attach an image (admin/coord)
@@ -283,9 +323,12 @@ namespace PSUEISKOLARSystem.Server.Controllers
         string Title,
         string Content,
         string? TargetRole,
-        int? TargetCampusId,
         int? TargetScholarshipTypeId,
         int? TargetProgramId,
         DateTime? ExpiresAt,
-        string? IntentAction);
+        // Null (or already past) publishes immediately; a future time schedules the release.
+        DateTime? PublishAt,
+        string? IntentAction,
+        // Named scholars. Non-empty means these scholars only; the filters above are ignored.
+        List<string>? RecipientIds);
 }

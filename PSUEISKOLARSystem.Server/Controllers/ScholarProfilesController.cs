@@ -15,25 +15,15 @@ namespace PSUEISKOLARSystem.Server.Controllers
     [Authorize]
     public class ScholarProfilesController(ApplicationDbContext db, INotificationService notifications) : ControllerBase
     {
-        // Coordinators are scoped to their assigned campus; admins see all (FR-8.6/8.7).
-        private int? CoordinatorCampusScope()
-        {
-            if (User.IsInRole(UserRoles.Administrator)) return null; // no restriction
-            if (User.IsInRole(UserRoles.ScholarshipCoordinator)
-                && int.TryParse(User.FindFirstValue("campusId"), out var c))
-                return c;
-            return null;
-        }
-
         [HttpGet]
         [Authorize(Roles = $"{UserRoles.Administrator},{UserRoles.ScholarshipCoordinator}")]
         public async Task<IActionResult> GetAll(
-            [FromQuery] int? campusId,
             [FromQuery] int? programId,
             [FromQuery] int? scholarshipTypeId,
             [FromQuery] string? search,
             [FromQuery] bool? meetsRequirement,
             [FromQuery] string? lifecycleStatus,
+            [FromQuery] string? approvalStatus,
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 20)
         {
@@ -41,21 +31,20 @@ namespace PSUEISKOLARSystem.Server.Controllers
             pageSize = Math.Clamp(pageSize, 1, 100);
 
             var query = db.ScholarProfiles
-                .Include(sp => sp.User).ThenInclude(u => u.Campus)
+                .Include(sp => sp.User)
                 .Include(sp => sp.Program)
                 .Include(sp => sp.ScholarshipType)
                 .Include(sp => sp.Grades.OrderByDescending(g => g.AcademicYear).ThenByDescending(g => g.Semester).Take(1))
                 .AsQueryable();
 
-            // Campus scoping for coordinators (FR-8.6).
-            var scope = CoordinatorCampusScope();
-            if (scope.HasValue)
-                query = query.Where(sp => sp.User.CampusId == scope);
-
-            if (campusId.HasValue)
-                query = query.Where(sp => sp.User.CampusId == campusId);
             if (!string.IsNullOrWhiteSpace(lifecycleStatus))
                 query = query.Where(sp => sp.LifecycleStatus == lifecycleStatus);
+            if (!string.IsNullOrWhiteSpace(approvalStatus))
+            {
+                if (!ApprovalStatuses.All.Contains(approvalStatus))
+                    return BadRequest(new { message = "Invalid approval status." });
+                query = query.Where(sp => sp.User.ApprovalStatus == approvalStatus);
+            }
             if (programId.HasValue)
                 query = query.Where(sp => sp.ProgramId == programId);
             if (scholarshipTypeId.HasValue)
@@ -82,15 +71,39 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 .Take(pageSize)
                 .ToListAsync();
 
+            var ledger = await LoadLedgerAsync(profiles.Select(p => p.UserId).ToList());
+
             return Ok(new
             {
                 total,
                 page,
                 pageSize,
                 totalPages = (int)Math.Ceiling(total / (double)pageSize),
-                items = profiles.Select(Map),
+                items = profiles.Select(sp => Map(sp, ledger.GetValueOrDefault(sp.UserId))),
             });
         }
+
+        // Batched scholarship-ledger lookup for a page of scholars: when the current
+        // scholarship was assigned, and how many scholarships they have ever held.
+        private async Task<Dictionary<string, LedgerSummary>> LoadLedgerAsync(List<string> userIds)
+        {
+            if (userIds.Count == 0) return [];
+
+            var rows = await db.ScholarshipAssignments
+                .Where(a => userIds.Contains(a.ScholarId))
+                .GroupBy(a => a.ScholarId)
+                .Select(g => new
+                {
+                    ScholarId = g.Key,
+                    Count = g.Count(),
+                    ActiveAssignedAt = g.Where(a => a.EndedAt == null).Max(a => (DateTime?)a.AssignedAt),
+                })
+                .ToListAsync();
+
+            return rows.ToDictionary(r => r.ScholarId, r => new LedgerSummary(r.ActiveAssignedAt, r.Count));
+        }
+
+        private record LedgerSummary(DateTime? AssignedAt, int RecordCount);
 
         [HttpGet("{userId}")]
         public async Task<IActionResult> GetByUserId(string userId)
@@ -102,7 +115,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 return Forbid();
 
             var profile = await db.ScholarProfiles
-                .Include(sp => sp.User).ThenInclude(u => u.Campus)
+                .Include(sp => sp.User)
                 .Include(sp => sp.Program)
                 .Include(sp => sp.ScholarshipType)
                 .Include(sp => sp.Grades.OrderByDescending(g => g.AcademicYear).ThenByDescending(g => g.Semester).Take(1))
@@ -110,12 +123,147 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
             if (profile is null) return NotFound(new { message = "Scholar profile not found." });
 
-            // Coordinators may only view scholars in their campus (FR-8.6).
-            var scope = CoordinatorCampusScope();
-            if (scope.HasValue && profile.User.CampusId != scope) return Forbid();
-
-            return Ok(Map(profile));
+            var ledger = await LoadLedgerAsync([userId]);
+            return Ok(Map(profile, ledger.GetValueOrDefault(userId)));
         }
+
+        // GET /api/scholars/{userId}/scholarship-history
+        // Every scholarship this scholar has been registered under. Exactly one row should
+        // be open (EndedAt = null) — that is their single active scholarship.
+        [HttpGet("{userId}/scholarship-history")]
+        public async Task<IActionResult> GetScholarshipHistory(string userId)
+        {
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            var isAdminOrCoord = User.IsInRole(UserRoles.Administrator) || User.IsInRole(UserRoles.ScholarshipCoordinator);
+            if (!isAdminOrCoord && currentUserId != userId) return Forbid();
+
+            var history = await ScholarshipRegistry.GetHistoryAsync(db, userId);
+
+            return Ok(history.Select(a => new
+            {
+                a.Id,
+                a.ScholarshipTypeId,
+                ScholarshipTypeName = a.ScholarshipType.Name,
+                ScholarshipTypeCategory = a.ScholarshipType.Category,
+                a.ScholarshipType.MinimumGwa,
+                a.AssignedAt,
+                AssignedBy = a.AssignedBy is null ? null : a.AssignedBy.FullName,
+                a.EndedAt,
+                a.EndReason,
+                IsActive = a.EndedAt == null,
+            }));
+        }
+
+        // GET /api/scholars/scholarship-verification
+        // Verification report backing the "strictly one scholarship per student" rule: any
+        // scholar whose records need a second look — more than one open assignment (should be
+        // impossible), a scholarship on the profile with no ledger row, a profile/ledger
+        // mismatch, a duplicated student ID, or a history of transfers.
+        [HttpGet("scholarship-verification")]
+        [Authorize(Roles = $"{UserRoles.Administrator},{UserRoles.ScholarshipCoordinator}")]
+        public async Task<IActionResult> GetScholarshipVerification()
+        {
+            var profiles = await db.ScholarProfiles
+                .Include(sp => sp.User)
+                .Include(sp => sp.ScholarshipType)
+                .ToListAsync();
+
+            var assignments = await db.ScholarshipAssignments
+                .Include(a => a.ScholarshipType)
+                .ToListAsync();
+
+            var byScholar = assignments.GroupBy(a => a.ScholarId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            var duplicateStudentIds = profiles
+                .Where(p => !string.IsNullOrWhiteSpace(p.StudentId))
+                .GroupBy(p => p.StudentId, StringComparer.OrdinalIgnoreCase)
+                .Where(g => g.Count() > 1)
+                .Select(g => g.Key)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var findings = new List<VerificationFinding>();
+
+            foreach (var p in profiles)
+            {
+                var rows = byScholar.GetValueOrDefault(p.UserId) ?? [];
+                var open = rows.Where(a => a.EndedAt is null).ToList();
+                var issues = new List<string>();
+                var severity = "info";
+
+                if (open.Count > 1)
+                {
+                    issues.Add($"{open.Count} scholarships are open at the same time: " +
+                               string.Join(", ", open.Select(a => a.ScholarshipType.Name)));
+                    severity = "error";
+                }
+
+                if (p.ScholarshipTypeId is not null && open.Count == 0)
+                {
+                    issues.Add($"Profile shows {p.ScholarshipType?.Name} but there is no assignment record for it.");
+                    if (severity != "error") severity = "warning";
+                }
+
+                if (p.ScholarshipTypeId is null && open.Count == 1)
+                {
+                    issues.Add($"An open assignment for {open[0].ScholarshipType.Name} exists but the profile has no scholarship set.");
+                    if (severity != "error") severity = "warning";
+                }
+
+                if (open.Count == 1 && p.ScholarshipTypeId is not null && open[0].ScholarshipTypeId != p.ScholarshipTypeId)
+                {
+                    issues.Add($"Profile says {p.ScholarshipType?.Name} but the open assignment is {open[0].ScholarshipType.Name}.");
+                    severity = "error";
+                }
+
+                if (!string.IsNullOrWhiteSpace(p.StudentId) && duplicateStudentIds.Contains(p.StudentId))
+                {
+                    issues.Add($"Student ID {p.StudentId} appears on more than one profile.");
+                    severity = "error";
+                }
+
+                if (rows.Count > 1 && issues.Count == 0)
+                    issues.Add($"Transferred scholarships {rows.Count - 1} time(s) — history is available for review.");
+
+                if (issues.Count == 0) continue;
+
+                findings.Add(new VerificationFinding(
+                    p.UserId,
+                    p.User.FullName,
+                    p.User.Email,
+                    p.StudentId,
+                    p.ScholarshipType?.Name,
+                    p.User.ApprovalStatus,
+                    open.Count,
+                    rows.Count,
+                    severity,
+                    issues));
+            }
+
+            return Ok(new
+            {
+                totalScholars = profiles.Count,
+                scholarsWithOneScholarship = profiles.Count(p => p.ScholarshipTypeId is not null),
+                scholarsWithoutScholarship = profiles.Count(p => p.ScholarshipTypeId is null),
+                flagged = findings.Count,
+                findings = findings
+                    .OrderBy(f => f.Severity == "error" ? 0 : f.Severity == "warning" ? 1 : 2)
+                    .ThenBy(f => f.FullName)
+                    .ToList(),
+            });
+        }
+
+        private record VerificationFinding(
+            string UserId,
+            string FullName,
+            string? Email,
+            string StudentId,
+            string? CurrentScholarship,
+            string ApprovalStatus,
+            int OpenAssignments,
+            int TotalAssignments,
+            string Severity,
+            List<string> Issues);
 
         // PATCH /api/scholars/{userId}/lifecycle  — set scholarship lifecycle status (FR-18)
         [HttpPatch("{userId}/lifecycle")]
@@ -130,8 +278,6 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 .FirstOrDefaultAsync(sp => sp.UserId == userId);
             if (profile is null) return NotFound(new { message = "Scholar profile not found." });
 
-            var scope = CoordinatorCampusScope();
-            if (scope.HasValue && profile.User.CampusId != scope) return Forbid();
 
             profile.LifecycleStatus = dto.Status;
             db.AuditLogs.Add(new AuditLog
@@ -153,16 +299,13 @@ namespace PSUEISKOLARSystem.Server.Controllers
             if (!isAdminOrCoord && currentUserId != userId) return Forbid();
 
             var profile = await db.ScholarProfiles
-                .Include(sp => sp.User).ThenInclude(u => u.Campus)
+                .Include(sp => sp.User)
                 .Include(sp => sp.Program)
                 .Include(sp => sp.ScholarshipType)
                 .Include(sp => sp.Grades)
                 .FirstOrDefaultAsync(sp => sp.UserId == userId);
             if (profile is null) return NotFound(new { message = "Scholar profile not found." });
 
-            // Coordinators may only export scholars in their campus (FR-8.6).
-            var scope = CoordinatorCampusScope();
-            if (scope.HasValue && profile.User.CampusId != scope) return Forbid();
 
             var documents = await db.DocumentSubmissions
                 .Include(d => d.Requirement)
@@ -177,7 +320,6 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 {
                     profile.User.FullName,
                     profile.User.Email,
-                    Campus = profile.User.Campus?.Name,
                     profile.User.CreatedAt,
                     profile.User.LastLoginAt,
                 },
@@ -211,9 +353,14 @@ namespace PSUEISKOLARSystem.Server.Controllers
             var user = await db.Users.FindAsync(userId);
             if (user is null) return NotFound(new { message = "User not found." });
 
-            // Coordinators may only edit scholars in their campus (FR-8.6).
-            var scope = CoordinatorCampusScope();
-            if (scope.HasValue && user.CampusId != scope) return Forbid();
+
+            // A student number must identify exactly one scholar — a duplicate is the usual
+            // symptom of the same student registering twice.
+            var studentId = dto.StudentId.Trim();
+            var studentIdTaken = await db.ScholarProfiles
+                .AnyAsync(sp => sp.UserId != userId && sp.StudentId == studentId);
+            if (studentIdTaken)
+                return BadRequest(new { message = $"Student ID {studentId} is already registered to another scholar." });
 
             var profile = await db.ScholarProfiles.FirstOrDefaultAsync(sp => sp.UserId == userId);
             if (profile is null)
@@ -221,8 +368,21 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 profile = new ScholarProfile { UserId = userId };
                 db.ScholarProfiles.Add(profile);
             }
+            else
+            {
+                // Existing profiles created before the ledger existed get a row on first touch,
+                // so the one-scholarship check below has something to compare against.
+                await ScholarshipRegistry.BackfillAsync(db, profile, currentUserId);
+            }
 
-            profile.StudentId = dto.StudentId;
+            // Strictly one scholarship per student: the ledger rejects a second active
+            // assignment and records every transfer.
+            var rejection = await ScholarshipRegistry.SetAsync(
+                db, userId, dto.ScholarshipTypeId, currentUserId, isAdminOrCoord, dto.ScholarshipChangeReason);
+            if (rejection is not null)
+                return BadRequest(new { message = rejection });
+
+            profile.StudentId = studentId;
             profile.ProgramId = dto.ProgramId;
             profile.ScholarshipTypeId = dto.ScholarshipTypeId;
             profile.YearLevel = dto.YearLevel;
@@ -230,7 +390,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             profile.BirthDate = dto.BirthDate;
             profile.Address = dto.Address;
 
-            db.Audit(this, "UpdateScholarProfile", $"Updated profile for {user.FullName} (student {dto.StudentId})");
+            db.Audit(this, "UpdateScholarProfile", $"Updated profile for {user.FullName} (student {studentId})");
             await db.SaveChangesAsync();
             return NoContent();
         }
@@ -249,9 +409,6 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 .FirstOrDefaultAsync(sp => sp.UserId == userId);
             if (profile is null) return NotFound(new { message = "Scholar profile not found." });
 
-            // Coordinators may only view grades for scholars in their campus (FR-8.6).
-            var scope = CoordinatorCampusScope();
-            if (scope.HasValue && profile.User.CampusId != scope) return Forbid();
 
             var grades = await db.AcademicGrades
                 .Where(g => g.ScholarProfileId == profile.Id)
@@ -289,9 +446,6 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 return BadRequest(new { message =
                     $"Cannot record a grade for A.Y. {dto.AcademicYear} Semester {dto.Semester} — it is later than the active period (A.Y. {active.AcademicYear} Semester {active.Semester})." });
 
-            // Coordinators may only record grades for scholars in their campus (FR-8.6).
-            var scope = CoordinatorCampusScope();
-            if (scope.HasValue && profile.User.CampusId != scope) return Forbid();
 
             var meetsRequirement = profile.ScholarshipType is null || dto.Gwa <= profile.ScholarshipType.MinimumGwa;
 
@@ -328,17 +482,21 @@ namespace PSUEISKOLARSystem.Server.Controllers
             return y1 > y2 || (y1 == y2 && semester > refSemester);
         }
 
-        private static ScholarProfileDto Map(ScholarProfile sp)
+        private static ScholarProfileDto Map(ScholarProfile sp, LedgerSummary? ledger = null)
         {
             var latest = sp.Grades.OrderByDescending(g => g.AcademicYear).ThenByDescending(g => g.Semester).FirstOrDefault();
             return new ScholarProfileDto
             {
+                ApprovalStatus = sp.User.ApprovalStatus,
+                ApprovalNote = sp.User.ApprovalNote,
+                ApprovalDecidedAt = sp.User.ApprovalDecidedAt,
+                ScholarshipAssignedAt = ledger?.AssignedAt,
+                ScholarshipRecordCount = ledger?.RecordCount ?? 0,
                 Id = sp.Id,
                 UserId = sp.UserId,
                 FullName = sp.User.FullName,
                 Email = sp.User.Email ?? string.Empty,
-                CampusId = sp.User.CampusId,
-                CampusName = sp.User.Campus?.Name,
+                HasAvatar = sp.User.AvatarPath != null,
                 StudentId = sp.StudentId,
                 ProgramId = sp.ProgramId,
                 ProgramName = sp.Program?.Name,

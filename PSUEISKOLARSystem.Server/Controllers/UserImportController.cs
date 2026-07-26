@@ -31,7 +31,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
         private static readonly string[] TemplateHeaders =
         {
             "FirstName", "MiddleName", "LastName", "Email",
-            "CampusCode", "StudentId", "ProgramCode", "ScholarshipType",
+            "StudentId", "ProgramCode", "ScholarshipType",
             "YearLevel", "ContactNumber", "Password",
         };
 
@@ -56,13 +56,12 @@ namespace PSUEISKOLARSystem.Server.Controllers
             ws.Cell(2, 2).Value = "Santos";
             ws.Cell(2, 3).Value = "Dela Cruz";
             ws.Cell(2, 4).Value = "juan.delacruz@example.com";
-            ws.Cell(2, 5).Value = "LC";
-            ws.Cell(2, 6).Value = "2024-00123";
-            ws.Cell(2, 7).Value = "BSCS";
-            ws.Cell(2, 8).Value = "CHED";
-            ws.Cell(2, 9).Value = 1;
-            ws.Cell(2, 10).Value = "09171234567";
-            ws.Cell(2, 11).Value = "(leave blank to auto-generate)";
+            ws.Cell(2, 5).Value = "2024-00123";
+            ws.Cell(2, 6).Value = "BSCS";
+            ws.Cell(2, 7).Value = "CHED";
+            ws.Cell(2, 8).Value = 1;
+            ws.Cell(2, 9).Value = "09171234567";
+            ws.Cell(2, 10).Value = "(leave blank to auto-generate)";
             ws.Row(2).Style.Font.Italic = true;
             ws.Row(2).Style.Font.FontColor = XLColor.FromHtml("#8a94a6");
 
@@ -70,33 +69,25 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
             // Reference sheet: valid codes so admins pick correct values.
             var refWs = wb.Worksheets.Add("Reference");
-            refWs.Cell(1, 1).Value = "Campus Code";
-            refWs.Cell(1, 2).Value = "Campus Name";
-            refWs.Cell(1, 4).Value = "Program Code";
-            refWs.Cell(1, 5).Value = "Program Name";
-            refWs.Cell(1, 7).Value = "Scholarship Type";
-            foreach (var c in new[] { 1, 2, 4, 5, 7 })
+            refWs.Cell(1, 1).Value = "Program Code";
+            refWs.Cell(1, 2).Value = "Program Name";
+            refWs.Cell(1, 4).Value = "Scholarship Type";
+            foreach (var c in new[] { 1, 2, 4 })
             {
                 refWs.Cell(1, c).Style.Font.Bold = true;
                 refWs.Cell(1, c).Style.Fill.BackgroundColor = XLColor.FromHtml("#002570");
                 refWs.Cell(1, c).Style.Font.FontColor = XLColor.White;
             }
 
-            var campuses = await db.Campuses.OrderBy(c => c.Name).ToListAsync();
-            for (int i = 0; i < campuses.Count; i++)
-            {
-                refWs.Cell(i + 2, 1).Value = campuses[i].Code;
-                refWs.Cell(i + 2, 2).Value = campuses[i].Name;
-            }
             var programs = await db.AcademicPrograms.OrderBy(p => p.Code).ToListAsync();
             for (int i = 0; i < programs.Count; i++)
             {
-                refWs.Cell(i + 2, 4).Value = programs[i].Code;
-                refWs.Cell(i + 2, 5).Value = programs[i].Name;
+                refWs.Cell(i + 2, 1).Value = programs[i].Code;
+                refWs.Cell(i + 2, 2).Value = programs[i].Name;
             }
             var types = await db.ScholarshipTypes.OrderBy(t => t.Name).ToListAsync();
             for (int i = 0; i < types.Count; i++)
-                refWs.Cell(i + 2, 7).Value = types[i].Name;
+                refWs.Cell(i + 2, 4).Value = types[i].Name;
 
             refWs.Columns().AdjustToContents();
 
@@ -132,13 +123,14 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 return BadRequest(new { message = $"Too many rows ({rows.Count}). Maximum is {MaxRows} per import." });
 
             // Preload lookups (case-insensitive).
-            var campusByCode = await db.Campuses.ToDictionaryAsync(c => c.Code.ToUpper(), c => c.Id);
             var programByCode = await db.AcademicPrograms.ToDictionaryAsync(p => p.Code.ToUpper(), p => p.Id);
             var typeByName = await db.ScholarshipTypes.ToDictionaryAsync(t => t.Name.ToUpper(), t => t.Id);
 
             var results = new List<ImportRowResult>();
             var welcomeEmails = new List<(string Email, string Name, string Password, string Link)>();
             var seenEmails = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var seenStudentIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var actorId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
             var baseUrl = emailOptions.Value.AppBaseUrl;
             int created = 0;
 
@@ -164,15 +156,6 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     errors.Add("Duplicate email within the file");
                 else if (await userManager.FindByEmailAsync(email) is not null)
                     errors.Add("An account with this email already exists");
-
-                // Campus
-                int? campusId = null;
-                var campusCode = Get("CampusCode");
-                if (!string.IsNullOrWhiteSpace(campusCode))
-                {
-                    if (campusByCode.TryGetValue(campusCode.ToUpper(), out var cid)) campusId = cid;
-                    else errors.Add($"Unknown campus code '{campusCode}'");
-                }
 
                 // Profile fields
                 var studentId = Get("StudentId");
@@ -207,6 +190,16 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 if (hasProfileData && string.IsNullOrWhiteSpace(studentId))
                     errors.Add("Student ID is required when profile details are provided");
 
+                // One student number per scholar — a duplicate means the same student is
+                // being registered twice.
+                if (!string.IsNullOrWhiteSpace(studentId))
+                {
+                    if (!seenStudentIds.Add(studentId))
+                        errors.Add($"Duplicate student ID '{studentId}' within the file");
+                    else if (await db.ScholarProfiles.AnyAsync(sp => sp.StudentId == studentId))
+                        errors.Add($"Student ID '{studentId}' is already registered to another scholar");
+                }
+
                 if (errors.Count > 0)
                 {
                     results.Add(new ImportRowResult(rowNo, email, false, string.Join("; ", errors)));
@@ -224,7 +217,6 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     FirstName = firstName,
                     MiddleName = string.IsNullOrWhiteSpace(middleName) ? null : middleName,
                     LastName = lastName,
-                    CampusId = campusId,
                     EmailConfirmed = false,
                     IsActive = true,
                 };
@@ -241,7 +233,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
                 if (hasProfileData)
                 {
-                    db.ScholarProfiles.Add(new ScholarProfile
+                    var profile = new ScholarProfile
                     {
                         UserId = user.Id,
                         StudentId = studentId,
@@ -249,8 +241,13 @@ namespace PSUEISKOLARSystem.Server.Controllers
                         ScholarshipTypeId = typeId,
                         YearLevel = yearLevel,
                         ContactNumber = string.IsNullOrWhiteSpace(contactNumber) ? null : contactNumber,
-                    });
+                    };
+                    db.ScholarProfiles.Add(profile);
                     await db.SaveChangesAsync();
+
+                    // Open the scholarship ledger row so the one-scholarship-per-student rule
+                    // and the verification report cover imported scholars too.
+                    await ScholarshipRegistry.BackfillAsync(db, profile, actorId);
                 }
 
                 var token = await userManager.GenerateEmailConfirmationTokenAsync(user);
@@ -264,7 +261,6 @@ namespace PSUEISKOLARSystem.Server.Controllers
             }
 
             // Audit + fire welcome emails in the background.
-            var actorId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
             db.AuditLogs.Add(new AuditLog
             {
                 UserId = actorId,

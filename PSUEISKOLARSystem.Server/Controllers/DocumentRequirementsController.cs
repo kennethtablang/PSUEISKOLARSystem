@@ -14,11 +14,16 @@ namespace PSUEISKOLARSystem.Server.Controllers
     public class DocumentRequirementsController(ApplicationDbContext db, IFileStorageService storage) : ControllerBase
     {
         [HttpGet]
-        public async Task<IActionResult> GetAll([FromQuery] int? scholarshipTypeId)
+        public async Task<IActionResult> GetAll([FromQuery] int? scholarshipTypeId, [FromQuery] bool sharedOnly = false)
         {
             var query = db.DocumentRequirements
                 .Where(dr => dr.IsActive)
                 .AsQueryable();
+
+            // The shared catalog excludes documents that exist only for one scholarship type;
+            // those are managed from the Scholarship Types page.
+            if (sharedOnly)
+                query = query.Where(dr => dr.ScholarshipTypeId == null);
 
             if (scholarshipTypeId.HasValue)
             {
@@ -34,15 +39,19 @@ namespace PSUEISKOLARSystem.Server.Controllers
             }
 
             var result = await query
-                .OrderBy(dr => dr.IsRequired ? 0 : 1)
-                .ThenBy(dr => dr.Name)
+                .InDisplayOrder()
                 .Select(dr => new
                 {
                     dr.Id,
                     dr.Name,
                     dr.Description,
                     dr.IsRequired,
+                    dr.DisplayOrder,
+                    dr.GroupName,
                     HasSample = dr.SampleImagePath != null,
+                    // Non-null when this document belongs to a single scholarship type.
+                    dr.ScholarshipTypeId,
+                    OwnerTypeName = dr.ScholarshipType != null ? dr.ScholarshipType.Name : null,
                 })
                 .ToListAsync();
 
@@ -117,11 +126,17 @@ namespace PSUEISKOLARSystem.Server.Controllers
         [Authorize(Roles = UserRoles.Administrator)]
         public async Task<IActionResult> Create(DocumentRequirementRequest dto)
         {
+            var error = Validate(dto);
+            if (error is not null) return BadRequest(new { message = error });
+
             var req = new DocumentRequirement
             {
                 Name = dto.Name.Trim(),
                 Description = dto.Description?.Trim(),
                 IsRequired = dto.IsRequired,
+                GroupName = Trim(dto.GroupName),
+                // New documents land at the end of their group rather than jumping to the top.
+                DisplayOrder = dto.DisplayOrder ?? await NextDisplayOrderAsync(Trim(dto.GroupName)),
             };
             db.DocumentRequirements.Add(req);
             db.Audit(this, "CreateRequirement", $"Created document requirement '{req.Name}'");
@@ -135,12 +150,84 @@ namespace PSUEISKOLARSystem.Server.Controllers
         {
             var req = await db.DocumentRequirements.FindAsync(id);
             if (req is null) return NotFound();
+
+            var error = Validate(dto);
+            if (error is not null) return BadRequest(new { message = error });
+
+            var newGroup = Trim(dto.GroupName);
+            // Moving to a different group without an explicit position appends it there.
+            if (dto.DisplayOrder is null && !string.Equals(newGroup, req.GroupName, StringComparison.OrdinalIgnoreCase))
+                req.DisplayOrder = await NextDisplayOrderAsync(newGroup, excludingId: id);
+            else if (dto.DisplayOrder is int order)
+                req.DisplayOrder = order;
+
             req.Name = dto.Name.Trim();
             req.Description = dto.Description?.Trim();
             req.IsRequired = dto.IsRequired;
+            req.GroupName = newGroup;
+
             db.Audit(this, "UpdateRequirement", $"Updated document requirement #{id} '{req.Name}'");
             await db.SaveChangesAsync();
             return NoContent();
+        }
+
+        // PUT /api/document-requirements/order  — persist a drag-free reorder: the client
+        // sends the requirement ids in the order they should appear and each gets its index.
+        [HttpPut("order")]
+        [Authorize(Roles = UserRoles.Administrator)]
+        public async Task<IActionResult> Reorder(List<int> orderedIds)
+        {
+            if (orderedIds is null || orderedIds.Count == 0)
+                return BadRequest(new { message = "No requirements were supplied." });
+
+            var requirements = await db.DocumentRequirements
+                .Where(dr => orderedIds.Contains(dr.Id))
+                .ToListAsync();
+
+            foreach (var req in requirements)
+                req.DisplayOrder = orderedIds.IndexOf(req.Id);
+
+            db.Audit(this, "ReorderRequirements", $"Reordered {requirements.Count} document requirement(s)");
+            await db.SaveChangesAsync();
+            return NoContent();
+        }
+
+        // GET /api/document-requirements/groups  — existing group names, for the editor's picker.
+        [HttpGet("groups")]
+        public async Task<IActionResult> GetGroups()
+        {
+            var groups = await db.DocumentRequirements
+                .Where(dr => dr.IsActive && dr.GroupName != null)
+                .Select(dr => dr.GroupName!)
+                .Distinct()
+                .OrderBy(g => g)
+                .ToListAsync();
+            return Ok(groups);
+        }
+
+        // The next free slot at the end of a group (0 when the group is empty).
+        private async Task<int> NextDisplayOrderAsync(string? groupName, int? excludingId = null)
+        {
+            var max = await db.DocumentRequirements
+                .Where(dr => dr.IsActive && dr.GroupName == groupName && (excludingId == null || dr.Id != excludingId))
+                .Select(dr => (int?)dr.DisplayOrder)
+                .MaxAsync();
+            return (max ?? -1) + 1;
+        }
+
+        private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+        private static string? Validate(DocumentRequirementRequest dto)
+        {
+            if (string.IsNullOrWhiteSpace(dto.Name))
+                return "A document name is required.";
+            if (dto.Name.Trim().Length > 200)
+                return "Document names must be 200 characters or fewer.";
+            if (dto.GroupName?.Trim().Length > 60)
+                return "Group names must be 60 characters or fewer.";
+            if (dto.DisplayOrder is int order && order < 0)
+                return "Display order cannot be negative.";
+            return null;
         }
 
         [HttpDelete("{id}")]
@@ -201,5 +288,9 @@ namespace PSUEISKOLARSystem.Server.Controllers
     public record DocumentRequirementRequest(
         string Name,
         string? Description,
-        bool IsRequired);
+        bool IsRequired,
+        // Optional checklist heading; null puts the document in the ungrouped bucket.
+        string? GroupName = null,
+        // Null appends to the end of the group instead of forcing a position.
+        int? DisplayOrder = null);
 }

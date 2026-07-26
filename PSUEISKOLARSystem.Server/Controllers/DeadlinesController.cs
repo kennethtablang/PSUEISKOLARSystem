@@ -52,8 +52,12 @@ namespace PSUEISKOLARSystem.Server.Controllers
         [Authorize(Roles = ManagerRoles)]
         public async Task<IActionResult> Upsert(DeadlineRequest dto)
         {
-            if (string.IsNullOrWhiteSpace(dto.AcademicYear) || dto.Semester is < 1 or > 2)
-                return BadRequest(new { message = "Academic year and a valid semester (1 or 2) are required." });
+            // A deadline is matched to submissions by exact (year, semester), so a malformed
+            // year here silently produces a deadline nothing can ever satisfy.
+            if (!AcademicPeriod.TryParse(dto.AcademicYear, dto.Semester, out var period, out var periodError))
+                return BadRequest(new { message = periodError });
+
+            var academicYear = period.AcademicYear;
 
             var requirement = await db.DocumentRequirements.FindAsync(dto.RequirementId);
             if (requirement is null || !requirement.IsActive)
@@ -61,8 +65,8 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
             var existing = await db.SubmissionDeadlines.FirstOrDefaultAsync(d =>
                 d.RequirementId == dto.RequirementId &&
-                d.AcademicYear == dto.AcademicYear &&
-                d.Semester == dto.Semester);
+                d.AcademicYear == academicYear &&
+                d.Semester == period.Semester);
 
             if (existing is not null)
             {
@@ -78,8 +82,8 @@ namespace PSUEISKOLARSystem.Server.Controllers
             var deadline = new SubmissionDeadline
             {
                 RequirementId = dto.RequirementId,
-                AcademicYear = dto.AcademicYear,
-                Semester = dto.Semester,
+                AcademicYear = academicYear,
+                Semester = period.Semester,
                 DueDate = dto.DueDate,
                 CreatedById = User.FindFirstValue(ClaimTypes.NameIdentifier),
             };
@@ -163,7 +167,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
                 var missingScholars = applicable
                     .Where(a => !submittedIds.Contains(a.Id))
-                    .Select(a => new { a.Id, a.FullName, a.CampusName })
+                    .Select(a => new { a.Id, a.FullName })
                     .OrderBy(a => a.FullName)
                     .ToList();
 
