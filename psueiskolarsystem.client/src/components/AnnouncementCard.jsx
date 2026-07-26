@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Clock } from 'lucide-react';
 import AnnouncementImage from './AnnouncementImage';
 import { ANNOUNCEMENT_INTENTS } from '../api/announcements';
 
@@ -11,9 +11,14 @@ import { ANNOUNCEMENT_INTENTS } from '../api/announcements';
  *  variant="manage" – management list (announcements page): full target badges,
  *                     intent shown as a label, plus Edit/Delete controls on hover.
  */
-export default function AnnouncementCard({ a, variant = 'feed', onEdit, onDelete }) {
+export default function AnnouncementCard({ a, variant = 'feed', onEdit, onDelete, onPublishNow }) {
   const date = new Date(a.createdAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
   const intent = a.intentAction ? ANNOUNCEMENT_INTENTS[a.intentAction] : null;
+
+  // Only managers ever see a scheduled announcement — its audience gets it at publish time.
+  const scheduledFor = a.isScheduled
+    ? new Date(a.publishAt).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })
+    : null;
 
   const daysLeft = a.expiresAt
     ? Math.ceil((new Date(a.expiresAt) - Date.now()) / (1000 * 60 * 60 * 24))
@@ -25,8 +30,24 @@ export default function AnnouncementCard({ a, variant = 'feed', onEdit, onDelete
   return (
     <div
       className={`clay-card p-5${variant === 'manage' ? ' group relative' : ''}`}
-      style={isUrgent ? { border: '1.5px solid #f0a860' } : undefined}
+      style={
+        scheduledFor ? { border: '1.5px dashed #80aaee' }
+        : isUrgent ? { border: '1.5px solid #f0a860' }
+        : undefined
+      }
     >
+      {scheduledFor && (
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
+          <span className="clay-badge text-xs inline-flex items-center gap-1"
+            style={{ background: '#dce8ff', color: '#003087', border: '1px solid #80aaee' }}>
+            <Clock size={10} strokeWidth={2.6} /> Scheduled
+          </span>
+          <span className="text-xs font-medium" style={{ color: '#003087' }}>
+            Goes out {scheduledFor} — not yet visible to its audience.
+          </span>
+        </div>
+      )}
+
       {a.hasImage && <AnnouncementImage announcementId={a.id} style={{ marginBottom: 12 }} />}
 
       <div className="flex items-start justify-between gap-4">
@@ -70,7 +91,16 @@ export default function AnnouncementCard({ a, variant = 'feed', onEdit, onDelete
         <div className="flex items-center justify-between mt-3">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs" style={{ color: '#7a8aaa' }}>{date} · {a.createdBy}</span>
-            {targets.length > 0 ? (
+            {/* Named scholars are the whole audience, so they replace the filter badges. */}
+            {a.recipientCount > 0 ? (
+              <span
+                className="clay-badge text-xs"
+                title={(a.recipientNames ?? []).join(', ')}
+                style={{ background: '#ede9fe', color: '#6d28d9', border: '1px solid #c4b5fd' }}
+              >
+                {a.recipientCount} specific scholar{a.recipientCount !== 1 ? 's' : ''}
+              </span>
+            ) : targets.length > 0 ? (
               targets.map(t => (
                 <span key={t} className="clay-badge text-xs" style={{ background: '#dce8ff', color: '#003087', border: '1px solid #80aaee' }}>
                   {t}
@@ -83,6 +113,11 @@ export default function AnnouncementCard({ a, variant = 'feed', onEdit, onDelete
             )}
           </div>
           <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+            {scheduledFor && onPublishNow && (
+              <button onClick={onPublishNow} className="text-xs font-medium hover:underline" style={{ color: '#1a6b3c' }}>
+                Publish now
+              </button>
+            )}
             <button onClick={onEdit} className="text-xs font-medium hover:underline" style={{ color: '#003087' }}>Edit</button>
             <button onClick={onDelete} className="text-xs font-medium hover:underline" style={{ color: '#e03030' }}>Delete</button>
           </div>

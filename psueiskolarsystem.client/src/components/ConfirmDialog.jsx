@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { AlertTriangle } from 'lucide-react';
+import Modal from './Modal';
 
 /**
  * Reusable confirmation dialog to replace native window.confirm().
@@ -22,28 +23,23 @@ export default function ConfirmDialog({
 }) {
   const confirmBtn = useRef(null);
 
-  /* Focus the confirm button and support Esc-to-cancel */
+  /* The confirm button is the natural default action here, so take focus from
+     Modal's first-field default. */
   useEffect(() => {
-    if (!open) return;
-    confirmBtn.current?.focus();
-    function onKey(e) {
-      if (e.key === 'Escape' && !busy) onCancel?.();
-    }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, busy, onCancel]);
+    if (open) confirmBtn.current?.focus();
+  }, [open]);
 
   if (!open) return null;
 
   return (
-    <div
-      className="fixed inset-0 flex items-center justify-center z-[60] p-4"
-      style={{ background: 'rgba(0,20,60,0.45)' }}
-      onMouseDown={e => { if (e.target === e.currentTarget && !busy) onCancel?.(); }}
-      role="dialog"
-      aria-modal="true"
+    <Modal
+      onClose={onCancel}
+      dismissible={!busy}
+      width={400}
+      variant="confirm"
+      bare
     >
-      <div className="clay-card-modal w-full max-w-sm p-6 fade-up">
+      <div className="clay-card-modal p-6">
         <div className="flex items-start gap-3.5 mb-4">
           <div
             className="flex items-center justify-center rounded-full shrink-0"
@@ -84,6 +80,6 @@ export default function ConfirmDialog({
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

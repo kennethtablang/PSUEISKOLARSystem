@@ -26,8 +26,8 @@ export default function ConsentGate() {
   }
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center z-[9998] p-4" style={{ background: 'rgba(0,20,60,0.6)' }}>
-      <div className="clay-card-modal w-full p-8" style={{ maxWidth: 480, maxHeight: '90vh', overflowY: 'auto' }}>
+    <div className="modal-backdrop" style={{ zIndex: 9998 }}>
+      <div className="modal-panel clay-card-modal" style={{ maxWidth: 480, padding: 32, overflowY: 'auto' }}>
         <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4"
           style={{ background: 'rgba(0,37,112,0.08)', border: '2px solid rgba(0,37,112,0.15)' }}>
           <ShieldCheck size={26} color="#002570" strokeWidth={2} />

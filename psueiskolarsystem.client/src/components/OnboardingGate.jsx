@@ -39,8 +39,8 @@ export default function OnboardingGate() {
   function later() { sessionStorage.setItem(DISMISS_KEY, 'true'); setDismissed(true); }
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center z-[9997] p-4" style={{ background: 'rgba(0,20,60,0.6)' }}>
-      <div className="clay-card-modal w-full p-8 fade-up" style={{ maxWidth: 460 }}>
+    <div className="modal-backdrop" style={{ zIndex: 9997 }}>
+      <div className="modal-panel clay-card-modal" style={{ maxWidth: 460, padding: 32 }}>
         <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4"
           style={{ background: 'rgba(0,37,112,0.08)', border: '2px solid rgba(0,37,112,0.15)' }}>
           <UserCog size={26} color="#002570" strokeWidth={2} />

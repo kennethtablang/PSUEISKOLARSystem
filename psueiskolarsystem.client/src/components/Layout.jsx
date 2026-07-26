@@ -6,12 +6,14 @@ import { useTheme } from '../context/ThemeContext';
 import NotificationBell from './NotificationBell';
 import ConfirmDialog from './ConfirmDialog';
 import GlobalSearch from './GlobalSearch';
+import Avatar from './Avatar';
 import {
   LayoutDashboard, GraduationCap, FileCheck, Users, Bell,
   FolderOpen, User, LogOut, BarChart2,
   ChevronLeft, Settings, Menu, X, ClipboardList, Activity, Award, CalendarClock, MessageSquare,
-  Sun, Moon, Monitor, HelpCircle,
+  Sun, Moon, Monitor, HelpCircle, UserCheck, Banknote, ShieldCheck,
 } from 'lucide-react';
+import { getPendingApprovalCount } from '../api/scholarApprovals';
 
 /* ── Responsive hook ─────────────────────────────── */
 function useMediaQuery(query) {
@@ -31,9 +33,12 @@ const navByRole = {
     { to: '/dashboard',       label: 'Dashboard',       Icon: LayoutDashboard },
     { section: 'Manage' },
     { to: '/scholars',        label: 'Scholars',         Icon: GraduationCap },
+    { to: '/scholar-approvals', label: 'Scholar Approvals', Icon: UserCheck, badge: 'approvals' },
     { to: '/document-review', label: 'Document Review',  Icon: FileCheck },
     { to: '/deadlines',       label: 'Deadlines',        Icon: CalendarClock },
     { to: '/scholarship-types', label: 'Scholarship Types', Icon: Award },
+    { to: '/one-time-grants', label: 'One-Time Grants',  Icon: Banknote },
+    { to: '/scholarship-verification', label: 'Scholarship Check', Icon: ShieldCheck },
     { to: '/requirements',    label: 'Requirements',     Icon: ClipboardList },
     { to: '/users',           label: 'Users',            Icon: Users },
     { section: 'Engage' },
@@ -49,8 +54,11 @@ const navByRole = {
     { to: '/dashboard',       label: 'Dashboard',       Icon: LayoutDashboard },
     { section: 'Manage' },
     { to: '/scholars',        label: 'Scholars',         Icon: GraduationCap },
+    { to: '/scholar-approvals', label: 'Scholar Approvals', Icon: UserCheck, badge: 'approvals' },
     { to: '/document-review', label: 'Document Review',  Icon: FileCheck },
     { to: '/deadlines',       label: 'Deadlines',        Icon: CalendarClock },
+    { to: '/one-time-grants', label: 'One-Time Grants',  Icon: Banknote },
+    { to: '/scholarship-verification', label: 'Scholarship Check', Icon: ShieldCheck },
     { section: 'Engage' },
     { to: '/announcements',   label: 'Announcements',    Icon: Bell },
     { to: '/messages',        label: 'Messages',         Icon: MessageSquare },
@@ -106,8 +114,9 @@ function IconBtn({ onClick, title, children, danger }) {
 }
 
 export default function Layout({ children }) {
-  const { user, signOut } = useAuth();
+  const { user, token, signOut } = useAuth();
   const { messageUnread } = useNotifications();
+  const [pendingApprovals, setPendingApprovals] = useState(0);
   const { theme, setTheme } = useTheme();
   const navigate   = useNavigate();
 
@@ -135,6 +144,17 @@ export default function Layout({ children }) {
     setMobileOpen(false);
   }, [location.pathname]);
 
+  /* Pending scholar registrations, for the sidebar badge. Re-read on navigation so
+     approving one from the queue clears the badge without a reload. */
+  useEffect(() => {
+    if (user?.role !== 'Administrator' && user?.role !== 'ScholarshipCoordinator') return;
+    let cancelled = false;
+    getPendingApprovalCount(token)
+      .then(c => { if (!cancelled) setPendingApprovals(c); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [user?.role, token, location.pathname]);
+
   /* Auto-close drawer when viewport becomes desktop */
   useEffect(() => {
     if (isDesktop) setMobileOpen(false);
@@ -151,7 +171,6 @@ export default function Layout({ children }) {
   }
 
   const navItems  = navByRole[user?.role] ?? [];
-  const initials  = user?.fullName?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() ?? '?';
   const roleLabel = user?.role === 'ScholarshipCoordinator' ? 'Coordinator' : user?.role;
   const isCollapsed = isDesktop && collapsed;
 
@@ -298,42 +317,65 @@ export default function Layout({ children }) {
             );
           }
 
-          const { to, label, Icon } = item;
+          const { to, label, Icon, badge } = item;
+          const count = to === '/messages' ? messageUnread
+                      : badge === 'approvals' ? pendingApprovals
+                      : 0;
           return (
             <NavLink key={to} to={to} data-tour={to} style={{ display: 'block', marginBottom: 2 }} title={isCollapsed ? label : undefined}>
               {({ isActive }) => (
                 <div
                   style={{
+                    position: 'relative',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: isCollapsed ? 'center' : 'flex-start',
                     gap: isCollapsed ? 0 : 10,
-                    padding: isCollapsed ? '9px' : '9px 12px',
+                    padding: isCollapsed ? '8px' : '8px 12px',
                     borderRadius: 12,
                     cursor: 'pointer',
-                    transition: 'background 0.12s, box-shadow 0.12s, border-color 0.12s',
+                    border: '1px solid transparent',
+                    transition: 'background 0.14s, border-color 0.14s, box-shadow 0.14s',
+                    /* Selected state: a gold wash that fades out to the right, a hairline
+                       edge, and the rail marker below — instead of a flat grey block. */
                     ...(isActive ? {
-                      background: 'rgba(255,255,255,0.09)',
-                      boxShadow: isCollapsed ? 'none' : 'inset 3px 0 0 #f5b800',
+                      background: 'linear-gradient(95deg, rgba(255,210,63,0.17) 0%, rgba(255,210,63,0.055) 48%, rgba(255,255,255,0.02) 100%)',
+                      borderColor: 'rgba(255,210,63,0.26)',
+                      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
                     } : {}),
                   }}
                   onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'rgba(255,255,255,0.055)'; }}
                   onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
                 >
-                  {/* Icon box */}
+                  {/* Rail marker — sits flush against the sidebar's left edge (nav has 10px
+                      of horizontal padding), so the eye can track the selection down the rail. */}
+                  {isActive && !isCollapsed && (
+                    <span style={{
+                      position: 'absolute', left: -11, top: '50%', transform: 'translateY(-50%)',
+                      width: 3, height: 20, borderRadius: 999,
+                      background: 'linear-gradient(180deg, #ffd23f, #d99700)',
+                      boxShadow: '0 0 10px rgba(255,210,63,0.5)',
+                    }} />
+                  )}
+
+                  {/* Icon box — inverted to solid gold when active, matching the PSU mark */}
                   <div style={{
                     width: 30, height: 30, borderRadius: 9, flexShrink: 0,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    background: isActive ? 'rgba(245,184,0,0.16)' : 'rgba(255,255,255,0.06)',
-                    transition: 'background 0.12s',
+                    background: isActive
+                      ? 'linear-gradient(145deg, #ffd23f, #e0a000)'
+                      : 'rgba(255,255,255,0.06)',
+                    boxShadow: isActive ? '0 2px 7px rgba(224,160,0,0.32)' : 'none',
+                    transition: 'background 0.14s, box-shadow 0.14s',
                   }}>
-                    <Icon size={14} strokeWidth={2.2} color={isActive ? '#ffd23f' : 'rgba(255,255,255,0.58)'} />
+                    <Icon size={14} strokeWidth={2.4} color={isActive ? '#1a0e00' : 'rgba(255,255,255,0.58)'} />
                   </div>
 
                   {/* Label */}
                   <span style={{
                     flex: 1, fontSize: 13, fontWeight: isActive ? 700 : 500,
                     color: isActive ? '#ffffff' : 'rgba(255,255,255,0.6)',
+                    letterSpacing: isActive ? '-0.01em' : 0,
                     whiteSpace: 'nowrap', overflow: 'hidden',
                     maxWidth: isCollapsed ? 0 : 160,
                     opacity: isCollapsed ? 0 : 1,
@@ -342,14 +384,15 @@ export default function Layout({ children }) {
                     {label}
                   </span>
 
-                  {/* Unread messages badge */}
-                  {to === '/messages' && messageUnread > 0 && !isCollapsed && (
+                  {/* Count badge — unread messages, or scholars waiting for approval */}
+                  {count > 0 && !isCollapsed && (
                     <span style={{
                       minWidth: 18, height: 18, padding: '0 5px', borderRadius: 999,
-                      background: '#d92020', color: '#fff', fontSize: 10, fontWeight: 800,
+                      background: badge === 'approvals' ? '#c07800' : '#d92020',
+                      color: '#fff', fontSize: 10, fontWeight: 800,
                       display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                     }}>
-                      {messageUnread > 99 ? '99+' : messageUnread}
+                      {count > 99 ? '99+' : count}
                     </span>
                   )}
 
@@ -370,18 +413,14 @@ export default function Layout({ children }) {
         {isCollapsed ? (
           /* Collapsed: icon column */
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-            <div
-              title={user?.fullName}
-              style={{
-                width: 36, height: 36, borderRadius: 11,
-                background: 'linear-gradient(145deg, #ffd030, #e0a000)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 11, fontWeight: 900, color: '#1a0e00',
-                boxShadow: '0 3px 0 rgba(0,0,0,0.22)', cursor: 'default',
-              }}
-            >
-              {initials}
-            </div>
+            <Avatar
+              userId={user?.id}
+              name={user?.fullName}
+              hasAvatar={user?.hasAvatar}
+              size={36}
+              radius={11}
+              style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.22)' }}
+            />
             <IconBtn onClick={() => navigate('/profile')} title="My Profile">
               <Settings size={13} strokeWidth={2.5} />
             </IconBtn>
@@ -396,15 +435,14 @@ export default function Layout({ children }) {
             border: '1px solid rgba(255,255,255,0.1)', padding: 12,
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 10 }}>
-              <div style={{
-                width: 36, height: 36, borderRadius: 11, flexShrink: 0,
-                background: 'linear-gradient(145deg, #ffd030, #e0a000)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 11, fontWeight: 900, color: '#1a0e00',
-                boxShadow: '0 3px 0 rgba(0,0,0,0.22)',
-              }}>
-                {initials}
-              </div>
+              <Avatar
+                userId={user?.id}
+                name={user?.fullName}
+                hasAvatar={user?.hasAvatar}
+                size={36}
+                radius={11}
+                style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.22)' }}
+              />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{
                   fontSize: 12.5, fontWeight: 700, color: '#fff',
@@ -550,19 +588,16 @@ export default function Layout({ children }) {
               <ThemeIcon size={17} strokeWidth={2.2} color="#003087" />
             </button>
             <span data-tour="notifications"><NotificationBell variant="inline" /></span>
-            <div
-              onClick={() => navigate('/profile')}
+            <Avatar
+              userId={user?.id}
+              name={user?.fullName}
+              hasAvatar={user?.hasAvatar}
+              size={36}
+              radius={11}
               title="My Profile"
-              style={{
-                width: 36, height: 36, borderRadius: 11, cursor: 'pointer',
-                background: 'linear-gradient(145deg, #ffd030, #e0a000)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 11, fontWeight: 900, color: '#1a0e00',
-                boxShadow: '3px 3px 8px rgba(163,177,198,0.5), -2px -2px 5px rgba(255,255,255,0.85)',
-              }}
-            >
-              {initials}
-            </div>
+              onClick={() => navigate('/profile')}
+              style={{ boxShadow: '3px 3px 8px rgba(163,177,198,0.5), -2px -2px 5px rgba(255,255,255,0.85)' }}
+            />
           </div>
         </header>
 
