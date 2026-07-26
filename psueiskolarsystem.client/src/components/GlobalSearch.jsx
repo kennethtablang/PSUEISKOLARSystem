@@ -54,7 +54,9 @@ export default function GlobalSearch({ isDesktop }) {
   const total = results.scholars.length + results.announcements.length + results.requirements.length;
 
   return (
-    <div ref={rootRef} style={{ position: 'relative', flex: isDesktop ? '0 1 340px' : 1, maxWidth: 340 }}>
+    // Grows into the space the topbar has going spare, up to a width where a longer
+    // field would stop helping — rather than sitting at a fixed 340px with a void beside it.
+    <div ref={rootRef} style={{ position: 'relative', flex: isDesktop ? '1 1 340px' : 1, maxWidth: 460 }}>
       <form onSubmit={submit}>
         <Search size={15} strokeWidth={2.2} color="#7a8aaa"
           style={{ position: 'absolute', left: 12, top: 19, transform: 'translateY(-50%)', pointerEvents: 'none' }} />

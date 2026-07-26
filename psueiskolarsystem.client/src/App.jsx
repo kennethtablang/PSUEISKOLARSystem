@@ -27,6 +27,9 @@ import DeadlinesPage from './pages/DeadlinesPage';
 import MessagesPage from './pages/MessagesPage';
 import NotificationsPage from './pages/NotificationsPage';
 import ScholarshipTypesPage from './pages/ScholarshipTypesPage';
+import ScholarApprovalsPage from './pages/ScholarApprovalsPage';
+import ScholarshipVerificationPage from './pages/ScholarshipVerificationPage';
+import OneTimeGrantsPage from './pages/OneTimeGrantsPage';
 import SettingsPage from './pages/SettingsPage';
 import ActivityLogPage from './pages/ActivityLogPage';
 import UnauthorizedPage from './pages/UnauthorizedPage';
@@ -59,6 +62,9 @@ export default function App() {
           <Route path="/users" element={<ProtectedRoute roles={admin}><UsersPage /></ProtectedRoute>} />
           <Route path="/scholars" element={<ProtectedRoute roles={adminCoord}><ScholarsPage /></ProtectedRoute>} />
           <Route path="/scholars/:userId" element={<ProtectedRoute roles={adminCoord}><ScholarDetailPage /></ProtectedRoute>} />
+          <Route path="/scholar-approvals" element={<ProtectedRoute roles={adminCoord}><ScholarApprovalsPage /></ProtectedRoute>} />
+          <Route path="/scholarship-verification" element={<ProtectedRoute roles={adminCoord}><ScholarshipVerificationPage /></ProtectedRoute>} />
+          <Route path="/one-time-grants" element={<ProtectedRoute roles={adminCoord}><OneTimeGrantsPage /></ProtectedRoute>} />
           <Route path="/my-profile" element={<ProtectedRoute><ScholarDetailPage /></ProtectedRoute>} />
           <Route path="/my-documents" element={<ProtectedRoute roles={['Scholar']}><MyDocumentsPage /></ProtectedRoute>} />
           <Route path="/document-review" element={<ProtectedRoute roles={adminCoord}><DocumentReviewPage /></ProtectedRoute>} />
@@ -97,9 +103,8 @@ function SessionExpiredModal() {
   }
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center z-[9999] p-4"
-      style={{ background: 'rgba(0,20,60,0.6)' }}>
-      <div className="clay-card-modal w-full p-8 text-center" style={{ maxWidth: 380 }}>
+    <div className="modal-backdrop" style={{ zIndex: 9999 }}>
+      <div className="modal-panel clay-card-modal text-center" style={{ maxWidth: 380, padding: 32 }}>
         <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4"
           style={{ background: 'rgba(0,37,112,0.08)', border: '2px solid rgba(0,37,112,0.15)' }}>
           <Clock size={26} color="#002570" strokeWidth={2} />

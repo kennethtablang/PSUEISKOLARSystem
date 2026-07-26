@@ -10,6 +10,7 @@ import { TableSkeleton, EmptyState } from '../components/ListState';
 import { useTitle } from '../hooks/useTitle';
 import { ctlStyle } from '../constants/ui';
 import Modal from '../components/Modal';
+import Avatar from '../components/Avatar';
 import { useToast, useConfirm } from '../context/UIContext';
 import PasswordStrengthMeter, { getPasswordStrength } from '../components/PasswordStrengthMeter';
 
@@ -113,8 +114,8 @@ export default function UsersPage() {
 
   return (
     <Layout>
-      <div className="p-4 sm:p-8">
-        <div className="flex items-center justify-between gap-3 flex-wrap mb-6">
+      <div className="page-shell">
+        <div className="page-head">
           <div>
             <h1 className="page-title">User Management</h1>
             <p className="page-subtitle">{total} user{total !== 1 ? 's' : ''}</p>
@@ -169,7 +170,12 @@ export default function UsersPage() {
               <tbody>
                 {users.map(u => (
                   <tr key={u.id} className="clay-table-row">
-                    <td className="px-5 py-3.5 font-semibold" style={{ color: 'var(--text-strong)' }}>{u.fullName}</td>
+                    <td className="px-5 py-3.5">
+                      <div className="flex items-center gap-2.5">
+                        <Avatar userId={u.id} name={u.fullName} hasAvatar={u.hasAvatar} size={32} />
+                        <span className="font-semibold" style={{ color: 'var(--text-strong)' }}>{u.fullName}</span>
+                      </div>
+                    </td>
                     <td className="px-5 py-3.5" style={{ color: 'var(--text)' }}>{u.email}</td>
                     <td className="px-5 py-3.5">
                       <span className={`clay-badge ${ROLE_BADGE_CLASS[u.role] ?? ''}`}>{u.role}</span>

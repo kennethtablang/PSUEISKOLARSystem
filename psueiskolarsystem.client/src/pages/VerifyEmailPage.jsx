@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { verifyEmail } from '../api/auth';
 import { useTitle } from '../hooks/useTitle';
 import { MailCheck, AlertTriangle, ArrowRight, Loader } from 'lucide-react';
+import Logo from '../components/Logo';
 
 export default function VerifyEmailPage() {
   useTitle('Verify Email');
@@ -36,10 +37,7 @@ export default function VerifyEmailPage() {
 
         {/* Logo */}
         <div className="flex items-center justify-center gap-3 mb-8">
-          <div className="w-11 h-11 rounded-2xl flex items-center justify-center font-black text-sm"
-            style={{ background: '#002570', color: '#f5b800', boxShadow: '0 3px 0px #001a4a' }}>
-            PSU
-          </div>
+          <Logo size={44} shadow="0 3px 0px rgba(0,37,112,0.35)" />
           <div>
             <p className="font-black text-lg leading-tight" style={{ color: 'var(--text-strong)' }}>e-Iskolar</p>
             <p className="text-xs" style={{ color: '#7a8aaa' }}>Lingayen Campus</p>

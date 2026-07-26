@@ -7,6 +7,7 @@ import NotificationBell from './NotificationBell';
 import ConfirmDialog from './ConfirmDialog';
 import GlobalSearch from './GlobalSearch';
 import Avatar from './Avatar';
+import Logo from './Logo';
 import {
   LayoutDashboard, GraduationCap, FileCheck, Users, Bell,
   FolderOpen, User, LogOut, BarChart2,
@@ -218,14 +219,7 @@ export default function Layout({ children }) {
             cursor: isCollapsed && isDesktop ? 'pointer' : 'default',
           }}
         >
-          <div style={{
-            width: 42, height: 42, borderRadius: 13, flexShrink: 0,
-            background: 'linear-gradient(145deg, #ffd030, #e0a000)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontWeight: 900, fontSize: 11, color: '#1a0e00',
-            boxShadow: '0 4px 0 rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.35)',
-            transition: 'box-shadow 0.15s',
-          }}>PSU</div>
+          <Logo size={42} shadow="0 4px 0 rgba(0,0,0,0.28)" style={{ transition: 'box-shadow 0.15s' }} />
 
           {/* Text — hidden when collapsed */}
           <div style={{
@@ -542,9 +536,12 @@ export default function Layout({ children }) {
           background: 'var(--bg)',
           backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)',
           borderBottom: '1px solid rgba(0,48,135,0.08)',
-          display: 'flex', alignItems: 'center', gap: 12,
-          padding: '9px 20px', minHeight: 58,
+          minHeight: 58,
         }}>
+          {/* The bar spans the viewport so its rule and blur are edge-to-edge, but its
+              controls sit inside the same shell the page content uses — so the search
+              lines up with the page title and the avatar with the page's right edge. */}
+          <div className="page-shell" style={{ padding: '9px 32px', display: 'flex', alignItems: 'center', gap: 12, minHeight: 58 }}>
           {/* Mobile: hamburger + brand */}
           {!isDesktop && (
             <>
@@ -598,6 +595,7 @@ export default function Layout({ children }) {
               onClick={() => navigate('/profile')}
               style={{ boxShadow: '3px 3px 8px rgba(163,177,198,0.5), -2px -2px 5px rgba(255,255,255,0.85)' }}
             />
+          </div>
           </div>
         </header>
 

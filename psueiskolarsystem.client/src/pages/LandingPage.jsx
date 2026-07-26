@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useTitle } from '../hooks/useTitle';
 import { MapPin, Phone, Mail, GraduationCap, ClipboardList, Users, BookOpen } from 'lucide-react';
+import Logo from '../components/Logo';
 
 const roles = [
   {
@@ -53,12 +54,7 @@ export default function LandingPage() {
       }}>
         <div className="max-w-5xl mx-auto px-6" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 56 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{
-              width: 30, height: 30, borderRadius: 7, flexShrink: 0,
-              background: '#f5b800',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontWeight: 900, fontSize: 9.5, color: '#002570', letterSpacing: '0.02em',
-            }}>PSU</div>
+            <Logo size={30} shadow="none" />
             <div>
               <p style={{ color: 'rgba(255,255,255,0.9)', fontWeight: 800, fontSize: 14, letterSpacing: '-0.01em', lineHeight: 1.1 }}>e-Iskolar</p>
               <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10, lineHeight: 1 }}>Lingayen Campus</p>

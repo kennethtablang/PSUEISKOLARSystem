@@ -129,22 +129,27 @@ export default function SettingsPage() {
 
   return (
     <Layout>
-      <div className="p-4 sm:p-8" style={{ maxWidth: 680 }}>
+      <div className="page-shell">
 
         {/* Header */}
-        <div className="mb-7">
-          <h1 className="page-title">System Settings</h1>
-          <p className="page-subtitle">Configure system-wide parameters for the active academic period.</p>
-          <span className="page-title-bar" />
+        <div className="page-head">
+          <div>
+            <h1 className="page-title">System Settings</h1>
+            <p className="page-subtitle">Configure system-wide parameters for the active academic period.</p>
+            <span className="page-title-bar" />
+          </div>
         </div>
 
         {loading ? (
           <p className="text-sm text-center py-12" style={{ color: '#7a8aaa' }}>Loading…</p>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          /* Settings-nav on the left, the selected panel on the right — the standard
+             shape for a settings screen, and it puts the width to work instead of
+             stacking a row of tabs above one narrow column. */
+          <div className="settings-split">
 
-            {/* Tab bar */}
-            <div className="flex gap-2 flex-wrap" role="tablist">
+            {/* Tab rail */}
+            <nav className="settings-nav" role="tablist">
               {TABS.map(({ key, label, Icon }) => {
                 const active = tab === key;
                 return (
@@ -153,15 +158,17 @@ export default function SettingsPage() {
                     role="tab"
                     aria-selected={active}
                     onClick={() => setTab(key)}
-                    className="clay-btn px-4 py-2.5 text-sm font-bold flex items-center gap-2"
+                    className="settings-nav-item"
                     style={active
                       ? { background: 'rgba(0,37,112,0.12)', color: '#003087', border: '1.5px solid rgba(0,37,112,0.3)' }
-                      : { color: 'var(--text)' }}>
+                      : { color: 'var(--text)', border: '1.5px solid transparent' }}>
                     <Icon size={15} strokeWidth={2.3} /> {label}
                   </button>
                 );
               })}
-            </div>
+            </nav>
+
+            <div className="settings-panel">
 
             {/* ── Academic Period tab ── */}
             {tab === 'period' && (<>
@@ -495,6 +502,7 @@ export default function SettingsPage() {
             </div>
             </>)}
 
+            </div>
           </div>
         )}
       </div>

@@ -15,6 +15,7 @@ import { useTheme } from '../context/ThemeContext';
 import { vizTokens, tooltipStyle } from '../constants/viz';
 import Modal from '../components/Modal';
 import Avatar from '../components/Avatar';
+import logoPsu from '../assets/logo-psu.png';
 import { StatusBadge } from './ScholarApprovalsPage';
 import { GrantModal, GrantStatusBadge } from './OneTimeGrantsPage';
 import { peso } from '../constants/grants';
@@ -60,8 +61,17 @@ export default function ScholarDetailPage() {
       .k{color:#889;font-size:10px;text-transform:uppercase;letter-spacing:.05em;} .v{font-weight:bold;font-size:14px;margin-top:2px;}
       h3{color:#002570;font-size:14px;border-bottom:2px solid #002570;padding-bottom:4px;} table{width:100%;border-collapse:collapse;}
       th,td{border:1px solid #ccd;padding:6px 8px;text-align:left;font-size:12px;} th{background:#eef2fb;}
-      .foot{margin-top:28px;color:#99a;font-size:10px;border-top:1px solid #ddd;padding-top:8px;}</style></head><body>
-      <h1>PSU e-Iskolar — Scholar Compliance Summary</h1>
+      .foot{margin-top:28px;color:#99a;font-size:10px;border-top:1px solid #ddd;padding-top:8px;}
+      .head{display:flex;align-items:center;gap:14px;border-bottom:3px solid #f5b800;padding-bottom:12px;margin-bottom:6px;}
+      .head img{width:58px;height:58px;object-fit:contain;}
+      .org{color:#667;font-size:11px;letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px;}</style></head><body>
+      <div class="head">
+        <img src="${window.location.origin}${logoPsu}" alt="Pangasinan State University">
+        <div>
+          <div class="org">Pangasinan State University · Lingayen Campus</div>
+          <h1>PSU e-Iskolar — Scholar Compliance Summary</h1>
+        </div>
+      </div>
       <div class="sub">Generated ${new Date().toLocaleString()} · by ${esc(currentUser?.fullName)}</div>
       <div class="grid">
         ${field('Full Name', profile.fullName)}${field('Student ID', profile.studentId)}${field('Status', profile.lifecycleStatus)}

@@ -201,6 +201,319 @@ body {
   border: none;
 }
 
+/* ═══ INFO TOOLTIPS (components/InfoTip.jsx) ═══
+   Explains what a figure measures. Portalled to <body> so a card's overflow can't clip it,
+   and above modals is not needed — it sits below them deliberately. */
+.info-tip-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  padding: 2px;
+  border-radius: 999px;
+  cursor: help;
+  color: var(--text-faint);
+  transition: color 0.15s ease, background 0.15s ease;
+  vertical-align: middle;
+}
+.info-tip-trigger:hover,
+.info-tip-trigger:focus-visible {
+  color: #003087;
+  background: rgba(0, 48, 135, 0.10);
+  outline: none;
+}
+:root[data-theme="dark"] .info-tip-trigger:hover,
+:root[data-theme="dark"] .info-tip-trigger:focus-visible {
+  color: #8fb6f5;
+  background: rgba(255, 255, 255, 0.10);
+}
+
+.info-tip-bubble {
+  position: fixed;
+  z-index: 9400;              /* under modals (9500) — a dialog must never be explained over */
+  padding: 9px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  background: #0d1a33;
+  color: #eaf0f8;
+  box-shadow: 0 8px 24px rgba(0, 12, 40, 0.32);
+  pointer-events: none;       /* never steals the pointer from the trigger */
+  animation: infoTipIn 0.12s ease both;
+}
+:root[data-theme="dark"] .info-tip-bubble {
+  background: #2b3a4f;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+}
+
+@keyframes infoTipIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Small tinted count chip used under the analytics rate cards. The tint is carried
+   inline (it is data-dependent); the relief has to switch with the theme, or the
+   light neumorphic glow floats on a dark card. */
+.mini-stat {
+  box-shadow: 4px 4px 10px rgba(163, 177, 198, 0.4), -3px -3px 7px rgba(255, 255, 255, 0.8);
+}
+:root[data-theme="dark"] .mini-stat {
+  box-shadow: 3px 3px 9px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  filter: saturate(0.78) brightness(0.92);
+}
+
+/* ═══ PAGE SHELL ═══
+   Every routed page opens with `.page-shell`. It owns the outer padding and stops the
+   content growing past a comfortable reading width on very large monitors — but it fills
+   the viewport up to that point, so a 1080p or 1440p screen never shows a column of
+   content hugging the left edge with dead space beside it.
+
+   `--shell-max` is generous on purpose: pages that hold a table or a split layout want
+   the room, and pages that hold prose get their measure from `.page-split` instead. */
+.page-shell {
+  --shell-max: 1560px;
+  width: 100%;
+  max-width: var(--shell-max);
+  margin-inline: auto;
+  padding: 32px;
+}
+
+/* Narrow, single-column pages (a form, a thread, a lone list) still need a readable
+   measure — but centred, not pinned left with a void to the right. */
+.page-shell-narrow { --shell-max: 980px; }
+
+@media (max-width: 640px) {
+  .page-shell { padding: 16px; }
+}
+
+/* ═══ PAGE HEADER ═══
+   Title block on the left, actions pushed to the right edge of the shell. Declaring it
+   here (rather than per page) keeps a page's primary action at the true right edge
+   instead of floating mid-canvas at the end of a narrow content column. */
+.page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+
+.page-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* ═══ SPLIT PAGE LAYOUT ═══
+   Two-column shell: working content on the left, secondary panels in a right rail.
+   The rail is where a page's supporting material goes — summaries, filters, contextual
+   help — so wide screens gain information density instead of empty margin. Below 1280px
+   the rail stacks underneath, so nothing is lost on tablets and phones. */
+.page-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 28px;
+  align-items: start;
+}
+
+@media (min-width: 1280px) {
+  .page-split { grid-template-columns: minmax(0, 1fr) 360px; }
+  /* A hairline separates the rail from the working column without adding a box.
+
+     The rail sticks and scrolls on its own. That is what stops a short working column
+     from leaving a tall empty gutter beside a long rail: the page's height is set by the
+     content you came for, and the supporting panels scroll within their own track. */
+  .page-rail {
+    padding-left: 28px;
+    border-left: 1px solid rgba(0, 48, 135, 0.08);
+    position: sticky;
+    top: 90px;   /* clears the 58px sticky topbar plus the shell's padding */
+    max-height: calc(100dvh - 110px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+@media (min-width: 1600px) {
+  .page-split { grid-template-columns: minmax(0, 1fr) 420px; }
+}
+
+:root[data-theme="dark"] .page-rail { border-left-color: rgba(255, 255, 255, 0.07); }
+
+/* A rail heading: small, quiet, and consistent across every page that has a rail. */
+.rail-heading {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.11em;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+/* ═══ SETTINGS LAYOUT ═══
+   A settings nav column beside the selected panel. Below 1024px the nav becomes a
+   horizontal strip of chips above the panel, which is what a phone wants anyway. */
+.settings-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.settings-nav {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.settings-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 14px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+  background: transparent;
+  transition: background 0.14s ease, color 0.14s ease;
+  white-space: nowrap;
+}
+
+.settings-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+@media (min-width: 1024px) {
+  .settings-split { grid-template-columns: 232px minmax(0, 1fr); gap: 28px; }
+  .settings-nav {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    position: sticky;
+    top: 90px;
+  }
+  .settings-nav-item { width: 100%; }
+}
+
+/* ═══ AUTO-FIT CARD GRIDS ═══
+   For collections of independent items (FAQ entries, settings panels, announcement
+   cards). Columns are added as the viewport allows rather than at fixed breakpoints,
+   so the same markup reads well from a laptop to an ultrawide. */
+.card-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  align-items: start;
+}
+
+.card-grid-wide {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr));
+  align-items: start;
+}
+
+/* ═══ MODAL OVERLAY ═══
+   Every modal renders through components/Modal.jsx, which portals to <body>. That is
+   deliberate: page content lives inside `.route-fade`, whose transform creates a stacking
+   context, so a modal rendered in place could never sit above the sticky topbar no matter
+   its z-index. Portalling also lets one backdrop own the blur + brand tint. */
+
+/* Layers, low → high. Page modals sit under confirm dialogs so a confirmation raised
+   from inside a modal still reads on top of it. */
+:root {
+  --z-modal: 9500;
+  --z-confirm: 9600;
+}
+
+body.modal-open { overflow: hidden; }
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  overflow-y: auto;
+  /* Hint of PSU blue over the blurred page behind. */
+  background:
+    radial-gradient(120% 110% at 50% -10%, rgba(0, 72, 200, 0.30) 0%, transparent 62%),
+    rgba(3, 18, 52, 0.44);
+  backdrop-filter: blur(7px) saturate(118%);
+  -webkit-backdrop-filter: blur(7px) saturate(118%);
+  animation: modalBackdropIn 0.18s ease both;
+}
+.modal-backdrop-confirm { z-index: var(--z-confirm); }
+
+:root[data-theme="dark"] .modal-backdrop {
+  background:
+    radial-gradient(120% 110% at 50% -10%, rgba(0, 56, 170, 0.34) 0%, transparent 62%),
+    rgba(2, 8, 22, 0.66);
+}
+
+@keyframes modalBackdropIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.modal-panel {
+  width: 100%;
+  max-height: calc(100dvh - 32px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  margin: auto;
+  animation: modalPanelIn 0.24s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+
+@keyframes modalPanelIn {
+  from { opacity: 0; transform: translateY(16px) scale(0.972); }
+  to   { opacity: 1; transform: none; }
+}
+
+.modal-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 22px 26px 14px;
+  border-bottom: 1px solid rgba(0, 48, 135, 0.09);
+  flex-shrink: 0;
+}
+:root[data-theme="dark"] .modal-head { border-bottom-color: rgba(255, 255, 255, 0.07); }
+
+.modal-body {
+  padding: 20px 26px 24px;
+  overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.modal-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: rgba(0, 48, 135, 0.07);
+  color: var(--text);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.modal-close:hover { background: rgba(0, 48, 135, 0.14); color: var(--text-strong); }
+:root[data-theme="dark"] .modal-close { background: rgba(255, 255, 255, 0.07); }
+:root[data-theme="dark"] .modal-close:hover { background: rgba(255, 255, 255, 0.14); }
+
 /* Recessed inner section */
 .clay-card-inner {
   background: #dde3ef;

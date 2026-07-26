@@ -4,6 +4,7 @@ import { registerScholar, checkEmailAvailable } from '../api/auth';
 import { useTitle } from '../hooks/useTitle';
 import { Mail, Lock, User, UserCheck, FolderUp, TrendingUp, Bell, ArrowRight, ArrowLeft, AlertTriangle, GraduationCap, MailCheck, XCircle, ShieldQuestion } from 'lucide-react';
 import PasswordStrengthMeter, { getPasswordStrength } from '../components/PasswordStrengthMeter';
+import Logo from '../components/Logo';
 
 const HIGHLIGHTS = [
   { Icon: UserCheck,  label: 'Scholar Profiling',   desc: 'Academic records and personal information' },
@@ -133,10 +134,7 @@ export default function RegisterPage() {
 
         <div className="relative z-10 flex flex-col h-full p-12">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl flex items-center justify-center font-black text-sm shrink-0"
-              style={{ background: '#f5b800', color: '#002570', boxShadow: '0 4px 0px rgba(0,0,0,0.25)' }}>
-              PSU
-            </div>
+            <Logo size={48} shadow="0 4px 0px rgba(0,0,0,0.25)" />
             <div>
               <p className="font-black text-xl text-white leading-tight tracking-tight">e-Iskolar</p>
               <p className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>Lingayen Campus</p>
@@ -187,10 +185,7 @@ export default function RegisterPage() {
 
         {/* Mobile logo */}
         <div className="flex items-center gap-3 mb-8 lg:hidden">
-          <div className="w-10 h-10 rounded-2xl flex items-center justify-center font-black text-sm"
-            style={{ background: '#002570', color: '#f5b800', boxShadow: '0 3px 0px #001a4a' }}>
-            PSU
-          </div>
+          <Logo size={40} shadow="0 3px 0px rgba(0,37,112,0.35)" />
           <div>
             <p className="font-black text-base leading-tight" style={{ color: 'var(--text-strong)' }}>e-Iskolar</p>
             <p className="text-xs" style={{ color: '#7a8aaa' }}>Lingayen Campus</p>
