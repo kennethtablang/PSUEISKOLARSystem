@@ -1,9 +1,11 @@
 const API = '/api/documents';
 const REQ_API = '/api/document-requirements';
 
-export async function getRequirements(token, { scholarshipTypeId } = {}) {
+export async function getRequirements(token, { scholarshipTypeId, sharedOnly } = {}) {
   const params = new URLSearchParams();
   if (scholarshipTypeId) params.set('scholarshipTypeId', scholarshipTypeId);
+  // The shared catalog excludes documents owned by a single scholarship type.
+  if (sharedOnly) params.set('sharedOnly', 'true');
   const res = await fetch(`${REQ_API}?${params}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -176,6 +178,26 @@ export async function deleteRequirement(id, token) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.message || 'Failed to remove requirement.');
   }
+}
+
+// Persist a new checklist order: ids in the order they should appear.
+export async function reorderRequirements(orderedIds, token) {
+  const res = await fetch(`${REQ_API}/order`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(orderedIds),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to save the new order.');
+  }
+}
+
+// Existing group headings, for the "group" combo box in the requirement editor.
+export async function getRequirementGroups(token) {
+  const res = await fetch(`${REQ_API}/groups`, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) throw new Error('Failed to load groups.');
+  return res.json(); // string[]
 }
 
 export async function getRequirementScholarshipTypes(id, token) {

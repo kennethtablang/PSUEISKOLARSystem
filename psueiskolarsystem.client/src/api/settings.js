@@ -18,3 +18,24 @@ export async function setActiveSemester(data, token) {
   }
   return res.json();
 }
+
+export async function getMessagingSettings(token) {
+  const res = await fetch('/api/messaging-settings', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error('Failed to load messaging settings.');
+  return res.json();
+}
+
+export async function setMessagingSettings(data, token) {
+  const res = await fetch('/api/messaging-settings', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to update messaging settings.');
+  }
+  return res.json();
+}

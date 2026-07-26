@@ -61,7 +61,23 @@ export async function updateAnnouncement(id, data, token) {
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error('Failed to update announcement.');
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to update announcement.');
+  }
+}
+
+// Release a scheduled announcement immediately instead of waiting for its publish time.
+export async function publishAnnouncementNow(id, token) {
+  const res = await fetch(`${API}/${id}/publish-now`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to publish the announcement.');
+  }
+  return res.json();
 }
 
 export async function deleteAnnouncement(id, token) {

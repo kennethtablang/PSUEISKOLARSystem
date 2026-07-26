@@ -6,6 +6,20 @@ export async function getScholarshipTypes(token) {
   return res.json();
 }
 
+// Full detail for the read-only view modal: requirement breakdown + scholar figures.
+export async function getScholarshipType(id, token) {
+  const res = await fetch(`${API}/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) throw new Error('Failed to load scholarship type.');
+  return res.json();
+}
+
+// Documents that belong only to this scholarship type.
+export async function getOtherDocuments(id, token) {
+  const res = await fetch(`${API}/${id}/other-documents`, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) throw new Error('Failed to load additional documents.');
+  return res.json();
+}
+
 export async function createScholarshipType(data, token) {
   const res = await fetch(API, {
     method: 'POST',
