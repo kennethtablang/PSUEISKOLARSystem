@@ -3,7 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { login, forgotPassword, verifyTwoFactorLogin, resendVerification } from '../api/auth';
 import { useTitle } from '../hooks/useTitle';
-import { Mail, Lock, UserCheck, FolderUp, TrendingUp, Bell, ArrowRight, X, KeyRound, UserPlus, AlertTriangle, ShieldCheck, MailCheck } from 'lucide-react';
+import { Mail, Lock, UserCheck, FolderUp, TrendingUp, Bell, ArrowRight, KeyRound, UserPlus, AlertTriangle, ShieldCheck, MailCheck } from 'lucide-react';
+import Modal from '../components/Modal';
 
 const HIGHLIGHTS = [
   { Icon: UserCheck,  label: 'Scholar Profiling',      desc: 'Academic records & personal information' },
@@ -506,10 +507,8 @@ function TwoFaModal({ ticket, onBack, onSuccess }) {
   }
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center z-50 p-4"
-      style={{ background: 'rgba(0,20,60,0.52)' }}>
-      <div className="clay-card-modal w-full p-7" style={{ maxWidth: 400 }}>
-
+    <Modal onClose={onBack} width={400} dismissible={!submitting} closeOnBackdrop={false} bare>
+      <div className="clay-card-modal p-7">
         <div className="flex flex-col items-center text-center mb-6">
           <div className="w-12 h-12 rounded-full flex items-center justify-center mb-3"
             style={{ background: 'rgba(0,37,112,0.08)', border: '2px solid rgba(0,37,112,0.15)' }}>
@@ -562,7 +561,7 @@ function TwoFaModal({ ticket, onBack, onSuccess }) {
           </div>
         </form>
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -589,25 +588,20 @@ function ForgotPasswordModal({ onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center z-50 p-4"
-      style={{ background: 'rgba(0,20,60,0.52)' }}
-      onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="clay-card-modal w-full p-7" style={{ maxWidth: 400 }}>
-
-        <div className="flex items-center justify-between mb-5">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl flex items-center justify-center"
-              style={{ background: 'rgba(0,37,112,0.08)', border: '1px solid rgba(0,37,112,0.12)' }}>
-              <KeyRound size={15} color="#002570" strokeWidth={2} />
-            </div>
-            <h2 className="text-base font-black" style={{ color: 'var(--text-strong)' }}>Reset Password</h2>
-          </div>
-          <button onClick={onClose}
-            className="w-7 h-7 rounded-xl flex items-center justify-center hover:bg-black/5 transition-colors">
-            <X size={15} color="#7a8aaa" strokeWidth={2.5} />
-          </button>
-        </div>
-
+    <Modal
+      title={
+        <span className="flex items-center gap-2.5">
+          <span className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
+            style={{ background: 'rgba(0,37,112,0.08)', border: '1px solid rgba(0,37,112,0.12)' }}>
+            <KeyRound size={15} color="#002570" strokeWidth={2} />
+          </span>
+          Reset Password
+        </span>
+      }
+      onClose={onClose}
+      width={400}
+      dismissible={!submitting}
+    >
         {step === 1 ? (
           <>
             <p className="text-sm mb-5 leading-relaxed" style={{ color: 'var(--text)' }}>
@@ -696,7 +690,6 @@ function ForgotPasswordModal({ onClose }) {
             </button>
           </>
         )}
-      </div>
-    </div>
+    </Modal>
   );
 }

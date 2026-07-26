@@ -13,7 +13,12 @@ import { getSubmissions, getRequirements } from '../api/documents';
 import { getActiveSemester } from '../api/settings';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { getDeadlines } from '../api/deadlines';
-import { GraduationCap, ClipboardList, AlertTriangle, BarChart2, Inbox, Clock, FileCheck, ArrowRight, RefreshCw, CalendarClock, MessageSquare, Megaphone, FolderOpen, User, Activity } from 'lucide-react';
+import { useTheme } from '../context/ThemeContext';
+import { vizTokens, tooltipStyle } from '../constants/viz';
+import InfoTip from '../components/InfoTip';
+import { getPendingApprovalCount } from '../api/scholarApprovals';
+import { getOneTimeGrantSummary } from '../api/oneTimeGrants';
+import { GraduationCap, ClipboardList, AlertTriangle, BarChart2, Inbox, Clock, FileCheck, ArrowRight, RefreshCw, CalendarClock, MessageSquare, Megaphone, FolderOpen, User, Activity, UserCheck, Banknote, ShieldX, ShieldQuestion } from 'lucide-react';
 import { useTitle } from '../hooks/useTitle';
 
 export default function DashboardPage() {
@@ -27,6 +32,13 @@ export default function DashboardPage() {
   const [overview, setOverview] = useState(null); // full analytics overview (admin/coord)
   const [deadlines, setDeadlines] = useState([]); // upcoming deadlines (scholar)
   const [activity, setActivity] = useState([]); // recent audit-log activity (staff)
+  const [pendingApprovals, setPendingApprovals] = useState(0); // scholars awaiting verification (staff)
+  const [grantSummary, setGrantSummary] = useState(null); // one-time grant totals (staff)
+
+  // The signed-in scholar's own verification state travels on the auth user.
+  const approval = user?.approvalStatus
+    ? { status: user.approvalStatus, note: user.approvalNote }
+    : null;
 
   useEffect(() => {
     getAnnouncements(token).then(setAnnouncements).catch(() => {});
@@ -37,6 +49,8 @@ export default function DashboardPage() {
     } else {
       loadRenewal();
       getRecentActivity(token).then(setActivity).catch(() => {});
+      getPendingApprovalCount(token).then(setPendingApprovals).catch(() => {});
+      getOneTimeGrantSummary(token).then(setGrantSummary).catch(() => {});
     }
   }, []);
 
@@ -134,9 +148,14 @@ export default function DashboardPage() {
     } catch { /* compliance is optional */ }
   }
 
+  const isStaff = user?.role !== 'Scholar';
+
   return (
     <Layout>
-      <div className="p-4 sm:p-8 max-w-4xl">
+      {/* Full-width dashboard: the primary column carries the working content, the right
+          rail carries the feeds (announcements, activity, deadlines) that used to be
+          stacked underneath it. The rail collapses under the main column below 1280px. */}
+      <div className="p-4 sm:p-8">
         {/* Header */}
         <div className="mb-7">
           <h1 className="page-title">
@@ -147,6 +166,41 @@ export default function DashboardPage() {
           </p>
           <span className="page-title-bar" />
         </div>
+
+        <div className="page-split">
+        <div className="min-w-0">
+
+        {/* Scholar: registration still awaiting verification */}
+        {user?.role === 'Scholar' && approval && approval.status !== 'Approved' && (
+          <div className="flex items-start gap-4 p-4 rounded-2xl mb-8"
+            style={approval.status === 'Rejected'
+              ? { background: 'linear-gradient(135deg, #a01818, #c83030)', color: '#fff' }
+              : { background: 'linear-gradient(135deg, #8a6000, #c08800)', color: '#fff' }}>
+            <div className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0" style={{ background: 'rgba(255,255,255,0.18)' }}>
+              {approval.status === 'Rejected'
+                ? <ShieldX size={22} strokeWidth={2.4} />
+                : <ShieldQuestion size={22} strokeWidth={2.4} />}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-black">
+                {approval.status === 'Rejected'
+                  ? 'Your registration was not approved'
+                  : 'Your registration is awaiting verification'}
+              </p>
+              <p className="text-xs mt-0.5 leading-relaxed" style={{ color: 'rgba(255,255,255,0.85)' }}>
+                {approval.status === 'Rejected'
+                  ? 'Document submission stays locked. Please contact the scholarship office to sort this out.'
+                  : 'The scholarship office is reviewing your details. You can finish your profile now — document submission unlocks once you are approved.'}
+              </p>
+              {approval.note && (
+                <p className="text-xs mt-1.5 italic" style={{ color: 'rgba(255,255,255,0.92)' }}>“{approval.note}”</p>
+              )}
+            </div>
+            <Link to="/my-profile" className="shrink-0 self-center" style={{ color: '#fff' }}>
+              <ArrowRight size={20} strokeWidth={2.4} />
+            </Link>
+          </div>
+        )}
 
         {/* Scholar: prominent next-action nudge when documents need attention */}
         {user?.role === 'Scholar' && compliance && (() => {
@@ -179,18 +233,26 @@ export default function DashboardPage() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
             {user?.role === 'Administrator' && (
               <>
-                <StatCard label="Total Scholars" value={stats.totalScholars} Icon={GraduationCap} color="#dce8ff" iconColor="#003087" />
-                <StatCard label="Coordinators"   value={stats.coordinators}  Icon={ClipboardList}  color="#ede0ff" iconColor="#6030b0" />
-                <StatCard label="Flagged GWA"    value={stats.flagged}       Icon={AlertTriangle}  color={stats.flagged > 0 ? '#ffe8d6' : '#d4f5e2'} iconColor={stats.flagged > 0 ? '#c05000' : '#108050'} />
-                <StatCard label="Pending Review" value={stats.pendingReview} Icon={Clock}          color={stats.pendingReview > 0 ? '#fff3cd' : '#d4f5e2'} iconColor={stats.pendingReview > 0 ? '#c07800' : '#108050'} />
+                <StatCard label="Total Scholars" value={stats.totalScholars} Icon={GraduationCap} color="#dce8ff" iconColor="#003087"
+                  info="Every scholar profile on record, whatever their lifecycle status." />
+                <StatCard label="Coordinators" value={stats.coordinators} Icon={ClipboardList} color="#ede0ff" iconColor="#6030b0"
+                  info="Active scholarship-coordinator accounts. Archived accounts are excluded." />
+                <StatCard label="Flagged GWA" value={stats.flagged} Icon={AlertTriangle} color={stats.flagged > 0 ? '#ffe8d6' : '#d4f5e2'} iconColor={stats.flagged > 0 ? '#c05000' : '#108050'}
+                  info="Scholars whose most recent GWA is above their scholarship's maximum. Review their standing before the next renewal." />
+                <StatCard label="Pending Review" value={stats.pendingReview} Icon={Clock} color={stats.pendingReview > 0 ? '#fff3cd' : '#d4f5e2'} iconColor={stats.pendingReview > 0 ? '#c07800' : '#108050'}
+                  info="Documents scholars have submitted that nobody has reviewed yet — your queue on the Document Review page." />
               </>
             )}
             {user?.role === 'ScholarshipCoordinator' && (
               <>
-                <StatCard label="Scholars"      value={stats.totalScholars} Icon={GraduationCap} color="#dce8ff" iconColor="#003087" />
-                <StatCard label="No GWA Yet"    value={stats.noGwa}         Icon={BarChart2}     color="#fff3cd" iconColor="#c07800" />
-                <StatCard label="Flagged GWA"   value={stats.flagged}       Icon={AlertTriangle} color={stats.flagged > 0 ? '#ffe8d6' : '#d4f5e2'} iconColor={stats.flagged > 0 ? '#c05000' : '#108050'} />
-                <StatCard label="Pending Review" value={stats.pendingReview} Icon={Clock}        color={stats.pendingReview > 0 ? '#fff3cd' : '#d4f5e2'} iconColor={stats.pendingReview > 0 ? '#c07800' : '#108050'} />
+                <StatCard label="Scholars" value={stats.totalScholars} Icon={GraduationCap} color="#dce8ff" iconColor="#003087"
+                  info="Every scholar profile on record, whatever their lifecycle status." />
+                <StatCard label="No GWA Yet" value={stats.noGwa} Icon={BarChart2} color="#fff3cd" iconColor="#c07800"
+                  info="Scholars with no grade recorded at all, so their compliance can't be assessed. Record a GWA from their profile." />
+                <StatCard label="Flagged GWA" value={stats.flagged} Icon={AlertTriangle} color={stats.flagged > 0 ? '#ffe8d6' : '#d4f5e2'} iconColor={stats.flagged > 0 ? '#c05000' : '#108050'}
+                  info="Scholars whose most recent GWA is above their scholarship's maximum. Review their standing before the next renewal." />
+                <StatCard label="Pending Review" value={stats.pendingReview} Icon={Clock} color={stats.pendingReview > 0 ? '#fff3cd' : '#d4f5e2'} iconColor={stats.pendingReview > 0 ? '#c07800' : '#108050'}
+                  info="Documents scholars have submitted that nobody has reviewed yet — your queue on the Document Review page." />
               </>
             )}
           </div>
@@ -209,16 +271,24 @@ export default function DashboardPage() {
         {/* Visual breakdown (admin / coordinator) */}
         {overview && user?.role !== 'Scholar' && (
           <div className="grid gap-4 mb-8" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
-            <DonutCard title="GWA Compliance" data={[
-              { name: 'Compliant', value: overview.compliant, color: '#10a060' },
-              { name: 'Flagged', value: overview.nonCompliant, color: '#e0603a' },
-              { name: 'No GWA', value: overview.noGwa, color: '#b0bdd0' },
-            ]} />
-            <DonutCard title="Document Submissions" data={[
-              { name: 'Verified', value: overview.submissions.verified, color: '#10a060' },
-              { name: 'Pending', value: overview.submissions.pending, color: '#e0a000' },
-              { name: 'Incomplete', value: overview.submissions.incomplete, color: '#e0603a' },
-            ]} />
+            <DonutCard
+              title="GWA Compliance"
+              info="Every scholar split by their most recent grade: at or under their scholarship's maximum GWA, above it, or no grade recorded yet."
+              data={[
+                { name: 'Compliant', value: overview.compliant, color: '#10a060' },
+                { name: 'Flagged', value: overview.nonCompliant, color: '#e0603a' },
+                { name: 'No GWA', value: overview.noGwa, color: '#b0bdd0' },
+              ]}
+            />
+            <DonutCard
+              title="Document Submissions"
+              info="All document submissions by review outcome. 'Pending' is waiting on staff; 'Incomplete' was sent back to the scholar."
+              data={[
+                { name: 'Verified', value: overview.submissions.verified, color: '#10a060' },
+                { name: 'Pending', value: overview.submissions.pending, color: '#e0a000' },
+                { name: 'Incomplete', value: overview.submissions.incomplete, color: '#e0603a' },
+              ]}
+            />
           </div>
         )}
 
@@ -277,32 +347,6 @@ export default function DashboardPage() {
                     : 'Meeting scholarship GWA requirement'}
                 </p>
               </div>
-            </div>
-          </div>
-        )}
-
-        {/* Upcoming deadlines (scholar) */}
-        {user?.role === 'Scholar' && deadlines.length > 0 && (
-          <div className="mb-8">
-            <h2 className="text-base font-black mb-4" style={{ color: 'var(--text-strong)' }}>Upcoming Deadlines</h2>
-            <div className="space-y-2">
-              {deadlines.map(d => {
-                const days = Math.ceil((new Date(d.dueDate) - Date.now()) / 86400000);
-                return (
-                  <Link key={d.id} to="/my-documents" className="clay-card p-4 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(234,88,12,0.1)' }}>
-                      <CalendarClock size={18} color="#c2410c" strokeWidth={2} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold" style={{ color: 'var(--text-strong)' }}>{d.requirementName}</p>
-                      <p className="text-xs" style={{ color: days <= 3 ? '#c2410c' : '#7a8aaa' }}>
-                        Due {new Date(d.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} · {days <= 0 ? 'today' : `in ${days} day${days > 1 ? 's' : ''}`}
-                      </p>
-                    </div>
-                    <ArrowRight size={16} color="#c2410c" strokeWidth={2.5} />
-                  </Link>
-                );
-              })}
             </div>
           </div>
         )}
@@ -405,41 +449,117 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Recent activity (staff) */}
-        {user?.role !== 'Scholar' && activity.length > 0 && (
-          <CollapsibleSection id="recent-activity" title="Recent Activity">
-            <div className="clay-card divide-y" style={{ borderColor: 'transparent' }}>
-              {activity.map(a => (
-                <div key={a.id} className="flex items-start gap-3 px-5 py-3.5" style={{ borderTop: '1px solid rgba(0,48,135,0.05)' }}>
-                  <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(0,48,135,0.08)' }}>
-                    <Activity size={15} strokeWidth={2.2} color="#003087" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm" style={{ color: 'var(--text-strong)' }}>
-                      <span className="font-semibold">{a.userName}</span>{' '}
-                      <span style={{ color: 'var(--text)' }}>{a.details || a.action}</span>
-                    </p>
-                    <p className="text-xs mt-0.5" style={{ color: '#9aa6bc' }}>{relativeTime(a.timestampUtc)}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CollapsibleSection>
-        )}
+        </div>{/* /main column */}
 
-        {/* Announcements */}
-        <CollapsibleSection id="announcements" title="Announcements">
-          {announcements.length === 0 ? (
-            <div className="clay-card p-8 text-center">
-              <Inbox size={32} strokeWidth={1.5} className="mx-auto mb-3" style={{ color: '#b0bdd0' }} />
-              <p className="text-sm" style={{ color: '#7a8aaa' }}>No announcements at this time.</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {announcements.map(a => <AnnouncementCard key={a.id} a={a} variant="feed" />)}
+        {/* ── Right rail: feeds and queues ── */}
+        <aside className="page-rail min-w-0">
+
+          {/* Scholars waiting for verification (staff) */}
+          {isStaff && pendingApprovals > 0 && (
+            <Link to="/scholar-approvals" className="block mb-6">
+              <div className="rounded-3xl p-5 flex items-center gap-4"
+                style={{ background: 'rgba(192,120,0,0.13)', border: '1.5px solid rgba(192,120,0,0.32)', boxShadow: '4px 4px 14px rgba(0,0,0,0.06)' }}>
+                <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0"
+                  style={{ background: 'rgba(192,120,0,0.18)' }}>
+                  <UserCheck size={20} strokeWidth={2} style={{ color: '#8a5a00' }} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-black" style={{ color: 'var(--text-strong)' }}>
+                    {pendingApprovals} scholar{pendingApprovals !== 1 ? 's' : ''} awaiting approval
+                  </p>
+                  <p className="text-xs mt-0.5" style={{ color: '#8a5a00' }}>
+                    They cannot submit documents until you verify their registration.
+                  </p>
+                </div>
+                <ArrowRight size={18} strokeWidth={2.5} style={{ color: '#8a5a00' }} />
+              </div>
+            </Link>
+          )}
+
+          {/* One-time grants awaiting release (staff) */}
+          {isStaff && grantSummary?.pendingCount > 0 && (
+            <Link to="/one-time-grants" className="block mb-6">
+              <div className="clay-card p-5 flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0"
+                  style={{ background: 'rgba(0,48,135,0.08)' }}>
+                  <Banknote size={20} strokeWidth={2} color="#003087" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-black" style={{ color: 'var(--text-strong)' }}>
+                    {grantSummary.pendingCount} grant{grantSummary.pendingCount !== 1 ? 's' : ''} to release
+                  </p>
+                  <p className="text-xs mt-0.5" style={{ color: '#7a8aaa' }}>
+                    ₱{Number(grantSummary.pendingAmount).toLocaleString('en-PH', { minimumFractionDigits: 2 })} awarded but not yet disbursed.
+                  </p>
+                </div>
+                <ArrowRight size={18} strokeWidth={2.5} color="#003087" />
+              </div>
+            </Link>
+          )}
+
+          {/* Upcoming deadlines (scholar) */}
+          {user?.role === 'Scholar' && deadlines.length > 0 && (
+            <div className="mb-8">
+              <h2 className="text-base font-black mb-4" style={{ color: 'var(--text-strong)' }}>Upcoming Deadlines</h2>
+              <div className="space-y-2">
+                {deadlines.map(d => {
+                  const days = Math.ceil((new Date(d.dueDate) - Date.now()) / 86400000);
+                  return (
+                    <Link key={d.id} to="/my-documents" className="clay-card p-4 flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(234,88,12,0.1)' }}>
+                        <CalendarClock size={18} color="#c2410c" strokeWidth={2} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold" style={{ color: 'var(--text-strong)' }}>{d.requirementName}</p>
+                        <p className="text-xs" style={{ color: days <= 3 ? '#c2410c' : '#7a8aaa' }}>
+                          Due {new Date(d.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} · {days <= 0 ? 'today' : `in ${days} day${days > 1 ? 's' : ''}`}
+                        </p>
+                      </div>
+                      <ArrowRight size={16} color="#c2410c" strokeWidth={2.5} />
+                    </Link>
+                  );
+                })}
+              </div>
             </div>
           )}
-        </CollapsibleSection>
+
+          {/* Recent activity (staff) */}
+          {isStaff && activity.length > 0 && (
+            <CollapsibleSection id="recent-activity" title="Recent Activity">
+              <div className="clay-card divide-y" style={{ borderColor: 'transparent' }}>
+                {activity.map(a => (
+                  <div key={a.id} className="flex items-start gap-3 px-5 py-3.5" style={{ borderTop: '1px solid rgba(0,48,135,0.05)' }}>
+                    <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(0,48,135,0.08)' }}>
+                      <Activity size={15} strokeWidth={2.2} color="#003087" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm" style={{ color: 'var(--text-strong)' }}>
+                        <span className="font-semibold">{a.userName}</span>{' '}
+                        <span style={{ color: 'var(--text)' }}>{a.details || a.action}</span>
+                      </p>
+                      <p className="text-xs mt-0.5" style={{ color: '#9aa6bc' }}>{relativeTime(a.timestampUtc)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CollapsibleSection>
+          )}
+
+          {/* Announcements */}
+          <CollapsibleSection id="announcements" title="Announcements">
+            {announcements.length === 0 ? (
+              <div className="clay-card p-8 text-center">
+                <Inbox size={32} strokeWidth={1.5} className="mx-auto mb-3" style={{ color: '#b0bdd0' }} />
+                <p className="text-sm" style={{ color: '#7a8aaa' }}>No announcements at this time.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {announcements.map(a => <AnnouncementCard key={a.id} a={a} variant="feed" />)}
+              </div>
+            )}
+          </CollapsibleSection>
+        </aside>
+        </div>{/* /page-split */}
       </div>
     </Layout>
   );
@@ -457,11 +577,14 @@ function relativeTime(iso) {
   return new Date(iso).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
 }
 
-function StatCard({ label, value, Icon, color, iconColor }) {
+function StatCard({ label, value, Icon, color, iconColor, info }) {
   return (
     <div className="rounded-3xl p-5 stat-tile" style={{ '--tile-bg': color }}>
-      <div className="w-10 h-10 rounded-2xl flex items-center justify-center mb-3 stat-tile-icon">
-        <Icon size={18} strokeWidth={2} style={{ color: iconColor }} />
+      <div className="flex items-start justify-between gap-2 mb-3">
+        <div className="w-10 h-10 rounded-2xl flex items-center justify-center stat-tile-icon">
+          <Icon size={18} strokeWidth={2} style={{ color: iconColor }} />
+        </div>
+        {info && <InfoTip text={info} align="end" label={`What "${label}" means`} />}
       </div>
       <p className="text-xs font-bold uppercase tracking-wider mb-1 stat-tile-label">{label}</p>
       <p className="text-3xl font-black stat-tile-value">{value}</p>
@@ -490,12 +613,17 @@ function QuickAction({ to, Icon, label }) {
   );
 }
 
-function DonutCard({ title, data }) {
+function DonutCard({ title, data, info }) {
+  const { resolved } = useTheme();
+  const t = vizTokens(resolved);
   const items = data.filter(d => d.value > 0);
   const total = data.reduce((s, d) => s + d.value, 0);
   return (
     <div className="clay-card p-5">
-      <h3 className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: '#7a8aaa' }}>{title}</h3>
+      <h3 className="text-xs font-bold uppercase tracking-wider mb-3 flex items-center gap-1.5" style={{ color: '#7a8aaa' }}>
+        {title}
+        {info && <InfoTip text={info} size={12} />}
+      </h3>
       {total === 0 ? (
         <p className="text-sm text-center py-8" style={{ color: '#9aaabb' }}>No data yet.</p>
       ) : (
@@ -503,19 +631,22 @@ function DonutCard({ title, data }) {
           <div style={{ width: 118, height: 118, flexShrink: 0 }}>
             <ResponsiveContainer>
               <PieChart>
-                <Pie data={items} dataKey="value" nameKey="name" innerRadius={34} outerRadius={54} paddingAngle={2}>
-                  {items.map((d, i) => <Cell key={i} fill={d.color} />)}
+                {/* A 2px surface ring stops adjacent segments fusing into one shape. */}
+                <Pie data={items} dataKey="value" nameKey="name" innerRadius={34} outerRadius={54}
+                  paddingAngle={2} stroke={t.gap} strokeWidth={2}>
+                  {items.map(d => <Cell key={d.name} fill={d.color} />)}
                 </Pie>
-                <Tooltip />
+                <Tooltip contentStyle={tooltipStyle(t)} />
               </PieChart>
             </ResponsiveContainer>
           </div>
+          {/* The written counts beside a colour chip — identity never rests on hue. */}
           <div className="flex-1 space-y-1.5">
             {data.map(d => (
               <div key={d.name} className="flex items-center gap-2 text-sm">
-                <span style={{ width: 10, height: 10, borderRadius: 3, background: d.color, flexShrink: 0 }} />
+                <span aria-hidden="true" style={{ width: 10, height: 10, borderRadius: 3, background: d.color, flexShrink: 0 }} />
                 <span style={{ color: 'var(--text)' }}>{d.name}</span>
-                <span className="ml-auto font-bold" style={{ color: 'var(--text-strong)' }}>{d.value}</span>
+                <span className="ml-auto font-bold tabular-nums" style={{ color: 'var(--text-strong)' }}>{d.value}</span>
               </div>
             ))}
           </div>

@@ -9,6 +9,7 @@ import { CheckCircle2, XCircle } from 'lucide-react';
 import Pagination from '../components/Pagination';
 import { TableSkeleton, EmptyState } from '../components/ListState';
 import { ctlStyle } from '../constants/ui';
+import Modal from '../components/Modal';
 
 const STATUSES = ['', 'Pending', 'Verified', 'Incomplete'];
 const STATUS_STYLE = {
@@ -285,13 +286,13 @@ function ReviewModal({ submission, token, onClose, onSaved }) {
   }
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{ background: 'rgba(0,20,60,0.45)' }}>
-      <div className="clay-card-modal w-full max-w-md p-7" style={{ maxHeight: '90vh', overflowY: 'auto' }}>
-        <h2 className="text-base font-black mb-1" style={{ color: 'var(--text-strong)' }}>Review Document</h2>
-        <p className="text-sm mb-5" style={{ color: 'var(--text)' }}>
-          {submission.scholarName} · {submission.requirementName}
-        </p>
-
+    <Modal
+      title="Review Document"
+      subtitle={`${submission.scholarName} · ${submission.requirementName}`}
+      onClose={onClose}
+      width={480}
+      dismissible={!submitting}
+    >
         <div className="mb-4">
           <button
             onClick={() => downloadFile(submission.id, submission.fileName, token).catch(e => toast(e.message, 'error'))}
@@ -370,7 +371,6 @@ function ReviewModal({ submission, token, onClose, onSaved }) {
             </ol>
           </div>
         )}
-      </div>
-    </div>
+    </Modal>
   );
 }
