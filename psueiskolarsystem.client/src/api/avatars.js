@@ -9,12 +9,8 @@ const API = '/api/avatars';
    nothing but its component (React Fast Refresh). */
 const cache = new Map();
 
-export function avatarUrl(userId) {
-  return `${API}/${userId}`;
-}
-
 export async function getAvatar(userId, token) {
-  const res = await fetch(avatarUrl(userId), { headers: { Authorization: `Bearer ${token}` } });
+  const res = await fetch(`${API}/${userId}`, { headers: { Authorization: `Bearer ${token}` } });
   if (!res.ok) return null;
   return URL.createObjectURL(await res.blob());
 }
