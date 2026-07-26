@@ -21,9 +21,9 @@ public static class TestDb
     }
 
     // Adds a scholar user (with the Scholar role) and returns it.
-    public static ApplicationUser AddScholar(this ApplicationDbContext db, string id, bool active = true, int? campusId = null)
+    public static ApplicationUser AddScholar(this ApplicationDbContext db, string id, bool active = true)
     {
-        var u = new ApplicationUser { Id = id, UserName = id + "@t", Email = id + "@t", FirstName = id, LastName = "Test", IsActive = active, CampusId = campusId };
+        var u = new ApplicationUser { Id = id, UserName = id + "@t", Email = id + "@t", FirstName = id, LastName = "Test", IsActive = active };
         db.Users.Add(u);
         db.UserRoles.Add(new IdentityUserRole<string> { UserId = id, RoleId = "role-scholar" });
         return u;

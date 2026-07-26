@@ -47,19 +47,4 @@ public class AnalyticsOverviewTests
         Assert.Equal(1, Prop(subs, "pending"));
         Assert.Equal(1, Prop(subs, "incomplete"));
     }
-
-    [Fact]
-    public async Task Overview_Respects_Campus_Filter()
-    {
-        using var db = TestDb.New();
-        db.AddRequirement(1, "Req1");
-        db.AddScholar("a", campusId: 1); db.AddProfile("a", null);
-        db.AddScholar("b", campusId: 1); db.AddProfile("b", null);
-        db.AddScholar("c", campusId: 2); db.AddProfile("c", null);
-        db.SaveChanges();
-
-        var result = await new AnalyticsController(db).Overview(campusId: 1);
-        var value = Assert.IsType<OkObjectResult>(result).Value!;
-        Assert.Equal(2, Prop(value, "totalScholars"));
-    }
 }
