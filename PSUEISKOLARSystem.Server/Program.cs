@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using PSUEISKOLARSystem.Server.Data;
+using PSUEISKOLARSystem.Server.Infrastructure;
 using PSUEISKOLARSystem.Server.Interfaces;
 using PSUEISKOLARSystem.Server.Mappings;
 using PSUEISKOLARSystem.Server.Models;
@@ -22,9 +23,15 @@ namespace PSUEISKOLARSystem.Server
 
             // Add services to the container.
 
-            builder.Services.AddControllers();
+            // Every api/… route also answers on api/v1/… — see ApiVersioning for the strategy.
+            builder.Services.AddControllers(options =>
+                options.Conventions.Add(new ApiVersioning.RouteConvention()));
             builder.Services.AddSignalR();
             builder.Services.AddOpenApi();
+
+            // QuestPDF's Community licence covers non-commercial and small-business use,
+            // which includes this university system (PDF report export).
+            QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
 
             builder.Services.AddDbContext<ApplicationDbContext>(options =>
                 options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
@@ -93,7 +100,10 @@ namespace PSUEISKOLARSystem.Server
             builder.Services.AddScoped<IAuthService, AuthService>();
             builder.Services.AddScoped<IEmailService, EmailService>();
             builder.Services.AddScoped<INotificationService, NotificationService>();
+            builder.Services.AddScoped<IAnnouncementDelivery, AnnouncementDelivery>();
+            builder.Services.AddScoped<DatabaseExporter>();
             builder.Services.AddHostedService<DeadlineReminderService>();
+            builder.Services.AddHostedService<AnnouncementPublisherService>();
             builder.Services.AddSingleton<IFileStorageService, LocalFileStorageService>();
 
             builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
@@ -103,7 +113,19 @@ namespace PSUEISKOLARSystem.Server
 
             builder.Services.AddSwaggerGen(options =>
             {
-                options.SwaggerDoc("v1", new OpenApiInfo { Title = "PSU e-Iskolar API", Version = "v1" });
+                options.SwaggerDoc(ApiVersioning.CurrentVersion, new OpenApiInfo
+                {
+                    Title = "PSU e-Iskolar API",
+                    Version = ApiVersioning.CurrentVersion,
+                    Description =
+                        "Versioned by URL segment. `/api/v1/...` is canonical; the unversioned " +
+                        "`/api/...` paths are legacy aliases that resolve to the same actions and " +
+                        "are omitted here so the documented surface stays unambiguous.",
+                });
+
+                // Document each action once, at its versioned address.
+                options.DocInclusionPredicate((_, api) =>
+                    api.RelativePath?.StartsWith(ApiVersioning.Prefix, StringComparison.OrdinalIgnoreCase) == true);
 
                 var jwtScheme = new OpenApiSecurityScheme
                 {
