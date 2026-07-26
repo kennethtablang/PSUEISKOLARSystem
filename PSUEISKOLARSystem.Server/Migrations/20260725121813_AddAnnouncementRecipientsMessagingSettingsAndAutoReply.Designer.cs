@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using PSUEISKOLARSystem.Server.Data;
 
@@ -11,9 +12,11 @@ using PSUEISKOLARSystem.Server.Data;
 namespace PSUEISKOLARSystem.Server.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260725121813_AddAnnouncementRecipientsMessagingSettingsAndAutoReply")]
+    partial class AddAnnouncementRecipientsMessagingSettingsAndAutoReply
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -284,12 +287,6 @@ namespace PSUEISKOLARSystem.Server.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
-                    b.Property<DateTime?>("PublishAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("PublishedAt")
-                        .HasColumnType("datetime2");
-
                     b.Property<int?>("TargetProgramId")
                         .HasColumnType("int");
 
@@ -354,10 +351,6 @@ namespace PSUEISKOLARSystem.Server.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
-                    b.Property<string>("AvatarPath")
-                        .HasMaxLength(260)
-                        .HasColumnType("nvarchar(260)");
-
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
                         .HasColumnType("nvarchar(max)");
@@ -410,10 +403,6 @@ namespace PSUEISKOLARSystem.Server.Migrations
 
                     b.Property<string>("MiddleName")
                         .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("MutedNotificationCategories")
-                        .HasMaxLength(300)
-                        .HasColumnType("nvarchar(300)");
 
                     b.Property<string>("NormalizedEmail")
                         .HasMaxLength(256)
@@ -493,13 +482,6 @@ namespace PSUEISKOLARSystem.Server.Migrations
                     b.Property<string>("Description")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
-
-                    b.Property<int>("DisplayOrder")
-                        .HasColumnType("int");
-
-                    b.Property<string>("GroupName")
-                        .HasMaxLength(60)
-                        .HasColumnType("nvarchar(60)");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
@@ -947,9 +929,6 @@ namespace PSUEISKOLARSystem.Server.Migrations
                         .IsRequired()
                         .HasMaxLength(150)
                         .HasColumnType("nvarchar(150)");
-
-                    b.Property<int?>("SlotLimit")
-                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
