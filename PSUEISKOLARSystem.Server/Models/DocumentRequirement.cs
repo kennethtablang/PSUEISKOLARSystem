@@ -14,6 +14,14 @@ namespace PSUEISKOLARSystem.Server.Models
 
         public bool IsRequired { get; set; } = true;
 
+        // Checklist presentation (add-on). Requirements are ordered by DisplayOrder first
+        // so an admin can put "Certificate of Registration" ahead of "2x2 Photo"; ties fall
+        // back to name. GroupName buckets related documents under a heading in the UI.
+        public int DisplayOrder { get; set; }
+
+        [MaxLength(60)]
+        public string? GroupName { get; set; }
+
         // Stored file name of an example/sample image shown to scholars (add-on).
         [MaxLength(260)]
         public string? SampleImagePath { get; set; }

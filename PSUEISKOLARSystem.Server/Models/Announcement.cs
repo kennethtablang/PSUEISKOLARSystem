@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace PSUEISKOLARSystem.Server.Models
 {
@@ -15,14 +16,24 @@ namespace PSUEISKOLARSystem.Server.Models
         [MaxLength(50)]
         public string? TargetRole { get; set; }
 
-        public int? TargetCampusId { get; set; }
-        public Campus? TargetCampus { get; set; }
-
         public int? TargetScholarshipTypeId { get; set; }
         public ScholarshipType? TargetScholarshipType { get; set; }
 
         public int? TargetProgramId { get; set; }
         public AcademicProgram? TargetProgram { get; set; }
+
+        // Named scholars. When any are present they are the whole audience and the
+        // role/type/program filters above are ignored (see AnnouncementRecipient).
+        public ICollection<AnnouncementRecipient> Recipients { get; set; } = [];
+
+        // Scheduling (add-on). PublishAt in the future hides the announcement from its
+        // audience until the publisher service releases it; PublishedAt is stamped once
+        // the notifications/emails have gone out so they can never be sent twice.
+        public DateTime? PublishAt { get; set; }
+        public DateTime? PublishedAt { get; set; }
+
+        [NotMapped]
+        public bool IsScheduled => PublishedAt is null && PublishAt is not null && PublishAt > DateTime.UtcNow;
 
         public DateTime? ExpiresAt { get; set; }
 

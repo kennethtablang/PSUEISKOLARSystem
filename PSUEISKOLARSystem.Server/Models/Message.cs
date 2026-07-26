@@ -29,6 +29,10 @@ namespace PSUEISKOLARSystem.Server.Models
         public bool ReadByScholar { get; set; }
         public bool ReadByStaff { get; set; }
 
+        // Posted by the system, not typed by the named sender. Shown as coming from the
+        // Scholarship Office and never counted as staff needing to read it.
+        public bool IsAutoReply { get; set; }
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 }

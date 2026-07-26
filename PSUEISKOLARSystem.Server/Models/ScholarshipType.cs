@@ -18,6 +18,10 @@ namespace PSUEISKOLARSystem.Server.Models
 
         public decimal MinimumGwa { get; set; } = 2.50m;
 
+        // Maximum number of scholars that may hold this scholarship at once.
+        // Null means unlimited — the slot tracker then reports "No cap".
+        public int? SlotLimit { get; set; }
+
         public bool IsActive { get; set; } = true;
 
         public ICollection<ScholarProfile> Scholars { get; set; } = [];
