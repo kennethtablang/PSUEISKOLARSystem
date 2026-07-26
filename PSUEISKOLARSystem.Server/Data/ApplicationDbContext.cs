@@ -7,7 +7,6 @@ namespace PSUEISKOLARSystem.Server.Data
     public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
         : IdentityDbContext<ApplicationUser>(options)
     {
-        public DbSet<Campus> Campuses => Set<Campus>();
         public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
         public DbSet<ScholarshipType> ScholarshipTypes => Set<ScholarshipType>();
         public DbSet<AcademicProgram> AcademicPrograms => Set<AcademicProgram>();
@@ -22,20 +21,14 @@ namespace PSUEISKOLARSystem.Server.Data
         public DbSet<Notification> Notifications => Set<Notification>();
         public DbSet<SubmissionDeadline> SubmissionDeadlines => Set<SubmissionDeadline>();
         public DbSet<Message> Messages => Set<Message>();
+        public DbSet<ScholarshipAssignment> ScholarshipAssignments => Set<ScholarshipAssignment>();
+        public DbSet<OneTimeGrant> OneTimeGrants => Set<OneTimeGrant>();
+        public DbSet<AnnouncementRecipient> AnnouncementRecipients => Set<AnnouncementRecipient>();
+        public DbSet<MessagingSettings> MessagingSettings => Set<MessagingSettings>();
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
             base.OnModelCreating(builder);
-
-            builder.Entity<Campus>()
-                .HasIndex(c => c.Code)
-                .IsUnique();
-
-            builder.Entity<ApplicationUser>()
-                .HasOne(u => u.Campus)
-                .WithMany(c => c.Users)
-                .HasForeignKey(u => u.CampusId)
-                .OnDelete(DeleteBehavior.SetNull);
 
             builder.Entity<ScholarProfile>()
                 .HasOne(sp => sp.User)
@@ -72,12 +65,6 @@ namespace PSUEISKOLARSystem.Server.Data
                 .WithMany()
                 .HasForeignKey(a => a.CreatedById)
                 .OnDelete(DeleteBehavior.Restrict);
-
-            builder.Entity<Announcement>()
-                .HasOne(a => a.TargetCampus)
-                .WithMany()
-                .HasForeignKey(a => a.TargetCampusId)
-                .OnDelete(DeleteBehavior.SetNull);
 
             builder.Entity<Announcement>()
                 .HasOne(a => a.TargetScholarshipType)
@@ -203,6 +190,83 @@ namespace PSUEISKOLARSystem.Server.Data
 
             builder.Entity<Message>()
                 .HasIndex(m => new { m.ScholarId, m.RequirementId });
+
+            /* ── Scholarship assignment history (strictly one active per scholar) ── */
+
+            builder.Entity<ScholarshipAssignment>()
+                .HasOne(a => a.Scholar)
+                .WithMany()
+                .HasForeignKey(a => a.ScholarId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Entity<ScholarshipAssignment>()
+                .HasOne(a => a.ScholarshipType)
+                .WithMany()
+                .HasForeignKey(a => a.ScholarshipTypeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Actor FKs are nulled out before a user is deleted (see UsersController.Delete)
+            // to avoid multiple cascade paths into ApplicationUser.
+            builder.Entity<ScholarshipAssignment>()
+                .HasOne(a => a.AssignedBy)
+                .WithMany()
+                .HasForeignKey(a => a.AssignedById)
+                .OnDelete(DeleteBehavior.ClientSetNull);
+
+            // The single-active-scholarship rule, enforced in the database.
+            builder.Entity<ScholarshipAssignment>()
+                .HasIndex(a => a.ScholarId)
+                .HasFilter("[EndedAt] IS NULL")
+                .IsUnique();
+
+            builder.Entity<ScholarshipAssignment>()
+                .HasIndex(a => new { a.ScholarId, a.AssignedAt });
+
+            /* ── One-time grants ── */
+
+            builder.Entity<OneTimeGrant>()
+                .HasOne(g => g.Scholar)
+                .WithMany()
+                .HasForeignKey(g => g.ScholarId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Entity<OneTimeGrant>()
+                .HasOne(g => g.RecordedBy)
+                .WithMany()
+                .HasForeignKey(g => g.RecordedById)
+                .OnDelete(DeleteBehavior.ClientSetNull);
+
+            builder.Entity<OneTimeGrant>()
+                .Property(g => g.Amount)
+                .HasPrecision(12, 2);
+
+            builder.Entity<OneTimeGrant>()
+                .HasIndex(g => new { g.ScholarId, g.AwardedOn });
+
+            /* ── Per-scholar announcement recipients ── */
+
+            builder.Entity<AnnouncementRecipient>()
+                .HasKey(r => new { r.AnnouncementId, r.ScholarId });
+
+            builder.Entity<AnnouncementRecipient>()
+                .HasOne(r => r.Announcement)
+                .WithMany(a => a.Recipients)
+                .HasForeignKey(r => r.AnnouncementId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Entity<AnnouncementRecipient>()
+                .HasOne(r => r.Scholar)
+                .WithMany()
+                .HasForeignKey(r => r.ScholarId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            /* ── Messaging settings (single row) ── */
+
+            builder.Entity<MessagingSettings>()
+                .HasOne(s => s.UpdatedBy)
+                .WithMany()
+                .HasForeignKey(s => s.UpdatedById)
+                .OnDelete(DeleteBehavior.SetNull);
         }
     }
 }

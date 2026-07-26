@@ -9,7 +9,7 @@ namespace PSUEISKOLARSystem.Server.Data
     // demos/testing. Idempotent — a marker account guards against double-seeding.
     public static class SampleDataSeeder
     {
-        public record SeedResult(int Coordinators, int Scholars, int Grades, int Announcements, bool AlreadySeeded);
+        public record SeedResult(int Coordinators, int Scholars, int Grades, int Announcements, bool AlreadySeeded, int Grants = 0);
 
         private const string Password = "Sample123!";
         private const string MarkerEmail = "sample.scholar1@psu.edu.ph";
@@ -22,13 +22,11 @@ namespace PSUEISKOLARSystem.Server.Data
             if (await userManager.FindByEmailAsync(MarkerEmail) is not null)
                 return new SeedResult(0, 0, 0, 0, AlreadySeeded: true);
 
-            var campuses = await db.Campuses.OrderBy(c => c.Id).ToListAsync();
             var programs = await db.AcademicPrograms.OrderBy(p => p.Id).ToListAsync();
             var types = await db.ScholarshipTypes.OrderBy(t => t.Id).ToListAsync();
 
-            int coordCount = 0, scholarCount = 0, gradeCount = 0, annCount = 0;
-
-            int? CampusAt(int i) => campuses.Count > 0 ? campuses[i % campuses.Count].Id : null;
+            int coordCount = 0, scholarCount = 0, gradeCount = 0, annCount = 0, grantCount = 0;
+            var seededScholarIds = new List<string>();
 
             // ── Coordinators ──
             var coordDefs = new[]
@@ -40,7 +38,7 @@ namespace PSUEISKOLARSystem.Server.Data
             {
                 var (fn, ln, em) = coordDefs[i];
                 if (await userManager.FindByEmailAsync(em) is not null) continue;
-                var u = new ApplicationUser { UserName = em, Email = em, FirstName = fn, LastName = ln, EmailConfirmed = true, IsActive = true, CampusId = CampusAt(i) };
+                var u = new ApplicationUser { UserName = em, Email = em, FirstName = fn, LastName = ln, EmailConfirmed = true, IsActive = true };
                 if ((await userManager.CreateAsync(u, Password)).Succeeded)
                 {
                     await userManager.AddToRoleAsync(u, UserRoles.ScholarshipCoordinator);
@@ -59,10 +57,11 @@ namespace PSUEISKOLARSystem.Server.Data
                 var em = $"sample.scholar{i + 1}@psu.edu.ph";
                 if (await userManager.FindByEmailAsync(em) is not null) continue;
 
-                var u = new ApplicationUser { UserName = em, Email = em, FirstName = first[i], LastName = last[i], EmailConfirmed = true, IsActive = true, CampusId = CampusAt(i) };
+                var u = new ApplicationUser { UserName = em, Email = em, FirstName = first[i], LastName = last[i], EmailConfirmed = true, IsActive = true };
                 if (!(await userManager.CreateAsync(u, Password)).Succeeded) continue;
                 await userManager.AddToRoleAsync(u, UserRoles.Scholar);
                 scholarCount++;
+                seededScholarIds.Add(u.Id);
 
                 var type = types.Count > 0 ? types[i % types.Count] : null;
                 var profile = new ScholarProfile
@@ -77,6 +76,9 @@ namespace PSUEISKOLARSystem.Server.Data
                 };
                 db.ScholarProfiles.Add(profile);
                 await db.SaveChangesAsync();
+
+                // Open the scholarship ledger row for the sample scholar.
+                await ScholarshipRegistry.BackfillAsync(db, profile, null);
 
                 for (int sem = 1; sem <= 2; sem++)
                 {
@@ -94,6 +96,34 @@ namespace PSUEISKOLARSystem.Server.Data
                 }
                 await db.SaveChangesAsync();
             }
+
+            // ── Sample one-time grants (a mix of pending and released) ──
+            var grantDefs = new[]
+            {
+                ("Tulong Dunong Assistance", "Book and supplies allowance", 5000m, "CHED", GrantReleaseStatuses.Released),
+                ("Thesis Support Grant", "Printing, binding and data-gathering costs", 7500m, "PSU Research Office", GrantReleaseStatuses.Pending),
+                ("Emergency Educational Aid", "One-off aid after Typhoon damage", 10000m, "PSU Alumni Association", GrantReleaseStatuses.Released),
+                ("Board Exam Review Subsidy", "Licensure review fee subsidy", 12000m, "LGU Lingayen", GrantReleaseStatuses.Pending),
+            };
+            for (int i = 0; i < grantDefs.Length && i < seededScholarIds.Count; i++)
+            {
+                var (title, purpose, amount, source, status) = grantDefs[i];
+                var released = status == GrantReleaseStatuses.Released;
+                db.OneTimeGrants.Add(new OneTimeGrant
+                {
+                    ScholarId = seededScholarIds[i],
+                    Title = title,
+                    Purpose = purpose,
+                    Amount = amount,
+                    Source = source,
+                    AwardedOn = DateTime.UtcNow.AddDays(-30 * (i + 1)),
+                    ReleaseStatus = status,
+                    ReleasedAt = released ? DateTime.UtcNow.AddDays(-30 * (i + 1) + 7) : null,
+                    ReferenceNo = released ? $"OTG-{DateTime.UtcNow:yyyy}-{1000 + i}" : null,
+                });
+                grantCount++;
+            }
+            if (grantCount > 0) await db.SaveChangesAsync();
 
             // ── Sample announcements ──
             var admin = await userManager.FindByEmailAsync("admin@psu.edu.ph");
@@ -117,7 +147,7 @@ namespace PSUEISKOLARSystem.Server.Data
                 await db.SaveChangesAsync();
             }
 
-            return new SeedResult(coordCount, scholarCount, gradeCount, annCount, AlreadySeeded: false);
+            return new SeedResult(coordCount, scholarCount, gradeCount, annCount, AlreadySeeded: false, Grants: grantCount);
         }
     }
 }

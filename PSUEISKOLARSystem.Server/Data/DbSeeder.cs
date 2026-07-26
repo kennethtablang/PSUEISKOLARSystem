@@ -17,28 +17,14 @@ namespace PSUEISKOLARSystem.Server.Data
 
             var db = services.GetRequiredService<ApplicationDbContext>();
 
-            if (!db.Campuses.Any())
-            {
-                db.Campuses.AddRange(
-                    new Campus { Name = "PSU Lingayen (Main)", Code = "LGY" },
-                    new Campus { Name = "PSU Alaminos", Code = "ALA" },
-                    new Campus { Name = "PSU Asingan", Code = "ASG" },
-                    new Campus { Name = "PSU Bayambang", Code = "BYB" },
-                    new Campus { Name = "PSU Infanta", Code = "INF" },
-                    new Campus { Name = "PSU Sta. Maria", Code = "STM" },
-                    new Campus { Name = "PSU Urdaneta", Code = "URD" }
-                );
-                await db.SaveChangesAsync();
-            }
-
             if (!db.ScholarshipTypes.Any())
             {
                 db.ScholarshipTypes.AddRange(
-                    new ScholarshipType { Name = "CHED Scholarship", Description = "Commission on Higher Education merit scholarship", MinimumGwa = 1.75m },
-                    new ScholarshipType { Name = "DOST-SEI Scholarship", Description = "Department of Science and Technology scholarship", MinimumGwa = 1.75m },
-                    new ScholarshipType { Name = "PSU Institutional Scholarship", Description = "Pangasinan State University institutional grant", MinimumGwa = 2.00m },
-                    new ScholarshipType { Name = "Local Government Unit (LGU)", Description = "Scholarship funded by local government", MinimumGwa = 2.25m },
-                    new ScholarshipType { Name = "Private/External Grant", Description = "Scholarships from private organizations or donors", MinimumGwa = 2.50m }
+                    new ScholarshipType { Name = "CHED Scholarship", Description = "Commission on Higher Education merit scholarship", Category = "Government", MinimumGwa = 1.75m },
+                    new ScholarshipType { Name = "DOST-SEI Scholarship", Description = "Department of Science and Technology scholarship", Category = "Government", MinimumGwa = 1.75m },
+                    new ScholarshipType { Name = "PSU Institutional Scholarship", Description = "Pangasinan State University institutional grant", Category = "Institutional", MinimumGwa = 2.00m },
+                    new ScholarshipType { Name = "Local Government Unit (LGU)", Description = "Scholarship funded by local government", Category = "Local (LGU)", MinimumGwa = 2.25m },
+                    new ScholarshipType { Name = "Private/External Grant", Description = "Scholarships from private organizations or donors", Category = "Private", MinimumGwa = 2.50m }
                 );
                 await db.SaveChangesAsync();
             }
