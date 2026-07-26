@@ -6,7 +6,7 @@ import { getAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnounc
   uploadAnnouncementImage, publishAnnouncementNow, ANNOUNCEMENT_INTENTS } from '../api/announcements';
 import AnnouncementCard from '../components/AnnouncementCard';
 import Modal from '../components/Modal';
-import { Users, UserSearch, X } from 'lucide-react';
+import { Users, UserSearch, X, Clock } from 'lucide-react';
 import { getPrograms, getScholarshipTypes, searchScholars } from '../api/lookups';
 import { useTitle } from '../hooks/useTitle';
 
@@ -41,6 +41,11 @@ export default function AnnouncementsPage() {
         a.title.toLowerCase().includes(search.toLowerCase()) ||
         a.content.toLowerCase().includes(search.toLowerCase()))
     : announcements;
+
+  // Queued posts, soonest first — the rail's release schedule.
+  const scheduled = announcements
+    .filter(a => a.isScheduled)
+    .sort((a, b) => new Date(a.publishAt) - new Date(b.publishAt));
 
   async function load() {
     setLoading(true);
@@ -89,47 +94,94 @@ export default function AnnouncementsPage() {
 
   return (
     <Layout>
-      <div className="p-4 sm:p-8 max-w-3xl">
-        <div className="flex items-center justify-between gap-3 flex-wrap mb-6">
+      <div className="page-shell">
+        <div className="page-head">
           <div>
             <h1 className="page-title">Announcements</h1>
-            <p className="page-subtitle">{announcements.length} announcement{announcements.length !== 1 ? 's' : ''}</p>
+            <p className="page-subtitle">
+              {announcements.length} announcement{announcements.length !== 1 ? 's' : ''}
+              {scheduled.length > 0 && ` · ${scheduled.length} scheduled`}
+            </p>
             <span className="page-title-bar" />
           </div>
-          <button onClick={openCreate} className="clay-btn clay-btn-primary px-4 py-2.5 text-sm">
-            + New Announcement
-          </button>
-        </div>
-
-        <div className="mb-4">
-          <input
-            type="search"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="clay-input"
-            style={{ height: 36, minHeight: 36, fontSize: 12.5, padding: '0 10px', width: 240 }}
-            placeholder="Search announcements…"
-          />
-        </div>
-
-        {loading ? (
-          <p className="text-sm" style={{ color: '#7a8aaa' }}>Loading…</p>
-        ) : displayed.length === 0 ? (
-          <p className="text-sm" style={{ color: '#7a8aaa' }}>No announcements found.</p>
-        ) : (
-          <div className="space-y-3">
-            {displayed.map(a => (
-              <AnnouncementCard
-                key={a.id}
-                a={a}
-                variant="manage"
-                onEdit={() => openEdit(a)}
-                onDelete={() => handleDelete(a.id)}
-                onPublishNow={() => handlePublishNow(a)}
-              />
-            ))}
+          <div className="page-head-actions">
+            <input
+              type="search"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="clay-input"
+              style={{ height: 40, minHeight: 40, fontSize: 13, padding: '0 12px', width: 240 }}
+              placeholder="Search announcements…"
+            />
+            <button onClick={openCreate} className="clay-btn clay-btn-primary px-4 py-2.5 text-sm">
+              + New Announcement
+            </button>
           </div>
-        )}
+        </div>
+
+        <div className="page-split">
+          <div>
+            {loading ? (
+              <p className="text-sm" style={{ color: '#7a8aaa' }}>Loading…</p>
+            ) : displayed.length === 0 ? (
+              <p className="text-sm" style={{ color: '#7a8aaa' }}>No announcements found.</p>
+            ) : (
+              <div className="space-y-3">
+                {displayed.map(a => (
+                  <AnnouncementCard
+                    key={a.id}
+                    a={a}
+                    variant="manage"
+                    onEdit={() => openEdit(a)}
+                    onDelete={() => handleDelete(a.id)}
+                    onPublishNow={() => handlePublishNow(a)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+
+          <aside className="page-rail space-y-5">
+            {/* What's queued to go out — the one thing you can't see by scrolling the
+                feed, since a scheduled post looks like any other card until it lands. */}
+            <div className="clay-card p-5">
+              <p className="rail-heading">Scheduled to publish</p>
+              {scheduled.length === 0 ? (
+                <p className="text-sm" style={{ color: 'var(--text-muted)', lineHeight: 1.55 }}>
+                  Nothing queued. Set a publish time when creating an announcement to hold it
+                  back until then.
+                </p>
+              ) : (
+                <div className="space-y-2.5">
+                  {scheduled.map(a => (
+                    <button
+                      key={a.id}
+                      onClick={() => openEdit(a)}
+                      className="w-full text-left clay-card-inner px-3.5 py-2.5"
+                    >
+                      <p className="text-sm font-bold truncate" style={{ color: 'var(--text-strong)' }}>{a.title}</p>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <Clock size={11} strokeWidth={2.5} style={{ color: '#003087' }} />
+                        <span className="text-xs font-semibold" style={{ color: '#003087' }}>
+                          {new Date(a.publishAt).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="clay-card p-5">
+              <p className="rail-heading">Audience</p>
+              <p className="text-sm" style={{ color: 'var(--text)', lineHeight: 1.6 }}>
+                An announcement reaches everyone matching its role, scholarship type, and
+                program filters — unless you name specific scholars, who then become the whole
+                audience. Scholars are notified in-app and by email when it publishes.
+              </p>
+            </div>
+          </aside>
+        </div>
       </div>
 
       {showModal && (

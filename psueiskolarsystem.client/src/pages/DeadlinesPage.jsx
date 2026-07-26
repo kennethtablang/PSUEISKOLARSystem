@@ -86,7 +86,7 @@ export default function DeadlinesPage() {
 
   return (
     <Layout>
-      <div className="p-4 sm:p-8">
+      <div className="page-shell">
         <div className="flex items-start justify-between mb-6 flex-wrap gap-3">
           <div>
             <h1 className="page-title">Submission Deadlines</h1>

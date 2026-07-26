@@ -155,16 +155,18 @@ export default function DashboardPage() {
       {/* Full-width dashboard: the primary column carries the working content, the right
           rail carries the feeds (announcements, activity, deadlines) that used to be
           stacked underneath it. The rail collapses under the main column below 1280px. */}
-      <div className="p-4 sm:p-8">
+      <div className="page-shell">
         {/* Header */}
-        <div className="mb-7">
-          <h1 className="page-title">
-            Welcome back, {user?.fullName?.split(' ')[0]}
-          </h1>
-          <p className="page-subtitle">
-            PSU Lingayen Campus · {user?.role === 'ScholarshipCoordinator' ? 'Coordinator' : user?.role}
-          </p>
-          <span className="page-title-bar" />
+        <div className="page-head">
+          <div>
+            <h1 className="page-title">
+              Welcome back, {user?.fullName?.split(' ')[0]}
+            </h1>
+            <p className="page-subtitle">
+              PSU Lingayen Campus · {user?.role === 'ScholarshipCoordinator' ? 'Coordinator' : user?.role}
+            </p>
+            <span className="page-title-bar" />
+          </div>
         </div>
 
         <div className="page-split">
@@ -602,13 +604,16 @@ function Pill({ label, bg, color, Icon }) {
   );
 }
 
+/* A shortcut reads as a row — icon, label, chevron — rather than a tall stacked tile.
+   Same information in roughly half the height, and the arrow makes it obviously a link. */
 function QuickAction({ to, Icon, label }) {
   return (
-    <Link to={to} className="clay-card p-4 flex flex-col items-center gap-2 text-center transition-opacity hover:opacity-90">
-      <div className="w-11 h-11 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(0,48,135,0.08)' }}>
-        <Icon size={20} color="#003087" strokeWidth={2} />
+    <Link to={to} className="clay-card px-4 py-3 flex items-center gap-3 transition-opacity hover:opacity-90">
+      <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(0,48,135,0.08)' }}>
+        <Icon size={17} color="#003087" strokeWidth={2.2} />
       </div>
-      <span className="text-xs font-bold" style={{ color: 'var(--text-strong)' }}>{label}</span>
+      <span className="text-xs font-bold flex-1 min-w-0" style={{ color: 'var(--text-strong)' }}>{label}</span>
+      <ArrowRight size={14} strokeWidth={2.5} style={{ color: '#9aaabb', flexShrink: 0 }} />
     </Link>
   );
 }
@@ -628,17 +633,19 @@ function DonutCard({ title, data, info }) {
         <p className="text-sm text-center py-8" style={{ color: '#9aaabb' }}>No data yet.</p>
       ) : (
         <div className="flex items-center gap-4">
+          {/* Fixed pixel size rather than a ResponsiveContainer: the donut is always
+              118px, and the container measured its parent as -1 here and drew nothing. */}
           <div style={{ width: 118, height: 118, flexShrink: 0 }}>
-            <ResponsiveContainer>
-              <PieChart>
-                {/* A 2px surface ring stops adjacent segments fusing into one shape. */}
-                <Pie data={items} dataKey="value" nameKey="name" innerRadius={34} outerRadius={54}
-                  paddingAngle={2} stroke={t.gap} strokeWidth={2}>
-                  {items.map(d => <Cell key={d.name} fill={d.color} />)}
-                </Pie>
-                <Tooltip contentStyle={tooltipStyle(t)} />
-              </PieChart>
-            </ResponsiveContainer>
+            <PieChart width={118} height={118}>
+              {/* A 2px surface ring stops adjacent segments fusing into one shape. */}
+              {/* Animation off: the sectors grow from radius 0, and when the entry
+                  animation doesn't run the donut stays invisible — a hole in the card. */}
+              <Pie data={items} dataKey="value" nameKey="name" innerRadius={34} outerRadius={54}
+                paddingAngle={2} stroke={t.gap} strokeWidth={2} isAnimationActive={false}>
+                {items.map(d => <Cell key={d.name} fill={d.color} />)}
+              </Pie>
+              <Tooltip contentStyle={tooltipStyle(t)} />
+            </PieChart>
           </div>
           {/* The written counts beside a colour chip — identity never rests on hue. */}
           <div className="flex-1 space-y-1.5">

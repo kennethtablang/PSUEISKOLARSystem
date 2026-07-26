@@ -101,7 +101,7 @@ export default function AnalyticsPage() {
 
   if (error) return (
     <Layout>
-      <div className="p-4 sm:p-8">
+      <div className="page-shell">
         <p className="text-sm" style={{ color: '#e03030' }}>{error}</p>
       </div>
     </Layout>
@@ -117,7 +117,7 @@ export default function AnalyticsPage() {
           right rail. The tables are not decoration — several categorical steps fall
           below 3:1 on the light card, and the relief for that is the same numbers in
           text form. */}
-      <div className="p-4 sm:p-8">
+      <div className="page-shell">
 
         {/* Header — filters and exports in one row above the charts */}
         <div className="flex items-start justify-between gap-4 flex-wrap mb-7">
