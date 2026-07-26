@@ -10,5 +10,6 @@ namespace PSUEISKOLARSystem.Server.Interfaces
         Task SendAnnouncementEmailAsync(string toEmail, string toName, string title, string content);
         Task SendScholarWelcomeAsync(string toEmail, string toName, string tempPassword, string verifyLink);
         Task SendMessageEmailAsync(string toEmail, string toName, string senderName, string messagePreview);
+        Task SendScholarApprovalDecisionAsync(string toEmail, string toName, bool approved, string? scholarshipName, string? note);
     }
 }
