@@ -8,13 +8,15 @@ namespace PSUEISKOLARSystem.Server.Models.Enums
         public const string Announcement   = "Announcement";
         public const string Deadline       = "Deadline";
         public const string Message        = "Message";
+        public const string Account        = "Account";
 
         public static readonly string[] All =
         [
             DocumentStatus,
             Announcement,
             Deadline,
-            Message
+            Message,
+            Account
         ];
     }
 }
