@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { registerScholar, checkEmailAvailable } from '../api/auth';
 import { useTitle } from '../hooks/useTitle';
-import { Mail, Lock, User, UserCheck, FolderUp, TrendingUp, Bell, ArrowRight, ArrowLeft, AlertTriangle, GraduationCap, MailCheck } from 'lucide-react';
+import { Mail, Lock, User, UserCheck, FolderUp, TrendingUp, Bell, ArrowRight, ArrowLeft, AlertTriangle, GraduationCap, MailCheck, XCircle, ShieldQuestion } from 'lucide-react';
 import PasswordStrengthMeter, { getPasswordStrength } from '../components/PasswordStrengthMeter';
 
 const HIGHLIGHTS = [
@@ -226,6 +226,19 @@ export default function RegisterPage() {
                   A verification link has been sent to <strong>{form.email}</strong>.
                   Please click the link in that email to activate your account before signing in.
                 </p>
+
+                {/* Self-registration is verified by the scholarship office before a scholar
+                    can submit documents — set that expectation up front. */}
+                <div className="rounded-2xl p-4 mb-4 text-left flex items-start gap-2.5"
+                  style={{ background: 'rgba(0,48,135,0.05)', border: '1px solid rgba(0,48,135,0.15)' }}>
+                  <ShieldQuestion size={15} strokeWidth={2.2} className="mt-px shrink-0" style={{ color: '#002570' }} />
+                  <p className="text-xs leading-relaxed" style={{ color: 'var(--text)' }}>
+                    <strong>What happens next:</strong> after verifying your email, sign in and set up
+                    your scholar profile — student ID, program, and the <strong>one</strong> scholarship
+                    you are enrolled in. The scholarship office then reviews your registration. You can
+                    start submitting documents once it is approved.
+                  </p>
+                </div>
 
                 <div className="rounded-2xl p-4 mb-5 text-left"
                   style={{ background: '#fffbea', border: '1px solid rgba(245,184,0,0.35)' }}>

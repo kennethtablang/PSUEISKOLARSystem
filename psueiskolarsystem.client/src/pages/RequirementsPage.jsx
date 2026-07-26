@@ -3,13 +3,19 @@ import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { getRequirements, createRequirement, updateRequirement, deleteRequirement,
   uploadRequirementSample, getRequirementSample, deleteRequirementSample,
-  getRequirementScholarshipTypes, setRequirementScholarshipTypes } from '../api/documents';
+  getRequirementScholarshipTypes, setRequirementScholarshipTypes,
+  reorderRequirements, getRequirementGroups } from '../api/documents';
 import { getScholarshipTypes } from '../api/lookups';
 import { useTitle } from '../hooks/useTitle';
 import { ClayModal, ErrorBox, Field, ModalButtons } from './UsersPage';
 import { TableSkeleton, EmptyState } from '../components/ListState';
-import { ImageIcon, X, Layers } from 'lucide-react';
+import { ImageIcon, Layers, ChevronUp, ChevronDown, FolderOpen } from 'lucide-react';
+import ImageLightbox from '../components/ImageLightbox';
 import { useToast, useConfirm } from '../context/UIContext';
+
+// Heading for requirements the admin hasn't put in a group
+// (server: RequirementOrdering.UngroupedLabel).
+const UNGROUPED = 'Other documents';
 
 export default function RequirementsPage() {
   useTitle('Document Requirements');
@@ -34,6 +40,41 @@ export default function RequirementsPage() {
         (r.description ?? '').toLowerCase().includes(search.toLowerCase()))
     : requirements;
 
+  // The server returns requirements already in display order (group → order → name), so
+  // splitting the flat list into consecutive runs is all the grouping the table needs.
+  const grouped = [];
+  for (const r of displayed) {
+    const name = r.groupName ?? UNGROUPED;
+    if (grouped.at(-1)?.name !== name) grouped.push({ name, items: [] });
+    grouped.at(-1).items.push(r);
+  }
+
+  // Reordering only makes sense against the full, unfiltered list.
+  const canReorder = !search;
+
+  /* Swap a requirement with its neighbour inside its own group and persist the result.
+     Only that group's ids are sent — display order is scoped per group on the server. */
+  async function move(groupItems, index, delta) {
+    const target = index + delta;
+    if (target < 0 || target >= groupItems.length) return;
+
+    const reordered = [...groupItems];
+    [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
+
+    // Optimistic swap so the row moves immediately; the group is contiguous in the
+    // flat list, so filling its slots in the new order is enough.
+    const slots = new Set(groupItems.map(r => r.id));
+    let cursor = 0;
+    setRequirements(prev => prev.map(r => (slots.has(r.id) ? reordered[cursor++] : r)));
+
+    try {
+      await reorderRequirements(reordered.map(r => r.id), token);
+    } catch (e) {
+      toast(e.message, 'error');
+      await load();
+    }
+  }
+
   async function handleUploadSample(id, file) {
     if (!file) return;
     setBusySample(id);
@@ -54,7 +95,8 @@ export default function RequirementsPage() {
   async function load() {
     setLoading(true);
     try {
-      setRequirements(await getRequirements(token));
+      // Documents owned by a single scholarship type are managed there, not here.
+      setRequirements(await getRequirements(token, { sharedOnly: true }));
     } finally {
       setLoading(false);
     }
@@ -82,7 +124,9 @@ export default function RequirementsPage() {
           <div>
             <h1 className="page-title">Document Requirements</h1>
             <p className="page-subtitle">
-              {requirements.length} active requirement{requirements.length !== 1 ? 's' : ''} — assign them to scholarship types on the Scholarship Types page.
+              {requirements.length} shared requirement{requirements.length !== 1 ? 's' : ''} — assign them to scholarship types
+              here or on the Scholarship Types page. Documents unique to one scholarship live on that type.
+              Group and reorder them to control how the checklist reads for scholars.
             </p>
             <span className="page-title-bar" />
           </div>
@@ -111,14 +155,49 @@ export default function RequirementsPage() {
             <div className="overflow-x-auto"><table className="w-full min-w-[640px] text-sm">
               <thead className="clay-table-head">
                 <tr>
-                  {['Requirement', 'Status', 'Sample', ''].map(h => (
-                    <th key={h} className="text-left px-5 py-3 text-xs font-bold uppercase tracking-wider" style={{ color: '#7a8aaa' }}>{h}</th>
+                  {['', 'Requirement', 'Status', 'Sample', ''].map((h, i) => (
+                    <th key={i} className="text-left px-5 py-3 text-xs font-bold uppercase tracking-wider" style={{ color: '#7a8aaa' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {displayed.map(r => (
+                {grouped.map(group => [
+                  /* Group heading — scholars see the same headings on their checklist */
+                  <tr key={`g-${group.name}`}>
+                    <td colSpan={5} className="px-5 py-2"
+                      style={{ background: 'rgba(0,37,112,0.045)', borderTop: '1px solid rgba(0,37,112,0.08)' }}>
+                      <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider"
+                        style={{ color: group.name === UNGROUPED ? '#9aaabb' : '#003087' }}>
+                        <FolderOpen size={12} strokeWidth={2.4} />
+                        {group.name}
+                        <span style={{ color: '#b0bdd0', fontWeight: 600 }}>({group.items.length})</span>
+                      </span>
+                    </td>
+                  </tr>,
+                  ...group.items.map((r, i) => (
                   <tr key={r.id} className="clay-table-row">
+                    <td className="px-5 py-3.5" style={{ width: 54 }}>
+                      {canReorder ? (
+                        <div className="flex flex-col gap-0.5">
+                          <ReorderBtn
+                            label="Move up"
+                            disabled={i === 0}
+                            onClick={() => move(group.items, i, -1)}
+                          >
+                            <ChevronUp size={13} strokeWidth={2.6} />
+                          </ReorderBtn>
+                          <ReorderBtn
+                            label="Move down"
+                            disabled={i === group.items.length - 1}
+                            onClick={() => move(group.items, i, 1)}
+                          >
+                            <ChevronDown size={13} strokeWidth={2.6} />
+                          </ReorderBtn>
+                        </div>
+                      ) : (
+                        <span className="text-xs" style={{ color: '#c0cbd8' }} title="Clear the search to reorder">—</span>
+                      )}
+                    </td>
                     <td className="px-5 py-3.5">
                       <p className="font-semibold" style={{ color: 'var(--text-strong)' }}>{r.name}</p>
                       {r.description && (
@@ -183,7 +262,8 @@ export default function RequirementsPage() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  )),
+                ])}
               </tbody>
             </table></div>
           )}
@@ -210,18 +290,36 @@ export default function RequirementsPage() {
       )}
 
       {viewSample && (
-        <div className="fixed inset-0 flex items-center justify-center z-50 p-6" style={{ background: 'rgba(0,20,60,0.6)' }}
-          onClick={() => { URL.revokeObjectURL(viewSample); setViewSample(null); }}>
-          <div className="relative" onClick={e => e.stopPropagation()}>
-            <button onClick={() => { URL.revokeObjectURL(viewSample); setViewSample(null); }}
-              className="absolute -top-3 -right-3 w-8 h-8 rounded-full flex items-center justify-center" style={{ background: '#fff', boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
-              <X size={16} color="#0d1a33" strokeWidth={2.5} />
-            </button>
-            <img src={viewSample} alt="Document sample" style={{ maxWidth: '90vw', maxHeight: '85vh', borderRadius: 12, boxShadow: '0 8px 40px rgba(0,0,0,0.4)' }} />
-          </div>
-        </div>
+        <ImageLightbox
+          url={viewSample}
+          alt="Document sample"
+          onClose={() => { URL.revokeObjectURL(viewSample); setViewSample(null); }}
+        />
       )}
     </Layout>
+  );
+}
+
+/* Small square arrow button used by the reorder column. */
+function ReorderBtn({ label, disabled, onClick, children }) {
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      disabled={disabled}
+      onClick={onClick}
+      style={{
+        width: 22, height: 18, borderRadius: 6, border: '1px solid rgba(0,37,112,0.12)',
+        background: disabled ? 'transparent' : 'var(--bg)',
+        color: disabled ? '#d0d8e4' : '#003087',
+        cursor: disabled ? 'default' : 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        transition: 'background 0.12s',
+      }}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -229,10 +327,15 @@ function RequirementModal({ initial, token, onClose, onSaved }) {
   const [form, setForm] = useState({
     name:        initial?.name ?? '',
     description: initial?.description ?? '',
+    groupName:   initial?.groupName ?? '',
     isRequired:  initial?.isRequired ?? true,
   });
+  const [groups, setGroups] = useState([]);
   const [error, setError]         = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  // Existing headings, offered as suggestions so groups don't fragment into near-duplicates.
+  useEffect(() => { getRequirementGroups(token).then(setGroups).catch(() => {}); }, [token]);
 
   function set(k, v) { setForm(f => ({ ...f, [k]: v })); }
 
@@ -244,6 +347,7 @@ function RequirementModal({ initial, token, onClose, onSaved }) {
       const payload = {
         name:        form.name.trim(),
         description: form.description.trim() || null,
+        groupName:   form.groupName.trim() || null,
         isRequired:  form.isRequired,
       };
       if (initial) {
@@ -281,6 +385,24 @@ function RequirementModal({ initial, token, onClose, onSaved }) {
             className="clay-input"
             placeholder="Brief note on what the scholar should submit…"
           />
+        </Field>
+
+        <Field label="Group (optional)">
+          <input
+            list="requirement-groups"
+            value={form.groupName}
+            onChange={e => set('groupName', e.target.value)}
+            className="clay-input"
+            maxLength={60}
+            placeholder="e.g. Enrolment documents"
+          />
+          <datalist id="requirement-groups">
+            {groups.map(g => <option key={g} value={g} />)}
+          </datalist>
+          <p className="text-xs mt-1.5" style={{ color: '#7a8aaa' }}>
+            Documents in the same group are listed together under this heading, in the order
+            you set on this page. Leave blank to put it under “{UNGROUPED}”.
+          </p>
         </Field>
 
         <label className="flex items-center gap-3 cursor-pointer select-none">

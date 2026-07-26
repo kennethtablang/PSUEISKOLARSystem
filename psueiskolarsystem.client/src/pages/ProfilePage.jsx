@@ -1,13 +1,17 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/UIContext';
 import { updateProfile, enable2fa, disable2fa, updateNotificationPreferences } from '../api/auth';
+import { uploadMyAvatar, deleteMyAvatar, clearAvatarCache } from '../api/avatars';
 import { exportScholarData } from '../api/scholars';
 import { useTutorial } from '../context/TutorialContext';
-import { User, Mail, Shield, Lock, KeyRound, CheckCircle, AlertCircle, ShieldCheck, ShieldOff, X, Bell, Download, Sparkles } from 'lucide-react';
+import { User, Mail, Shield, Lock, KeyRound, CheckCircle, AlertCircle, ShieldCheck, ShieldOff, Bell, Download, Sparkles, Camera, Trash2 } from 'lucide-react';
 import { useTitle } from '../hooks/useTitle';
 import PasswordStrengthMeter from '../components/PasswordStrengthMeter';
+import Modal from '../components/Modal';
+import Avatar from '../components/Avatar';
+import { MUTABLE_IN_APP_CATEGORIES } from '../constants/notifications';
 
 const ROLE_BADGE = {
   Administrator:           { cls: 'badge-admin',   label: 'Administrator' },
@@ -41,9 +45,21 @@ export default function ProfilePage() {
     emailAnnouncements:  user?.emailAnnouncements  ?? true,
     emailDocumentStatus: user?.emailDocumentStatus ?? true,
     emailDeadlines:      user?.emailDeadlines      ?? true,
+    mutedInAppCategories: user?.mutedInAppCategories ?? [],
   });
   const [savingPrefs, setSavingPrefs] = useState(false);
   const [prefsMsg, setPrefsMsg]       = useState(null);
+
+  // The UI asks "show this in the bell?", the server stores the inverse (what's muted).
+  const isInAppOn = key => !prefs.mutedInAppCategories.includes(key);
+  function toggleInApp(key, on) {
+    setPrefs(p => ({
+      ...p,
+      mutedInAppCategories: on
+        ? p.mutedInAppCategories.filter(c => c !== key)
+        : [...p.mutedInAppCategories, key],
+    }));
+  }
 
   async function handleSavePrefs() {
     setSavingPrefs(true); setPrefsMsg(null);
@@ -54,6 +70,51 @@ export default function ProfilePage() {
     } catch (err) {
       setPrefsMsg({ ok: false, text: err.message });
     } finally { setSavingPrefs(false); }
+  }
+
+  /* ── Profile photo ── */
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [photoVersion, setPhotoVersion]     = useState(0);
+  const photoInput = useRef(null);
+
+  async function handlePhotoPicked(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';               // let the same file be re-picked after an error
+    if (!file) return;
+
+    // Checked here as well as on the server so the feedback is instant.
+    if (!/\.(png|jpe?g|webp)$/i.test(file.name)) {
+      toast('Profile photo must be a PNG, JPG, or WEBP image.', 'error');
+      return;
+    }
+    if (file.size > 4 * 1024 * 1024) {
+      toast('Profile photo must be 4 MB or smaller.', 'error');
+      return;
+    }
+
+    setUploadingPhoto(true);
+    try {
+      await uploadMyAvatar(file, token);
+      clearAvatarCache(user.id);
+      setPhotoVersion(v => v + 1);
+      await refreshUser();
+      toast('Profile photo updated.', 'success');
+    } catch (err) {
+      toast(err.message, 'error');
+    } finally { setUploadingPhoto(false); }
+  }
+
+  async function handleRemovePhoto() {
+    setUploadingPhoto(true);
+    try {
+      await deleteMyAvatar(token);
+      clearAvatarCache(user.id);
+      setPhotoVersion(v => v + 1);
+      await refreshUser();
+      toast('Profile photo removed.', 'success');
+    } catch (err) {
+      toast(err.message, 'error');
+    } finally { setUploadingPhoto(false); }
   }
 
   async function handleDownloadData() {
@@ -67,7 +128,6 @@ export default function ProfilePage() {
     } catch (err) { toast(err.message, 'error'); }
   }
 
-  const initials  = ((user?.firstName?.[0] ?? '') + (user?.lastName?.[0] ?? '')).toUpperCase() || '?';
   const roleBadge = ROLE_BADGE[user?.role] ?? { cls: 'badge-inactive', label: user?.role };
   const twoFaEnabled = user?.twoFactorEnabled ?? false;
 
@@ -136,14 +196,60 @@ export default function ProfilePage() {
         {/* Identity card */}
         <div className="clay-card p-6 mb-6">
           <div className="flex items-center gap-5 flex-wrap">
-            <div style={{
-              width: 76, height: 76, borderRadius: 20, flexShrink: 0,
-              background: 'linear-gradient(145deg, #ffd030, #e0a000)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 26, fontWeight: 900, color: '#1a0e00',
-              boxShadow: '5px 5px 0 rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.32)',
-            }}>
-              {initials}
+            {/* Photo + its controls. The camera button overlaps the corner so the whole
+                thing still reads as one avatar rather than a form field. */}
+            <div style={{ position: 'relative', flexShrink: 0 }}>
+              <Avatar
+                userId={user?.id}
+                name={user?.fullName}
+                hasAvatar={user?.hasAvatar}
+                version={photoVersion}
+                size={76}
+                radius={20}
+                style={{
+                  boxShadow: '5px 5px 0 rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.32)',
+                  opacity: uploadingPhoto ? 0.55 : 1,
+                  transition: 'opacity 0.15s',
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => photoInput.current?.click()}
+                disabled={uploadingPhoto}
+                title={user?.hasAvatar ? 'Change profile photo' : 'Upload a profile photo'}
+                style={{
+                  position: 'absolute', right: -6, bottom: -6,
+                  width: 30, height: 30, borderRadius: 10, border: 'none',
+                  cursor: uploadingPhoto ? 'wait' : 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: '#003087', color: '#fff',
+                  boxShadow: '3px 3px 0 rgba(0,0,0,0.15)',
+                }}
+              >
+                <Camera size={14} strokeWidth={2.4} />
+              </button>
+              <input
+                ref={photoInput}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                onChange={handlePhotoPicked}
+                style={{ display: 'none' }}
+              />
+              {user?.hasAvatar && (
+                <button
+                  type="button"
+                  onClick={handleRemovePhoto}
+                  disabled={uploadingPhoto}
+                  className="flex items-center gap-1 mx-auto mt-2.5"
+                  style={{
+                    fontSize: 10.5, fontWeight: 700, color: '#c03030',
+                    background: 'none', border: 'none',
+                    cursor: uploadingPhoto ? 'wait' : 'pointer',
+                  }}
+                >
+                  <Trash2 size={11} strokeWidth={2.4} /> Remove
+                </button>
+              )}
             </div>
 
             <div className="flex-1 min-w-0">
@@ -331,13 +437,15 @@ export default function ProfilePage() {
             <div style={{ width: 32, height: 32, borderRadius: 10, background: 'rgba(0,48,135,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Bell size={15} color="#003087" strokeWidth={2} />
             </div>
-            <h2 style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-strong)' }}>Email Notification Preferences</h2>
+            <h2 style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-strong)' }}>Notification Preferences</h2>
           </div>
-          <p className="text-sm mb-4" style={{ color: 'var(--text)' }}>
+
+          <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: '#7a8aaa' }}>Email</p>
+          <p className="text-sm mb-3" style={{ color: 'var(--text)' }}>
             Choose which emails you receive. Account and security emails are always sent.
           </p>
 
-          <div className="space-y-2 mb-4">
+          <div className="space-y-2 mb-5">
             {[
               { key: 'emailAnnouncements',  label: 'Announcements' },
               { key: 'emailDocumentStatus', label: 'Document status updates' },
@@ -349,6 +457,28 @@ export default function ProfilePage() {
                   type="checkbox"
                   checked={prefs[key]}
                   onChange={e => setPrefs(p => ({ ...p, [key]: e.target.checked }))}
+                  style={{ width: 18, height: 18, accentColor: '#003087' }}
+                />
+              </label>
+            ))}
+          </div>
+
+          {/* In-app muting — finer than the three email toggles: each category can be
+              silenced in the bell independently of whether its email still arrives. */}
+          <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: '#7a8aaa' }}>In-app (notification bell)</p>
+          <p className="text-sm mb-3" style={{ color: 'var(--text)' }}>
+            Turn a category off to stop it appearing in your bell. Account and security
+            notices always show, and muting here doesn't change your email choices above.
+          </p>
+
+          <div className="space-y-2 mb-4">
+            {MUTABLE_IN_APP_CATEGORIES.map(({ key, label }) => (
+              <label key={key} className="flex items-center justify-between clay-card-inner px-4 py-3 cursor-pointer">
+                <span className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>{label}</span>
+                <input
+                  type="checkbox"
+                  checked={isInAppOn(key)}
+                  onChange={e => toggleInApp(key, e.target.checked)}
                   style={{ width: 18, height: 18, accentColor: '#003087' }}
                 />
               </label>
@@ -420,29 +550,22 @@ function Disable2faModal({ token, onClose, onDisabled }) {
   }
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center z-50 p-4"
-      style={{ background: 'rgba(0,20,60,0.52)' }}
-      onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="clay-card-modal w-full p-7" style={{ maxWidth: 400 }}>
-
-        <div className="flex items-center justify-between mb-5">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl flex items-center justify-center"
-              style={{ background: 'rgba(200,0,0,0.06)' }}>
-              <ShieldOff size={15} color="#c03030" strokeWidth={2} />
-            </div>
-            <h2 className="text-base font-black" style={{ color: 'var(--text-strong)' }}>Disable 2FA</h2>
-          </div>
-          <button onClick={onClose}
-            className="w-7 h-7 rounded-xl flex items-center justify-center hover:bg-black/5">
-            <X size={15} color="#7a8aaa" strokeWidth={2.5} />
-          </button>
-        </div>
-
-        <p className="text-sm mb-5" style={{ color: 'var(--text)' }}>
-          Enter your current password to confirm disabling two-factor authentication. Your account will be less secure.
-        </p>
-
+    <Modal
+      title={
+        <span className="flex items-center gap-2.5">
+          <span className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
+            style={{ background: 'rgba(200,0,0,0.08)' }}>
+            <ShieldOff size={15} color="#c03030" strokeWidth={2} />
+          </span>
+          Disable 2FA
+        </span>
+      }
+      subtitle="Enter your current password to confirm disabling two-factor authentication. Your account will be less secure."
+      onClose={onClose}
+      width={400}
+      dismissible={!saving}
+      labelledBy={undefined}
+    >
         {error && (
           <div className="mb-4 flex items-start gap-2 p-3 rounded-2xl text-sm"
             style={{ background: '#fff0f0', color: '#b03030', border: '1.5px solid #f5b0b0' }}>
@@ -486,8 +609,7 @@ function Disable2faModal({ token, onClose, onDisabled }) {
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 }
 

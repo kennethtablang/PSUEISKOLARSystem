@@ -8,7 +8,9 @@ import { getScholarshipTypes } from '../api/lookups';
 import { getActiveSemester } from '../api/settings';
 import { getDeadlines } from '../api/deadlines';
 import { useTitle } from '../hooks/useTitle';
-import { Eye, X, Download, FileText, Image, FileX, Loader, BookOpen, ChevronDown, ChevronUp, CalendarClock } from 'lucide-react';
+import { Eye, X, Download, FileText, Image, FileX, Loader, BookOpen, ChevronDown, ChevronUp, CalendarClock, Lock } from 'lucide-react';
+import ImageLightbox from '../components/ImageLightbox';
+import InfoTip from '../components/InfoTip';
 
 const STATUS_STYLE = {
   Pending:    'bg-amber-100 text-amber-700',
@@ -37,6 +39,11 @@ export default function MyDocumentsPage() {
   const [period,      setPeriod]      = useState({ academicYear: '', semester: 1 });
   const [periodReady, setPeriodReady] = useState(false);
   const [sampleUrl,   setSampleUrl]   = useState(null);
+
+  // Registration verification state — uploads stay locked until the office approves.
+  // Accounts that predate the approval flow have no status and are treated as approved.
+  const approvalStatus = user?.approvalStatus ?? 'Approved';
+  const isApproved = approvalStatus === 'Approved';
 
   async function handleViewSample(reqId) {
     try { setSampleUrl(await getRequirementSample(reqId, token)); }
@@ -183,6 +190,14 @@ export default function MyDocumentsPage() {
   const verified = submissions.filter(s => s.status === 'Verified').length;
   const total    = requirements.filter(r => r.isRequired).length;
 
+  // The API returns requirements already sorted by group, so consecutive runs are the groups.
+  const requirementGroups = [];
+  for (const req of requirements) {
+    const name = req.groupName ?? 'Other documents';
+    if (requirementGroups.at(-1)?.name !== name) requirementGroups.push({ name, items: [] });
+    requirementGroups.at(-1).items.push(req);
+  }
+
   return (
     <Layout>
       <div className="flex h-full" style={{ minHeight: 0 }}>
@@ -205,38 +220,66 @@ export default function MyDocumentsPage() {
                   {profile?.scholarshipTypeName
                     ? `${profile.scholarshipTypeName} · ${verified}/${total} required verified`
                     : 'Select your scholarship type below'}
-                  {profile?.scholarshipTypeName && !showTypePicker && (
-                    <button
-                      onClick={() => { setPickingType(profile.scholarshipTypeId?.toString() ?? ''); setShowTypePicker(true); }}
-                      className="text-xs font-semibold hover:underline"
-                      style={{ color: '#003087', marginLeft: 4 }}
-                    >
-                      Change
-                    </button>
+                  {/* A student holds exactly one scholarship; once it's set only a
+                      coordinator can change it, so we don't offer a "Change" action here. */}
+                  {profile?.scholarshipTypeName && (
+                    <span className="text-xs" style={{ color: '#9aaabb', marginLeft: 4 }}>
+                      · one scholarship per student — contact your coordinator to change it
+                    </span>
                   )}
                 </p>
                 <span className="page-title-bar" />
               </div>
-              <div className="flex gap-2 items-center">
-                <input
-                  type="text"
-                  value={period.academicYear}
-                  onChange={e => setPeriod(p => ({ ...p, academicYear: e.target.value }))}
-                  className="clay-input w-28"
-                  placeholder="2025-2026"
+              {/* The period is the one the scholarship office has set active — it is not the
+                  scholar's to choose. It used to be a free-text box, which let submissions be
+                  filed against arbitrary years that no deadline or report would ever match. */}
+              <div className="clay-card-inner px-3.5 py-2 flex items-center gap-2 shrink-0">
+                <CalendarClock size={14} strokeWidth={2.2} style={{ color: '#7a8aaa' }} />
+                <div>
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Submission period</p>
+                  <p className="text-sm font-bold" style={{ color: 'var(--text-strong)' }}>
+                    {period.academicYear || '—'} · Sem {period.semester}
+                  </p>
+                </div>
+                <InfoTip
+                  align="end"
+                  text="Set by the scholarship office. Documents you upload are filed against this period, which is how deadlines and compliance reports line up. Ask your coordinator if you need to submit for an earlier semester."
                 />
-                <select
-                  value={period.semester}
-                  onChange={e => setPeriod(p => ({ ...p, semester: parseInt(e.target.value) }))}
-                  className="clay-input"
-                >
-                  <option value={1}>Sem 1</option>
-                  <option value={2}>Sem 2</option>
-                </select>
               </div>
             </div>
 
             {/* Scholarship type picker — shown when no type set, or when changing */}
+            {/* Registration must be verified by the scholarship office before anything
+                can be submitted — the server enforces this too. */}
+            {!isApproved && (
+              <div className="clay-card p-5 mb-5"
+                style={approvalStatus === 'Rejected'
+                  ? { background: '#fff1f1', border: '1.5px solid #fca5a5' }
+                  : { background: '#fffbe8', border: '1.5px solid #f5d060' }}>
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                    style={{ background: approvalStatus === 'Rejected' ? 'rgba(192,32,32,0.10)' : 'rgba(192,120,0,0.12)' }}>
+                    <Lock size={16} strokeWidth={2.2} style={{ color: approvalStatus === 'Rejected' ? '#c02020' : '#8a5a00' }} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold mb-0.5" style={{ color: 'var(--text-strong)' }}>
+                      {approvalStatus === 'Rejected'
+                        ? 'Document submission is locked'
+                        : 'Waiting for the scholarship office to verify your registration'}
+                    </p>
+                    <p className="text-xs leading-relaxed" style={{ color: 'var(--text)' }}>
+                      {approvalStatus === 'Rejected'
+                        ? 'Your registration was not approved, so uploads are disabled. Please contact the scholarship office to resolve this.'
+                        : 'You can review your requirements now. Uploading unlocks as soon as your registration is approved — you will be notified by email.'}
+                    </p>
+                    {user?.approvalNote && (
+                      <p className="text-xs mt-1.5 italic" style={{ color: '#7a5500' }}>“{user.approvalNote}”</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {(!profile?.scholarshipTypeId || showTypePicker) && (
               <div className="clay-card p-5 mb-5"
                 style={{ background: '#f0f5ff', border: '1.5px solid #80aaee' }}>
@@ -307,25 +350,36 @@ export default function MyDocumentsPage() {
               <p className="text-sm" style={{ color: '#7a8aaa' }}>No document requirements found.</p>
             ) : (
               <div className="space-y-3">
-                {requirements.map(req => {
-                  const sub = submissionFor(req.id);
-                  return (
-                    <RequirementRow
-                      key={req.id}
-                      requirement={req}
-                      submission={sub}
-                      deadline={deadlineByReq[req.id]}
-                      uploading={uploading === req.id}
-                      loadingPreview={loadingPreview === sub?.id}
-                      isPreviewing={preview?.submissionId === sub?.id}
-                      onUpload={file => handleUpload(req.id, file)}
-                      onDelete={() => handleDelete(sub.id)}
-                      onPreview={() => handlePreview(sub)}
-                      onViewSample={() => handleViewSample(req.id)}
-                      token={token}
-                    />
-                  );
-                })}
+                {requirementGroups.map(group => (
+                  <div key={group.name} className="space-y-3">
+                    {/* Only worth a heading once the office has actually grouped things. */}
+                    {requirementGroups.length > 1 && (
+                      <p className="text-xs font-bold uppercase tracking-wider pt-1" style={{ color: '#7a8aaa' }}>
+                        {group.name}
+                      </p>
+                    )}
+                    {group.items.map(req => {
+                      const sub = submissionFor(req.id);
+                      return (
+                        <RequirementRow
+                          key={req.id}
+                          requirement={req}
+                          submission={sub}
+                          deadline={deadlineByReq[req.id]}
+                          uploading={uploading === req.id}
+                          loadingPreview={loadingPreview === sub?.id}
+                          isPreviewing={preview?.submissionId === sub?.id}
+                          onUpload={file => handleUpload(req.id, file)}
+                          onDelete={() => handleDelete(sub.id)}
+                          onPreview={() => handlePreview(sub)}
+                          onViewSample={() => handleViewSample(req.id)}
+                          uploadLocked={!isApproved}
+                          token={token}
+                        />
+                      );
+                    })}
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -378,17 +432,12 @@ export default function MyDocumentsPage() {
       </div>
 
       {sampleUrl && (
-        <div className="fixed inset-0 flex items-center justify-center z-50 p-6" style={{ background: 'rgba(0,20,60,0.6)' }}
-          onClick={() => { URL.revokeObjectURL(sampleUrl); setSampleUrl(null); }}>
-          <div className="relative" onClick={e => e.stopPropagation()}>
-            <button onClick={() => { URL.revokeObjectURL(sampleUrl); setSampleUrl(null); }}
-              className="absolute -top-3 -right-3 w-8 h-8 rounded-full flex items-center justify-center" style={{ background: '#fff', boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
-              <X size={16} color="#0d1a33" strokeWidth={2.5} />
-            </button>
-            <p className="text-white text-sm font-semibold mb-2 text-center">Example of a valid document</p>
-            <img src={sampleUrl} alt="Document sample" style={{ maxWidth: '90vw', maxHeight: '80vh', borderRadius: 12, boxShadow: '0 8px 40px rgba(0,0,0,0.4)' }} />
-          </div>
-        </div>
+        <ImageLightbox
+          url={sampleUrl}
+          alt="Document sample"
+          caption="Example of a valid document"
+          onClose={() => { URL.revokeObjectURL(sampleUrl); setSampleUrl(null); }}
+        />
       )}
     </Layout>
   );
@@ -472,7 +521,7 @@ function Badge({ color, bg, children }) {
   );
 }
 
-function RequirementRow({ requirement, submission, deadline, uploading, loadingPreview, isPreviewing, onUpload, onDelete, onPreview, onViewSample, token }) {
+function RequirementRow({ requirement, submission, deadline, uploading, loadingPreview, isPreviewing, onUpload, onDelete, onPreview, onViewSample, uploadLocked, token }) {
   const toast = useToast();
   const inputId  = `file-${requirement.id}`;
   const canUpload = !submission || submission.status === 'Incomplete';
@@ -562,7 +611,15 @@ function RequirementRow({ requirement, submission, deadline, uploading, loadingP
           </button>
         )}
 
-        {canUpload && (
+        {canUpload && (uploadLocked ? (
+          <span
+            className="clay-btn text-sm px-3 py-1.5 inline-flex items-center gap-1.5"
+            title="Uploading unlocks once the scholarship office approves your registration."
+            style={{ opacity: 0.55, cursor: 'not-allowed', color: '#7a8aaa' }}>
+            <Lock size={12} strokeWidth={2.5} />
+            Upload locked
+          </span>
+        ) : (
           <>
             <label
               htmlFor={inputId}
@@ -581,7 +638,7 @@ function RequirementRow({ requirement, submission, deadline, uploading, loadingP
               onChange={e => { if (e.target.files?.[0]) onUpload(e.target.files[0]); e.target.value = ''; }}
             />
           </>
-        )}
+        ))}
 
         {submission && submission.status !== 'Verified' && (
           <button onClick={onDelete} className="text-xs hover:underline ml-auto" style={{ color: '#e03030' }}>
