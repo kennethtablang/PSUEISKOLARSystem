@@ -610,6 +610,106 @@ namespace PSUEISKOLARSystem.Server.Services
             await SendMessageAsync(message);
         }
 
+        public async Task SendScholarApprovalDecisionAsync(string toEmail, string toName, bool approved, string? scholarshipName, string? note)
+        {
+            toName = Enc(toName);
+            var scholarship = scholarshipName is null ? null : Enc(scholarshipName);
+            var noteHtml = string.IsNullOrWhiteSpace(note)
+                ? ""
+                : $"""
+                    <div style="margin:16px 0 0;padding:14px 16px;border-radius:10px;background:#f4f6fb;border-left:4px solid #002570;">
+                      <div style="font-size:11px;font-weight:700;color:#7a8aaa;text-transform:uppercase;letter-spacing:0.06em;">Note from the office</div>
+                      <div style="font-size:14px;color:#4a5a7a;line-height:1.6;margin-top:4px;">{Enc(note)}</div>
+                    </div>
+                    """;
+
+            var heading = approved ? "Registration Approved" : "Registration Not Approved";
+            var badgeBg = approved ? "#d4f5e2" : "#fee2e2";
+            var badgeColor = approved ? "#0a5a3a" : "#991b1b";
+            var body = approved
+                ? $"""
+                    <p style="margin:0 0 12px;font-size:14px;color:#4a5a7a;line-height:1.6;">
+                      Your scholar registration has been verified by the scholarship office
+                      {(scholarship is null ? "" : $"for <strong>{scholarship}</strong>")}.
+                      You now have full access to PSU e-Iskolar and can start submitting your
+                      document requirements.
+                    </p>
+                    """
+                : """
+                    <p style="margin:0 0 12px;font-size:14px;color:#4a5a7a;line-height:1.6;">
+                      After review, the scholarship office was unable to verify your scholar
+                      registration. Your account stays active, but document submission remains
+                      locked until the issue below is resolved.
+                    </p>
+                    """;
+
+            var message = new MimeMessage();
+            message.From.Add(new MailboxAddress(_s.FromName, _s.From));
+            message.To.Add(new MailboxAddress(toName, toEmail));
+            message.Subject = approved
+                ? "Your PSU e-Iskolar registration is approved"
+                : "Action needed on your PSU e-Iskolar registration";
+
+            message.Body = new BodyBuilder
+            {
+                HtmlBody = $"""
+                    <!DOCTYPE html>
+                    <html>
+                    <body style="margin:0;padding:0;background:#e8edf5;font-family:Arial,sans-serif;">
+                      <table width="100%" cellpadding="0" cellspacing="0">
+                        <tr><td align="center" style="padding:32px 16px;">
+                          <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+                            <tr>
+                              <td style="background:#002570;border-radius:16px 16px 0 0;padding:28px 32px;text-align:center;">
+                                <div style="display:inline-flex;align-items:center;gap:12px;">
+                                  <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(145deg,#ffd030,#e0a000);
+                                              display:inline-flex;align-items:center;justify-content:center;
+                                              font-weight:900;font-size:11px;color:#1a0e00;">PSU</div>
+                                  <div style="text-align:left;">
+                                    <div style="font-weight:900;font-size:18px;color:#fff;letter-spacing:-0.3px;">e-Iskolar</div>
+                                    <div style="font-size:11px;color:rgba(255,255,255,0.45);margin-top:2px;">Lingayen Campus</div>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                            <tr>
+                              <td style="background:#fff;padding:36px 32px;">
+                                <h2 style="margin:0 0 8px;font-size:22px;font-weight:900;color:#0d1a33;letter-spacing:-0.5px;">
+                                  {heading}
+                                </h2>
+                                <p style="margin:0 0 20px;font-size:14px;color:#4a5a7a;line-height:1.6;">
+                                  Hello <strong>{toName}</strong>,
+                                </p>
+                                <div style="display:inline-block;padding:8px 18px;border-radius:8px;
+                                            background:{badgeBg};color:{badgeColor};font-weight:700;font-size:14px;margin-bottom:16px;">
+                                  {heading}
+                                </div>
+                                {body}
+                                {noteHtml}
+                                <p style="margin:20px 0 0;font-size:12px;color:#9aaabb;line-height:1.6;">
+                                  Sign in to PSU e-Iskolar to review your profile and requirements.
+                                </p>
+                              </td>
+                            </tr>
+                            <tr>
+                              <td style="background:#001040;border-radius:0 0 16px 16px;padding:18px 32px;text-align:center;">
+                                <p style="margin:0;font-size:11px;color:rgba(255,255,255,0.28);">
+                                  PSU e-Iskolar &middot; Scholar Profiling and Records Management System<br/>
+                                  Pangasinan State University &ndash; Lingayen Campus
+                                </p>
+                              </td>
+                            </tr>
+                          </table>
+                        </td></tr>
+                      </table>
+                    </body>
+                    </html>
+                    """
+            }.ToMessageBody();
+
+            await SendMessageAsync(message);
+        }
+
         public async Task SendDocumentStatusEmailAsync(string toEmail, string toName, string requirementName, string status, string? feedback)
         {
             bool isVerified = status == "Verified";

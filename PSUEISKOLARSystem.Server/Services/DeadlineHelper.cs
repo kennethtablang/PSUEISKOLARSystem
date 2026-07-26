@@ -4,7 +4,7 @@ using PSUEISKOLARSystem.Server.Models.Enums;
 
 namespace PSUEISKOLARSystem.Server.Services
 {
-    public record ApplicableScholar(string Id, string FullName, string? CampusName);
+    public record ApplicableScholar(string Id, string FullName);
 
     public static class DeadlineHelper
     {
@@ -52,7 +52,6 @@ namespace PSUEISKOLARSystem.Server.Services
                     u.FirstName,
                     u.MiddleName,
                     u.LastName,
-                    CampusName = u.Campus != null ? u.Campus.Name : null,
                     ScholarshipTypeId = (int?)(sp != null ? sp.ScholarshipTypeId : null),
                 })
                 .ToListAsync();
@@ -74,8 +73,7 @@ namespace PSUEISKOLARSystem.Server.Services
                         s.Id,
                         s.MiddleName != null
                             ? $"{s.FirstName} {s.MiddleName} {s.LastName}"
-                            : $"{s.FirstName} {s.LastName}",
-                        s.CampusName))
+                            : $"{s.FirstName} {s.LastName}"))
                     .ToList();
             }
 

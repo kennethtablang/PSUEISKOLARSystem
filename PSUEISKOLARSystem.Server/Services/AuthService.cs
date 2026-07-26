@@ -11,6 +11,7 @@ using PSUEISKOLARSystem.Server.DTOs.Auth;
 using PSUEISKOLARSystem.Server.Exceptions;
 using PSUEISKOLARSystem.Server.Interfaces;
 using PSUEISKOLARSystem.Server.Models;
+using PSUEISKOLARSystem.Server.Models.Enums;
 using PSUEISKOLARSystem.Server.Settings;
 
 namespace PSUEISKOLARSystem.Server.Services
@@ -30,7 +31,6 @@ namespace PSUEISKOLARSystem.Server.Services
         public async Task<AuthResponseDto> LoginAsync(LoginRequestDto request)
         {
             var user = await dbContext.Users
-                .Include(u => u.Campus)
                 .FirstOrDefaultAsync(u => u.Email == request.Email);
 
             // Unknown or deactivated account — fail generically without revealing which.
@@ -116,9 +116,6 @@ namespace PSUEISKOLARSystem.Server.Services
             if (!await roleManager.RoleExistsAsync(request.Role))
                 throw new BadRequestException($"Role '{request.Role}' does not exist.");
 
-            if (request.CampusId.HasValue && !await dbContext.Campuses.AnyAsync(c => c.Id == request.CampusId))
-                throw new BadRequestException($"Campus '{request.CampusId}' does not exist.");
-
             var user = new ApplicationUser
             {
                 UserName = request.Email,
@@ -126,7 +123,6 @@ namespace PSUEISKOLARSystem.Server.Services
                 FirstName = request.FirstName.Trim(),
                 MiddleName = string.IsNullOrWhiteSpace(request.MiddleName) ? null : request.MiddleName.Trim(),
                 LastName = request.LastName.Trim(),
-                CampusId = request.CampusId,
                 EmailConfirmed = true,
             };
 
@@ -154,6 +150,9 @@ namespace PSUEISKOLARSystem.Server.Services
                 MiddleName = string.IsNullOrWhiteSpace(request.MiddleName) ? null : request.MiddleName.Trim(),
                 LastName = request.LastName.Trim(),
                 EmailConfirmed = false,
+                // Self-registration needs an administrator to verify the scholar before
+                // they can submit documents (see ScholarApprovalsController).
+                ApprovalStatus = ApprovalStatuses.Pending,
             };
 
             var result = await userManager.CreateAsync(user, request.Password);
@@ -214,7 +213,6 @@ namespace PSUEISKOLARSystem.Server.Services
         public async Task<UserDto> GetCurrentUserAsync(string userId)
         {
             var user = await dbContext.Users
-                .Include(u => u.Campus)
                 .FirstOrDefaultAsync(u => u.Id == userId)
                 ?? throw new NotFoundException("User not found.");
 
@@ -227,7 +225,6 @@ namespace PSUEISKOLARSystem.Server.Services
         public async Task<UserDto> UpdateProfileAsync(string userId, UpdateProfileDto dto)
         {
             var user = await dbContext.Users
-                .Include(u => u.Campus)
                 .FirstOrDefaultAsync(u => u.Id == userId)
                 ?? throw new NotFoundException("User not found.");
 
@@ -401,9 +398,6 @@ namespace PSUEISKOLARSystem.Server.Services
                 new(ClaimTypes.Role, role),
                 new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
             };
-
-            if (user.CampusId.HasValue)
-                claims.Add(new Claim("campusId", user.CampusId.Value.ToString()));
 
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSettings.Key));
             var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
