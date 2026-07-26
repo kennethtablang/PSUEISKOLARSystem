@@ -2,23 +2,29 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 
 const ThemeContext = createContext(null);
 
-function applyTheme(theme) {
-  const effective = theme === 'system'
+function effectiveTheme(theme) {
+  return theme === 'system'
     ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
     : theme;
-  document.documentElement.setAttribute('data-theme', effective);
 }
 
 export function ThemeProvider({ children }) {
   const [theme, setThemeState] = useState(() => localStorage.getItem('theme') || 'system');
+  // The concrete light/dark in force. CSS reads it off `data-theme`; charts need it
+  // in JS because their mark colours are per-mode values, not a filter on one set.
+  const [resolved, setResolved] = useState(() => effectiveTheme(localStorage.getItem('theme') || 'system'));
 
   useEffect(() => {
-    applyTheme(theme);
+    const apply = () => {
+      const eff = effectiveTheme(theme);
+      document.documentElement.setAttribute('data-theme', eff);
+      setResolved(eff);
+    };
+    apply();
     if (theme === 'system') {
       const mq = window.matchMedia('(prefers-color-scheme: dark)');
-      const handler = () => applyTheme('system');
-      mq.addEventListener('change', handler);
-      return () => mq.removeEventListener('change', handler);
+      mq.addEventListener('change', apply);
+      return () => mq.removeEventListener('change', apply);
     }
   }, [theme]);
 
@@ -28,7 +34,7 @@ export function ThemeProvider({ children }) {
   }, []);
 
   return (
-    <ThemeContext.Provider value={{ theme, setTheme }}>
+    <ThemeContext.Provider value={{ theme, resolved, setTheme }}>
       {children}
     </ThemeContext.Provider>
   );
