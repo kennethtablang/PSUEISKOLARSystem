@@ -8,6 +8,9 @@ import Pagination from '../components/Pagination';
 import { TableSkeleton, EmptyState } from '../components/ListState';
 import { useTitle } from '../hooks/useTitle';
 import { ctlStyle } from '../constants/ui';
+import { StatusBadge } from './ScholarApprovalsPage';
+import Avatar from '../components/Avatar';
+import { Award, AlertTriangle } from 'lucide-react';
 
 const GWA_BADGE = (meets) => {
   if (meets === null || meets === undefined) return 'bg-[#e8edf5] text-[#7a8aaa]';
@@ -22,6 +25,7 @@ const LIFECYCLE_STYLE = {
   Graduated: { bg: '#e5e7eb', color: '#374151' },
 };
 const LIFECYCLE_OPTIONS = ['Active', 'Renewed', 'Lapsed', 'Suspended', 'Graduated'];
+const APPROVAL_OPTIONS = ['Pending', 'Approved', 'Rejected'];
 
 export default function ScholarsPage() {
   useTitle('Scholars');
@@ -45,6 +49,7 @@ export default function ScholarsPage() {
     scholarshipTypeId: '',
     meetsRequirement: '',
     lifecycleStatus: initialStatus,
+    approvalStatus: searchParams.get('approval') ?? '',
   });
 
   async function loadScholars(f = filters, page = 1, size = pageSize) {
@@ -57,6 +62,7 @@ export default function ScholarsPage() {
         scholarshipTypeId: f.scholarshipTypeId || undefined,
         meetsRequirement: f.meetsRequirement !== '' ? f.meetsRequirement : undefined,
         lifecycleStatus: f.lifecycleStatus || undefined,
+        approvalStatus: f.approvalStatus || undefined,
         page,
         pageSize: size,
       });
@@ -131,6 +137,10 @@ export default function ScholarsPage() {
             <option value="">All Statuses</option>
             {LIFECYCLE_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
+          <select value={filters.approvalStatus} onChange={e => setFilter('approvalStatus', e.target.value)} className={inputCls} style={{ ...ctlStyle, width: 'auto' }}>
+            <option value="">All Verifications</option>
+            {APPROVAL_OPTIONS.map(s => <option key={s} value={s}>{s === 'Pending' ? 'Awaiting approval' : s}</option>)}
+          </select>
         </div>
 
         {error && <p className="text-sm mb-4" style={{ color: '#e03030' }}>{error}</p>}
@@ -141,10 +151,10 @@ export default function ScholarsPage() {
           ) : scholars.length === 0 ? (
             <EmptyState title="No scholars found" message="Try adjusting your filters." />
           ) : (
-            <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-sm">
+            <div className="overflow-x-auto"><table className="w-full min-w-[940px] text-sm">
               <thead className="clay-table-head">
                 <tr>
-                  {['Scholar', 'Student ID', 'Program', 'Scholarship', 'GWA', 'Status', ''].map(h => (
+                  {['Scholar', 'Student ID', 'Program', 'Scholarship', 'GWA', 'Status', 'Verified', ''].map(h => (
                     <th key={h} className="text-left px-5 py-3 text-xs font-bold uppercase tracking-wider" style={{ color: '#7a8aaa' }}>{h}</th>
                   ))}
                 </tr>
@@ -153,12 +163,56 @@ export default function ScholarsPage() {
                 {scholars.map(s => (
                   <tr key={s.id} className="clay-table-row">
                     <td className="px-5 py-3.5">
-                      <p className="font-semibold" style={{ color: 'var(--text-strong)' }}>{s.fullName}</p>
-                      <p className="text-xs" style={{ color: '#7a8aaa' }}>{s.email}</p>
+                      <div className="flex items-center gap-2.5">
+                        <Avatar userId={s.userId} name={s.fullName} hasAvatar={s.hasAvatar} size={34} />
+                        <div className="min-w-0">
+                          <p className="font-semibold" style={{ color: 'var(--text-strong)' }}>{s.fullName}</p>
+                          <p className="text-xs" style={{ color: '#7a8aaa' }}>{s.email}</p>
+                        </div>
+                      </div>
                     </td>
                     <td className="px-5 py-3.5 font-mono" style={{ color: 'var(--text)' }}>{s.studentId}</td>
                     <td className="px-5 py-3.5" style={{ color: 'var(--text)' }}>{s.programCode ?? '—'}</td>
-                    <td className="px-5 py-3.5 max-w-[140px] truncate" style={{ color: 'var(--text)' }}>{s.scholarshipTypeName ?? '—'}</td>
+                    {/* The scholarship a student holds — one only, so it gets its own block
+                        with category and assignment date rather than a bare cell. */}
+                    <td className="px-5 py-3.5" style={{ maxWidth: 210 }}>
+                      {s.scholarshipTypeName ? (
+                        <>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <Award size={12} strokeWidth={2.4} className="shrink-0" style={{ color: '#6030b0' }} />
+                            <span className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>
+                              {s.scholarshipTypeName}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                            {s.scholarshipTypeCategory && (
+                              <span className="text-xs px-1.5 rounded-lg font-medium"
+                                style={{ background: '#ede9fe', color: '#6d28d9', border: '1px solid #c4b5fd' }}>
+                                {s.scholarshipTypeCategory}
+                              </span>
+                            )}
+                            {s.minimumGwa != null && (
+                              <span className="text-xs" style={{ color: '#7a8aaa' }}>
+                                max GWA {s.minimumGwa.toFixed(2)}
+                              </span>
+                            )}
+                          </div>
+                          {/* More than one record means they were transferred at some point. */}
+                          {s.scholarshipRecordCount > 1 && (
+                            <span
+                              title="This scholar has held more than one scholarship over time — open the Scholarship Check report to review."
+                              className="inline-flex items-center gap-1 text-xs font-semibold mt-0.5"
+                              style={{ color: '#b45309' }}
+                            >
+                              <AlertTriangle size={10} strokeWidth={2.6} />
+                              {s.scholarshipRecordCount} records
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-xs italic" style={{ color: '#b45309' }}>None assigned</span>
+                      )}
+                    </td>
                     <td className="px-5 py-3.5">
                       {s.latestGwa != null ? (
                         <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${GWA_BADGE(s.meetsRequirement)}`}>
@@ -177,6 +231,9 @@ export default function ScholarsPage() {
                           </span>
                         );
                       })()}
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <StatusBadge status={s.approvalStatus || 'Approved'} />
                     </td>
                     <td className="px-5 py-3 text-right">
                       <button

@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
-import { useConfirm } from '../context/UIContext';
-import { getActiveSemester, setActiveSemester } from '../api/settings';
+import { useConfirm, useToast } from '../context/UIContext';
+import { getActiveSemester, setActiveSemester, getMessagingSettings, setMessagingSettings } from '../api/settings';
+import { downloadBackup } from '../api/reports';
 import { useTitle } from '../hooks/useTitle';
 import { useTheme } from '../context/ThemeContext';
-import { CalendarDays, CheckCircle, Archive, AlertTriangle, X, Database, Sun, Moon, Monitor, Clock } from 'lucide-react';
+import { CalendarDays, CheckCircle, Archive, AlertTriangle, Database, Sun, Moon, Monitor, Clock, MessageSquare, Bot, HardDriveDownload } from 'lucide-react';
+import Modal from '../components/Modal';
+import InfoTip from '../components/InfoTip';
 
 function yearOptions() {
   const y = new Date().getFullYear();
@@ -18,6 +21,7 @@ export default function SettingsPage() {
   useTitle('System Settings');
   const { token, inactivityMin, setInactivityMin } = useAuth();
   const confirm = useConfirm();
+  const toast = useToast();
   const { theme, setTheme } = useTheme();
 
   const [current, setCurrent] = useState(null);
@@ -32,12 +36,24 @@ export default function SettingsPage() {
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
   const [seeding, setSeeding]       = useState(false);
   const [seedResult, setSeedResult] = useState(null);
+  const [backingUp, setBackingUp]   = useState(false);
   const [tab, setTab] = useState('period');
 
+  async function handleBackup() {
+    setBackingUp(true);
+    try {
+      await downloadBackup(token);
+      toast('Backup downloaded.', 'success');
+    } catch (e) {
+      toast(e.message, 'error');
+    } finally { setBackingUp(false); }
+  }
+
   const TABS = [
-    { key: 'period',     label: 'Academic Period', Icon: CalendarDays },
-    { key: 'maintenance', label: 'Maintenance',    Icon: Archive },
-    { key: 'appearance', label: 'Preferences',      Icon: Monitor },
+    { key: 'period',      label: 'Academic Period', Icon: CalendarDays },
+    { key: 'messaging',   label: 'Messaging',       Icon: MessageSquare },
+    { key: 'maintenance', label: 'Maintenance',     Icon: Archive },
+    { key: 'appearance',  label: 'Preferences',     Icon: Monitor },
   ];
 
   async function handleSeed() {
@@ -286,6 +302,9 @@ export default function SettingsPage() {
 
             </>)}
 
+            {/* ── Messaging tab ── */}
+            {tab === 'messaging' && <MessagingSettingsPanel token={token} />}
+
             {/* ── Maintenance tab ── */}
             {tab === 'maintenance' && (<>
 
@@ -347,6 +366,39 @@ export default function SettingsPage() {
                   <span>{archiveResult.error}</span>
                 </div>
               )}
+            </div>
+
+            {/* One-click data export */}
+            <div className="clay-card p-6">
+              <div className="flex items-center gap-3 mb-5">
+                <div style={{ width: 44, height: 44, borderRadius: 13, flexShrink: 0, background: 'rgba(0,48,135,0.07)', border: '1px solid rgba(0,48,135,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <HardDriveDownload size={20} color="#003087" strokeWidth={2} />
+                </div>
+                <div>
+                  <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-strong)' }}>Database Backup</p>
+                  <p style={{ fontSize: 12, color: '#7a8aaa', marginTop: 2 }}>
+                    Download a snapshot of every table as a ZIP of CSV files — one per table, openable in Excel.
+                  </p>
+                </div>
+              </div>
+
+              <button onClick={handleBackup} disabled={backingUp}
+                className="clay-btn clay-btn-primary px-5 py-2.5 text-sm font-bold"
+                style={{ opacity: backingUp ? 0.65 : 1 }}>
+                <HardDriveDownload size={13} strokeWidth={2.5} className="inline mr-1.5" />
+                {backingUp ? 'Preparing…' : 'Download Backup'}
+              </button>
+
+              <div className="mt-4 flex items-start gap-2 p-3.5 rounded-2xl text-sm"
+                style={{ background: '#fffbe8', color: '#7a5500', border: '1.5px solid #f5d060' }}>
+                <AlertTriangle size={15} strokeWidth={2.5} className="mt-px shrink-0" />
+                <span>
+                  The archive holds personal data covered by RA 10173 — store it securely and delete
+                  it when you're done. Password hashes are deliberately excluded, so this is an
+                  archive and reporting export rather than a restorable credential backup; see
+                  DEPLOYMENT.md for taking a full SQL Server backup.
+                </span>
+              </div>
             </div>
 
             {/* Sample data seeder */}
@@ -449,22 +501,19 @@ export default function SettingsPage() {
 
       {/* Archive confirmation modal */}
       {showArchiveConfirm && (
-        <div className="fixed inset-0 flex items-center justify-center z-50 p-4"
-          style={{ background: 'rgba(0,20,60,0.52)' }}
-          onClick={e => e.target === e.currentTarget && setShowArchiveConfirm(false)}>
-          <div className="clay-card-modal w-full p-7" style={{ maxWidth: 420 }}>
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(180,60,0,0.08)' }}>
-                  <Archive size={15} color="#b03000" strokeWidth={2} />
-                </div>
-                <h2 className="text-base font-black" style={{ color: 'var(--text-strong)' }}>Confirm Archive</h2>
-              </div>
-              <button onClick={() => setShowArchiveConfirm(false)}
-                className="w-7 h-7 rounded-xl flex items-center justify-center hover:bg-black/5">
-                <X size={15} color="#7a8aaa" strokeWidth={2.5} />
-              </button>
-            </div>
+        <Modal
+          title={
+            <span className="flex items-center gap-2.5">
+              <span className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(180,60,0,0.08)' }}>
+                <Archive size={15} color="#b03000" strokeWidth={2} />
+              </span>
+              Confirm Archive
+            </span>
+          }
+          onClose={() => setShowArchiveConfirm(false)}
+          width={420}
+          dismissible={!archiving}
+        >
             <p className="text-sm leading-relaxed mb-6" style={{ color: 'var(--text)' }}>
               This will <strong>deactivate</strong> all scholar accounts with no document submissions in the last{' '}
               <strong>{archiveDays} days</strong>. Deactivated accounts cannot log in until re-activated by an administrator.
@@ -481,9 +530,149 @@ export default function SettingsPage() {
                 {archiving ? 'Archiving…' : 'Yes, Archive'}
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </Layout>
+  );
+}
+
+/* ── Messaging: the automatic acknowledgement scholars get on a new conversation ── */
+function MessagingSettingsPanel({ token }) {
+  const [enabled, setEnabled] = useState(true);
+  const [message, setMessage] = useState('');
+  const [meta, setMeta]       = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving]   = useState(false);
+  const [saved, setSaved]     = useState(false);
+  const [error, setError]     = useState('');
+
+  useEffect(() => {
+    getMessagingSettings(token)
+      .then(s => {
+        setEnabled(s.autoReplyEnabled);
+        setMessage(s.autoReplyMessage ?? '');
+        setMeta({ updatedAt: s.updatedAt, updatedByName: s.updatedByName });
+      })
+      .catch(e => setError(e.message))
+      .finally(() => setLoading(false));
+  }, [token]);
+
+  const tooShort = enabled && message.trim().length < 10;
+
+  async function handleSave(e) {
+    e.preventDefault();
+    setError(''); setSaved(false);
+    if (tooShort) { setError('The auto-reply message needs at least 10 characters.'); return; }
+    setSaving(true);
+    try {
+      const res = await setMessagingSettings({ autoReplyEnabled: enabled, autoReplyMessage: message.trim() }, token);
+      setMeta({ updatedAt: res.updatedAt, updatedByName: null });
+      setSaved(true);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) return <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Loading…</p>;
+
+  return (
+    <div className="clay-card p-6">
+      <div className="flex items-center gap-3 mb-5">
+        <div style={{ width: 44, height: 44, borderRadius: 13, flexShrink: 0, background: 'rgba(0,48,135,0.07)', border: '1px solid rgba(0,48,135,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Bot size={20} color="#003087" strokeWidth={2} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="flex items-center gap-1.5" style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-strong)' }}>
+            Automatic Acknowledgement
+            <InfoTip text="Posted the moment a scholar starts a new conversation, so they know the message arrived. Sent once per conversation — never in reply to a coordinator, and it never shows up as unread work for staff." />
+          </p>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+            Replies instantly to a scholar's first message in a conversation.
+          </p>
+        </div>
+      </div>
+
+      {error && (
+        <div className="mb-4 p-3 rounded-2xl text-sm font-medium"
+          style={{ background: '#fff0f0', color: '#b03030', border: '1.5px solid #f5b0b0' }}>
+          {error}
+        </div>
+      )}
+      {saved && (
+        <div className="mb-4 p-3 rounded-2xl text-sm font-medium flex items-center gap-2"
+          style={{ background: '#d4f5e2', color: '#0a5a3a', border: '1.5px solid #86efac' }}>
+          <CheckCircle size={14} strokeWidth={2.5} /> Saved.
+        </div>
+      )}
+
+      <form onSubmit={handleSave} className="space-y-4">
+        <label className="flex items-start gap-3 cursor-pointer select-none">
+          <input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)}
+            className="mt-0.5 w-4 h-4 rounded" style={{ accentColor: '#003087' }} />
+          <span>
+            <span className="block text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>
+              Send an automatic acknowledgement
+            </span>
+            <span className="block text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+              Turn this off to leave every conversation for a coordinator to answer.
+            </span>
+          </span>
+        </label>
+
+        <div>
+          <label className="block text-xs font-bold mb-1.5 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
+            Message
+          </label>
+          <textarea
+            rows={4}
+            value={message}
+            onChange={e => setMessage(e.target.value)}
+            disabled={!enabled}
+            maxLength={1000}
+            className="clay-input"
+            style={{ opacity: enabled ? 1 : 0.55 }}
+            placeholder="Thanks for your message — we'll reply within 2 working days."
+          />
+          <div className="flex items-center justify-between mt-1">
+            {tooShort
+              ? <p className="text-xs font-medium" style={{ color: '#dc2626' }}>At least 10 characters.</p>
+              : <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  Include your reply time and office hours so scholars know what to expect.
+                </p>}
+            <p className="text-xs tabular-nums" style={{ color: 'var(--text-faint)' }}>{message.length}/1000</p>
+          </div>
+        </div>
+
+        {/* What the scholar will actually see. */}
+        {enabled && message.trim() && (
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>Preview</p>
+            <div className="max-w-md px-3.5 py-2.5 rounded-2xl"
+              style={{ background: 'var(--surface-inset)', border: '1px dashed rgba(0,48,135,0.28)', borderBottomLeftRadius: 4 }}>
+              <p className="text-xs font-bold mb-0.5 flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
+                <Bot size={12} strokeWidth={2.4} /> Scholarship Office · automatic
+              </p>
+              <p className="text-sm" style={{ color: 'var(--text)', whiteSpace: 'pre-wrap' }}>{message.trim()}</p>
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-center gap-3 pt-1">
+          <button type="submit" disabled={saving || tooShort}
+            className="clay-btn clay-btn-primary px-5 py-2.5 text-sm"
+            style={{ opacity: (saving || tooShort) ? 0.65 : 1 }}>
+            {saving ? 'Saving…' : 'Save messaging settings'}
+          </button>
+          {meta?.updatedAt && (
+            <span className="text-xs" style={{ color: 'var(--text-faint)' }}>
+              Last updated {new Date(meta.updatedAt).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+              {meta.updatedByName ? ` by ${meta.updatedByName}` : ''}
+            </span>
+          )}
+        </div>
+      </form>
+    </div>
   );
 }

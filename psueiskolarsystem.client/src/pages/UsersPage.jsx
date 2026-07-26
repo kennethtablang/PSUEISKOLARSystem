@@ -9,6 +9,7 @@ import Pagination from '../components/Pagination';
 import { TableSkeleton, EmptyState } from '../components/ListState';
 import { useTitle } from '../hooks/useTitle';
 import { ctlStyle } from '../constants/ui';
+import Modal from '../components/Modal';
 import { useToast, useConfirm } from '../context/UIContext';
 import PasswordStrengthMeter, { getPasswordStrength } from '../components/PasswordStrengthMeter';
 
@@ -277,14 +278,13 @@ function ImportScholarsModal({ token, onClose, onDone }) {
   }
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{ background: 'rgba(0,20,60,0.45)' }}>
-      <div className="clay-card-modal w-full p-7" style={{ maxWidth: 620, maxHeight: '88vh', overflowY: 'auto' }}>
-        <h2 className="text-base font-black mb-1.5" style={{ color: 'var(--text-strong)' }}>Import Scholars</h2>
-        <p className="text-sm mb-5" style={{ color: '#5a6a85' }}>
-          Upload a CSV or Excel file to create many scholar accounts at once. Each created scholar is
-          emailed a temporary password and a verification link.
-        </p>
-
+    <Modal
+      title="Import Scholars"
+      subtitle="Upload a CSV or Excel file to create many scholar accounts at once. Each created scholar is emailed a temporary password and a verification link, and is verified on creation."
+      onClose={onClose}
+      width={620}
+      dismissible={!busy}
+    >
         {error && <ErrorBox>{error}</ErrorBox>}
 
         {!result && (
@@ -361,8 +361,7 @@ function ImportScholarsModal({ token, onClose, onDone }) {
             </div>
           </>
         )}
-      </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -512,14 +511,13 @@ function EditUserModal({ user, token, onClose, onSaved }) {
 }
 
 /* ── Shared UI helpers (exported for reuse in other pages) ── */
-export function ClayModal({ title, onClose, children }) {
+/* Thin wrapper kept for the pages that already import it; all chrome, layering and
+   backdrop behaviour live in components/Modal.jsx. */
+export function ClayModal({ title, subtitle, onClose, children, width = 460, dismissible = true }) {
   return (
-    <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{ background: 'rgba(0,20,60,0.45)' }}>
-      <div className="clay-card-modal w-full max-w-md p-7">
-        <h2 className="text-base font-black mb-5" style={{ color: 'var(--text-strong)' }}>{title}</h2>
-        {children}
-      </div>
-    </div>
+    <Modal title={title} subtitle={subtitle} onClose={onClose} width={width} dismissible={dismissible}>
+      {children}
+    </Modal>
   );
 }
 

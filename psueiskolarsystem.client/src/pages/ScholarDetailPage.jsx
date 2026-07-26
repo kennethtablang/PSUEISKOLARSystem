@@ -1,13 +1,22 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { AlertTriangle, Printer } from 'lucide-react';
+import { AlertTriangle, Printer, Award, ShieldCheck, ShieldX, Plus, BanknoteArrowUp, History } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/UIContext';
-import { getScholarProfile, upsertScholarProfile, getGrades, addGrade, setLifecycleStatus } from '../api/scholars';
+import { getScholarProfile, upsertScholarProfile, getGrades, addGrade, setLifecycleStatus, getScholarshipHistory } from '../api/scholars';
 import { getPrograms, getScholarshipTypes } from '../api/lookups';
+import { getOneTimeGrants, releaseOneTimeGrant } from '../api/oneTimeGrants';
+import { approveScholar, rejectScholar } from '../api/scholarApprovals';
 import { useTitle } from '../hooks/useTitle';
+import { useTheme } from '../context/ThemeContext';
+import { vizTokens, tooltipStyle } from '../constants/viz';
+import Modal from '../components/Modal';
+import Avatar from '../components/Avatar';
+import { StatusBadge } from './ScholarApprovalsPage';
+import { GrantModal, GrantStatusBadge } from './OneTimeGrantsPage';
+import { peso } from '../constants/grants';
 
 export default function ScholarDetailPage() {
   useTitle('Scholar Profile');
@@ -25,6 +34,10 @@ export default function ScholarDetailPage() {
   const [editing, setEditing] = useState(false);
   const [showAddGrade, setShowAddGrade] = useState(false);
   const [savingStatus, setSavingStatus] = useState(false);
+  const [scholarshipHistory, setScholarshipHistory] = useState([]);
+  const [grants, setGrants] = useState(null);         // { items, totalAmount, … }
+  const [showGrantModal, setShowGrantModal] = useState(false);
+  const [decision, setDecision] = useState(null);      // 'approve' | 'reject'
 
   async function handleStatusChange(status) {
     setSavingStatus(true);
@@ -73,21 +86,33 @@ export default function ScholarDetailPage() {
   async function load() {
     setLoading(true);
     try {
-      const [p, prog, st, g] = await Promise.all([
+      const [p, prog, st, g, hist, gr] = await Promise.all([
         getScholarProfile(targetUserId, token),
         getPrograms(token),
         getScholarshipTypes(token),
         getGrades(targetUserId, token).catch(() => []),
+        getScholarshipHistory(targetUserId, token).catch(() => []),
+        getOneTimeGrants(token, { scholarId: targetUserId, pageSize: 50 }).catch(() => null),
       ]);
       setProfile(p);
       setPrograms(prog);
       setScholarshipTypes(st);
       setGrades(g);
+      setScholarshipHistory(hist);
+      setGrants(gr);
     } catch (e) {
       setError(e.message);
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleReleaseGrant(grant) {
+    try {
+      await releaseOneTimeGrant(grant.id, {}, token);
+      toast(`${grant.title} released.`, 'success');
+      await load();
+    } catch (e) { toast(e.message, 'error'); }
   }
 
   useEffect(() => { load(); }, [targetUserId]);
@@ -97,16 +122,28 @@ export default function ScholarDetailPage() {
 
   return (
     <Layout>
-      <div className="p-4 sm:p-8 max-w-3xl">
+      <div className="p-4 sm:p-8 max-w-5xl">
         <button onClick={() => navigate(-1)} className="text-sm mb-5 flex items-center gap-1 hover:underline" style={{ color: 'var(--text)' }}>
           ← Back
         </button>
 
-        <div className="flex items-start justify-between mb-6">
-          <div>
-            <h1 className="page-title">{profile?.fullName ?? 'Scholar Profile'}</h1>
-            <p className="page-subtitle">{profile?.email}</p>
-            <span className="page-title-bar" />
+        <div className="flex items-start justify-between mb-6 gap-4 flex-wrap">
+          <div className="flex items-center gap-4 min-w-0">
+            {profile && (
+              <Avatar
+                userId={profile.userId}
+                name={profile.fullName}
+                hasAvatar={profile.hasAvatar}
+                size={56}
+                radius={16}
+                style={{ boxShadow: '4px 4px 0 rgba(0,0,0,0.1)' }}
+              />
+            )}
+            <div className="min-w-0">
+              <h1 className="page-title">{profile?.fullName ?? 'Scholar Profile'}</h1>
+              <p className="page-subtitle">{profile?.email}</p>
+              <span className="page-title-bar" />
+            </div>
           </div>
           <div className="flex items-center gap-2">
             {profile && (
@@ -150,11 +187,54 @@ export default function ScholarDetailPage() {
               </div>
             )}
 
+            {/* Registration verification (admin approval of a self-registered scholar) */}
+            {profile.approvalStatus && profile.approvalStatus !== 'Approved' && (
+              <div className="rounded-2xl p-4 mb-5 flex items-start gap-3 flex-wrap"
+                style={profile.approvalStatus === 'Rejected'
+                  ? { background: '#fff1f1', border: '1.5px solid #fca5a5' }
+                  : { background: '#fffbe8', border: '1.5px solid #f5d060' }}>
+                <div className="flex-1 min-w-[220px]">
+                  <div className="flex items-center gap-2 mb-1">
+                    <StatusBadge status={profile.approvalStatus} />
+                    <span className="text-sm font-black" style={{ color: 'var(--text-strong)' }}>
+                      {profile.approvalStatus === 'Rejected'
+                        ? 'Registration was not approved'
+                        : 'Registration awaiting verification'}
+                    </span>
+                  </div>
+                  <p className="text-xs leading-relaxed" style={{ color: 'var(--text)' }}>
+                    {isOwnProfile
+                      ? 'You can sign in and finish your profile, but document submission stays locked until the scholarship office verifies your registration.'
+                      : 'This scholar cannot submit documents until their registration is verified.'}
+                  </p>
+                  {profile.approvalNote && (
+                    <p className="text-xs mt-1.5 italic" style={{ color: '#7a5500' }}>“{profile.approvalNote}”</p>
+                  )}
+                </div>
+                {isAdminOrCoord && (
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setDecision('approve')}
+                      className="clay-btn clay-btn-primary px-3.5 py-2 text-xs flex items-center gap-1.5">
+                      <ShieldCheck size={13} strokeWidth={2.6} /> Approve
+                    </button>
+                    {profile.approvalStatus !== 'Rejected' && (
+                      <button onClick={() => setDecision('reject')}
+                        className="clay-btn clay-btn-ghost px-3.5 py-2 text-xs flex items-center gap-1.5"
+                        style={{ color: '#c02020' }}>
+                        <ShieldX size={13} strokeWidth={2.6} /> Reject
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Scholarship lifecycle status (FR-18) */}
             <div className="clay-card p-4 mb-5 flex items-center justify-between flex-wrap gap-3">
               <div className="flex items-center gap-2.5">
                 <span className="text-xs font-bold uppercase tracking-wider" style={{ color: '#7a8aaa' }}>Scholarship Status</span>
                 <LifecycleBadge status={profile.lifecycleStatus} />
+                {profile.approvalStatus === 'Approved' && <StatusBadge status="Approved" />}
               </div>
               {isAdminOrCoord && (
                 <select
@@ -183,6 +263,22 @@ export default function ScholarDetailPage() {
                 {profile.address && <Detail label="Address" value={profile.address} />}
               </dl>
             </div>
+
+            {/* The one scholarship this student holds, plus the full assignment trail */}
+            <ScholarshipCard
+              profile={profile}
+              history={scholarshipHistory}
+              isAdminOrCoord={isAdminOrCoord}
+              onChange={() => setEditing(true)}
+            />
+
+            {/* One-time grants — one-off awards on top of the scholarship */}
+            <OneTimeGrantsCard
+              grants={grants}
+              isAdminOrCoord={isAdminOrCoord}
+              onAdd={() => setShowGrantModal(true)}
+              onRelease={handleReleaseGrant}
+            />
 
             {grades.length >= 2 && (
               <GradeTrendChart grades={grades} minimumGwa={profile.minimumGwa} />
@@ -263,11 +359,274 @@ export default function ScholarDetailPage() {
           onSaved={() => { setShowAddGrade(false); load(); }}
         />
       )}
+
+      {showGrantModal && profile && (
+        <GrantModal
+          initial={null}
+          scholars={[]}
+          fixedScholar={{ userId: targetUserId, fullName: profile.fullName }}
+          token={token}
+          onClose={() => setShowGrantModal(false)}
+          onSaved={() => { setShowGrantModal(false); load(); }}
+        />
+      )}
+
+      {decision && profile && (
+        <ApprovalDecisionModal
+          profile={profile}
+          approve={decision === 'approve'}
+          token={token}
+          onClose={() => setDecision(null)}
+          onDone={msg => { setDecision(null); toast(msg, 'success'); load(); }}
+        />
+      )}
     </Layout>
   );
 }
 
+/* ── The single scholarship a student holds, plus its assignment trail ── */
+function ScholarshipCard({ profile, history, isAdminOrCoord, onChange }) {
+  const active = history.find(h => h.isActive);
+  const past = history.filter(h => !h.isActive);
+  const conflict = history.filter(h => h.isActive).length > 1;
+
+  return (
+    <div className="clay-card p-6 mb-5">
+      <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+        <h2 className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5" style={{ color: '#7a8aaa' }}>
+          <Award size={13} strokeWidth={2.4} /> Scholarship
+        </h2>
+        {isAdminOrCoord && (
+          <button onClick={onChange} className="text-xs font-medium hover:underline" style={{ color: '#003087' }}>
+            {profile.scholarshipTypeId ? 'Transfer scholarship' : 'Assign scholarship'}
+          </button>
+        )}
+      </div>
+
+      {conflict && (
+        <div className="rounded-xl p-3 mb-4 flex items-start gap-2"
+          style={{ background: '#fff1f1', border: '1.5px solid #fca5a5' }}>
+          <AlertTriangle size={14} strokeWidth={2.5} className="mt-0.5 shrink-0" style={{ color: '#c02020' }} />
+          <p className="text-xs" style={{ color: '#991b1b' }}>
+            More than one scholarship is open for this scholar. A student may hold only one —
+            close the extra assignment from the Scholarship Check report.
+          </p>
+        </div>
+      )}
+
+      {!profile.scholarshipTypeId ? (
+        <p className="text-sm" style={{ color: '#7a8aaa' }}>
+          No scholarship assigned yet. A student may hold exactly one scholarship at a time.
+        </p>
+      ) : (
+        <div className="rounded-2xl p-4"
+          style={{ background: 'rgba(96,48,176,0.06)', border: '1.5px solid rgba(96,48,176,0.18)' }}>
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="min-w-0">
+              <p className="text-base font-black" style={{ color: 'var(--text-strong)' }}>
+                {profile.scholarshipTypeName}
+              </p>
+              <div className="flex items-center gap-2 flex-wrap mt-1">
+                {profile.scholarshipTypeCategory && (
+                  <span className="text-xs px-1.5 py-0.5 rounded-lg font-medium"
+                    style={{ background: '#ede9fe', color: '#6d28d9', border: '1px solid #c4b5fd' }}>
+                    {profile.scholarshipTypeCategory}
+                  </span>
+                )}
+                {profile.minimumGwa != null && (
+                  <span className="text-xs font-mono" style={{ color: 'var(--text)' }}>
+                    max GWA {profile.minimumGwa.toFixed(2)}
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="text-right shrink-0">
+              <p className="text-xs" style={{ color: '#7a8aaa' }}>Registered</p>
+              <p className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>
+                {(active?.assignedAt ?? profile.scholarshipAssignedAt)
+                  ? new Date(active?.assignedAt ?? profile.scholarshipAssignedAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
+                  : '—'}
+              </p>
+              {active?.assignedBy && (
+                <p className="text-xs mt-0.5" style={{ color: '#9aaabb' }}>by {active.assignedBy}</p>
+              )}
+            </div>
+          </div>
+          <p className="text-xs mt-3 pt-3" style={{ color: '#7a8aaa', borderTop: '1px solid rgba(96,48,176,0.14)' }}>
+            This is the scholar's only active scholarship. Assigning another closes this one and is
+            recorded below.
+          </p>
+        </div>
+      )}
+
+      {past.length > 0 && (
+        <div className="mt-5">
+          <p className="text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5" style={{ color: '#7a8aaa' }}>
+            <History size={12} strokeWidth={2.4} /> Previous scholarships ({past.length})
+          </p>
+          <ol className="space-y-2">
+            {past.map(h => (
+              <li key={h.id} className="clay-card-inner px-3.5 py-2.5">
+                <div className="flex items-baseline justify-between gap-3 flex-wrap">
+                  <span className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>{h.scholarshipTypeName}</span>
+                  <span className="text-xs" style={{ color: '#7a8aaa' }}>
+                    {new Date(h.assignedAt).toLocaleDateString('en-PH', { month: 'short', year: 'numeric' })}
+                    {' → '}
+                    {new Date(h.endedAt).toLocaleDateString('en-PH', { month: 'short', year: 'numeric' })}
+                  </span>
+                </div>
+                {h.endReason && (
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--text)' }}>{h.endReason}</p>
+                )}
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── One-off financial awards on top of the scholarship ── */
+function OneTimeGrantsCard({ grants, isAdminOrCoord, onAdd, onRelease }) {
+  const items = grants?.items ?? [];
+
+  return (
+    <div className="clay-card p-6 mb-5">
+      <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+        <h2 className="text-xs font-bold uppercase tracking-wider" style={{ color: '#7a8aaa' }}>
+          One-Time Grants
+        </h2>
+        {isAdminOrCoord && (
+          <button onClick={onAdd} className="text-xs font-medium hover:underline flex items-center gap-1" style={{ color: '#003087' }}>
+            <Plus size={12} strokeWidth={2.8} /> Record grant
+          </button>
+        )}
+      </div>
+
+      {items.length === 0 ? (
+        <p className="text-sm" style={{ color: '#7a8aaa' }}>
+          No one-time grants recorded. These are one-off awards separate from the scholarship above.
+        </p>
+      ) : (
+        <>
+          <div className="flex flex-wrap gap-3 mb-4">
+            <MiniStat label="Awarded" value={peso(grants.totalAmount)} />
+            <MiniStat label="Released" value={peso(grants.releasedAmount)} color="#0a5a3a" />
+            <MiniStat label="Pending" value={peso(grants.pendingAmount)} color="#7d5a00" />
+          </div>
+          <ul className="space-y-2">
+            {items.map(g => (
+              <li key={g.id} className="clay-card-inner px-3.5 py-3">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>{g.title}</p>
+                    <p className="text-xs mt-0.5" style={{ color: '#7a8aaa' }}>
+                      {[g.source, g.purpose].filter(Boolean).join(' · ') || '—'}
+                    </p>
+                    <p className="text-xs mt-0.5" style={{ color: '#9aaabb' }}>
+                      Awarded {new Date(g.awardedOn).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      {g.referenceNo ? ` · ref ${g.referenceNo}` : ''}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0 flex flex-col items-end gap-1.5">
+                    <span className="font-mono font-bold text-sm" style={{ color: 'var(--text-strong)' }}>{peso(g.amount)}</span>
+                    <GrantStatusBadge status={g.releaseStatus} />
+                    {isAdminOrCoord && g.releaseStatus === 'Pending' && (
+                      <button
+                        onClick={() => onRelease(g)}
+                        className="text-xs font-bold hover:underline flex items-center gap-1"
+                        style={{ color: '#166534' }}
+                      >
+                        <BanknoteArrowUp size={11} strokeWidth={2.6} /> Release
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </div>
+  );
+}
+
+function MiniStat({ label, value, color }) {
+  return (
+    <div className="flex-1 min-w-[110px]">
+      <p className="text-xs" style={{ color: '#7a8aaa' }}>{label}</p>
+      <p className="text-sm font-black font-mono mt-0.5" style={{ color: color ?? 'var(--text-strong)' }}>{value}</p>
+    </div>
+  );
+}
+
+/* ── Approve / reject a registration straight from the profile ── */
+function ApprovalDecisionModal({ profile, approve, token, onClose, onDone }) {
+  const [note, setNote] = useState('');
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const canSubmit = approve || note.trim().length >= 5;
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError('');
+    if (!canSubmit) return;
+    setSubmitting(true);
+    try {
+      if (approve) {
+        await approveScholar(profile.userId, note.trim() || null, token);
+        onDone(`${profile.fullName}'s registration is approved.`);
+      } else {
+        await rejectScholar(profile.userId, note.trim(), token);
+        onDone(`${profile.fullName}'s registration was rejected.`);
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <ClayModal
+      title={approve ? 'Approve registration' : 'Reject registration'}
+      subtitle={`${profile.fullName} · ${profile.email}`}
+      onClose={onClose}
+    >
+      {error && <ErrorBox>{error}</ErrorBox>}
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <Field label={approve ? 'Note (optional)' : 'Reason (sent to the scholar)'}>
+          <textarea
+            rows={3}
+            required={!approve}
+            value={note}
+            onChange={e => setNote(e.target.value)}
+            className="clay-input"
+            placeholder={approve ? 'Anything the scholar should know…' : 'Explain what needs fixing…'}
+          />
+        </Field>
+        <p className="text-xs" style={{ color: '#7a8aaa' }}>
+          {approve
+            ? 'The scholar is notified and can start submitting documents immediately.'
+            : 'Document submission stays locked until the registration is approved.'}
+        </p>
+        <ModalButtons
+          onClose={onClose}
+          submitting={submitting}
+          disabled={!canSubmit}
+          label={approve ? 'Approve' : 'Reject'}
+        />
+      </form>
+    </ClayModal>
+  );
+}
+
 function GradeTrendChart({ grades, minimumGwa }) {
+  const { resolved } = useTheme();
+  const t = vizTokens(resolved);
+
   // GWA: lower is better (1.0 best, 5.0 worst). Reverse the Y axis so "up = better".
   const data = [...grades]
     .sort((a, b) => a.academicYear.localeCompare(b.academicYear) || a.semester - b.semester)
@@ -278,15 +637,17 @@ function GradeTrendChart({ grades, minimumGwa }) {
       <h2 className="text-xs font-bold uppercase tracking-wider mb-4" style={{ color: '#7a8aaa' }}>GWA Trend</h2>
       <ResponsiveContainer width="100%" height={220}>
         <LineChart data={data} margin={{ top: 5, right: 12, left: -8, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-          <XAxis dataKey="period" tick={{ fontSize: 11, fill: '#7a8aaa' }} />
-          <YAxis domain={[1, 5]} reversed tick={{ fontSize: 11, fill: '#7a8aaa' }} />
-          <Tooltip formatter={v => [Number(v).toFixed(2), 'GWA']} />
+          <CartesianGrid strokeDasharray="3 3" stroke={t.grid} vertical={false} />
+          <XAxis dataKey="period" tick={{ fontSize: 11, fill: t.axis }} axisLine={false} tickLine={false} />
+          <YAxis domain={[1, 5]} reversed tick={{ fontSize: 11, fill: t.axis }} axisLine={false} tickLine={false} />
+          <Tooltip contentStyle={tooltipStyle(t)} formatter={v => [Number(v).toFixed(2), 'GWA']} />
           {minimumGwa != null && (
             <ReferenceLine y={minimumGwa} stroke="#d05010" strokeDasharray="5 4"
               label={{ value: `Max ${minimumGwa.toFixed(2)}`, fontSize: 10, fill: '#d05010', position: 'insideTopRight' }} />
           )}
-          <Line type="monotone" dataKey="gwa" stroke="#003087" strokeWidth={2.5} dot={{ r: 4, fill: '#003087' }} activeDot={{ r: 6 }} />
+          {/* One series, so no legend box — the heading names it. */}
+          <Line type="monotone" dataKey="gwa" name="GWA" stroke={t.markColor} strokeWidth={2}
+            dot={{ r: 4, fill: t.markColor, stroke: t.gap, strokeWidth: 2 }} activeDot={{ r: 6 }} />
         </LineChart>
       </ResponsiveContainer>
       <p className="text-xs mt-2" style={{ color: '#9aaabb' }}>
@@ -331,11 +692,19 @@ function EditProfileModal({ profile, userId, programs, scholarshipTypes, token, 
     contactNumber: profile?.contactNumber ?? '',
     birthDate: profile?.birthDate ? profile.birthDate.split('T')[0] : '',
     address: profile?.address ?? '',
+    scholarshipChangeReason: '',
   });
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   function set(k, v) { setForm(f => ({ ...f, [k]: v })); }
+
+  // Staff moving a scholar off an existing scholarship: capture why, since it closes
+  // the current assignment and opens a new one in the ledger.
+  const originalTypeId = profile?.scholarshipTypeId ?? '';
+  const isTransfer = !scholarMode
+    && originalTypeId !== ''
+    && String(form.scholarshipTypeId) !== String(originalTypeId);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -366,6 +735,7 @@ function EditProfileModal({ profile, userId, programs, scholarshipTypes, token, 
         contactNumber: form.contactNumber || null,
         birthDate: form.birthDate || null,
         address: form.address || null,
+        scholarshipChangeReason: isTransfer ? (form.scholarshipChangeReason.trim() || null) : null,
       }, token);
       onSaved();
     } catch (err) {
@@ -376,7 +746,7 @@ function EditProfileModal({ profile, userId, programs, scholarshipTypes, token, 
   }
 
   return (
-    <ClayModal title={scholarMode ? 'Edit My Info' : 'Edit Scholar Profile'} onClose={onClose}>
+    <ClayModal title={scholarMode ? 'Edit My Info' : 'Edit Scholar Profile'} onClose={onClose} width={520}>
       {error && <ErrorBox>{error}</ErrorBox>}
       <form onSubmit={handleSubmit} className="space-y-4">
         <Field label="Student ID">
@@ -403,12 +773,34 @@ function EditProfileModal({ profile, userId, programs, scholarshipTypes, token, 
             <option value="">— Select Scholarship Type —</option>
             {scholarshipTypes.map(st => <option key={st.id} value={st.id}>{st.name}</option>)}
           </select>
-          {scholarMode && (
+          {scholarMode ? (
             <p className="text-xs mt-1.5" style={{ color: '#7a8aaa' }}>
-              Choose the scholarship you are enrolled in — this sets which documents you need to submit.
+              Choose the scholarship you are enrolled in — this sets which documents you need to
+              submit. You may hold only one scholarship, and only your coordinator can change it
+              once it is set.
+            </p>
+          ) : (
+            <p className="text-xs mt-1.5" style={{ color: '#7a8aaa' }}>
+              A student may hold only one scholarship at a time. Choosing a different one closes the
+              current assignment and records the transfer.
             </p>
           )}
         </Field>
+
+        {isTransfer && (
+          <Field label="Reason for the transfer">
+            <input
+              value={form.scholarshipChangeReason}
+              onChange={e => set('scholarshipChangeReason', e.target.value)}
+              className="clay-input"
+              placeholder="e.g. Awarded a DOST-SEI slot for A.Y. 2026-2027"
+            />
+            <p className="text-xs mt-1.5" style={{ color: '#b45309' }}>
+              This closes the scholar's current scholarship and opens the new one. The reason is kept
+              in their scholarship history.
+            </p>
+          </Field>
+        )}
         <Field label="Birth Date">
           <input type="date" value={form.birthDate} onChange={e => set('birthDate', e.target.value)} className="clay-input" />
         </Field>
@@ -485,14 +877,11 @@ function AddGradeModal({ userId, token, onClose, onSaved }) {
   );
 }
 
-function ClayModal({ title, onClose, children }) {
+function ClayModal({ title, subtitle, onClose, children, width = 460 }) {
   return (
-    <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{ background: 'rgba(0,20,60,0.45)' }}>
-      <div className="clay-card-modal w-full max-w-md p-7">
-        <h2 className="text-base font-black mb-5" style={{ color: 'var(--text-strong)' }}>{title}</h2>
-        {children}
-      </div>
-    </div>
+    <Modal title={title} subtitle={subtitle} onClose={onClose} width={width}>
+      {children}
+    </Modal>
   );
 }
 
@@ -514,11 +903,12 @@ function Field({ label, children }) {
   );
 }
 
-function ModalButtons({ onClose, submitting, label }) {
+function ModalButtons({ onClose, submitting, label, disabled = false }) {
+  const off = submitting || disabled;
   return (
     <div className="flex gap-3 pt-2">
       <button type="button" onClick={onClose} className="clay-btn clay-btn-ghost flex-1 py-2.5 text-sm">Cancel</button>
-      <button type="submit" disabled={submitting} className="clay-btn clay-btn-primary flex-1 py-2.5 text-sm" style={{ opacity: submitting ? 0.65 : 1 }}>
+      <button type="submit" disabled={off} className="clay-btn clay-btn-primary flex-1 py-2.5 text-sm" style={{ opacity: off ? 0.65 : 1 }}>
         {submitting ? 'Saving…' : label}
       </button>
     </div>
