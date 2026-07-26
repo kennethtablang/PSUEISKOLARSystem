@@ -185,15 +185,18 @@ export default function ProfilePage() {
 
   return (
     <Layout>
-      <div className="p-4 sm:p-8" style={{ maxWidth: '860px' }}>
+      <div className="page-shell">
 
-        <div className="mb-8">
-          <h1 className="page-title">My Profile</h1>
-          <p className="page-subtitle">Manage your account information and security</p>
-          <span className="page-title-bar" />
+        <div className="page-head">
+          <div>
+            <h1 className="page-title">My Profile</h1>
+            <p className="page-subtitle">Manage your account information and security</p>
+            <span className="page-title-bar" />
+          </div>
         </div>
 
-        {/* Identity card */}
+        {/* Identity card — spans the full shell above the split, so the person you are
+            editing is established once before the columns begin. */}
         <div className="clay-card p-6 mb-6">
           <div className="flex items-center gap-5 flex-wrap">
             {/* Photo + its controls. The camera button overlaps the corner so the whole
@@ -279,15 +282,37 @@ export default function ProfilePage() {
               </div>
             </div>
 
+            {/* Account facts. Role and email already read in the block to the left, so
+                these carry things you can't see anywhere else on the page. */}
             <div className="flex gap-3 flex-wrap">
-              <InfoBlock icon={<User size={13} color="#003087" strokeWidth={2} />} label="Role" value={roleBadge.label} />
-              <InfoBlock icon={<Mail size={13} color="#003087" strokeWidth={2} />} label="Email" value={user?.email ?? '—'} />
+              <InfoBlock
+                icon={<User size={13} color="#003087" strokeWidth={2} />}
+                label="Role"
+                value={roleBadge.label}
+              />
+              <InfoBlock
+                icon={<ShieldCheck size={13} color="#003087" strokeWidth={2} />}
+                label="Two-factor"
+                value={twoFaEnabled ? 'Enabled' : 'Off'}
+              />
+              <InfoBlock
+                icon={<Shield size={13} color="#003087" strokeWidth={2} />}
+                label="Privacy notice"
+                value={user?.consentAcceptedAt
+                  ? `v${user.consentVersion} · ${new Date(user.consentAcceptedAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}`
+                  : 'Not accepted'}
+              />
             </div>
           </div>
         </div>
 
+        {/* Working columns: the forms you came here to fill in on the left, account
+            posture and one-off actions in the rail. */}
+        <div className="page-split">
+          <div>
+
         {/* Edit grid */}
-        <div className="grid gap-5 mb-5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))' }}>
+        <div className="card-grid-wide mb-5">
 
           {/* Display name */}
           <div className="clay-card p-6">
@@ -367,72 +392,8 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* 2FA card */}
-        <div className="clay-card p-6">
-          <div className="flex items-start justify-between gap-4 flex-wrap">
-            <div className="flex items-center gap-3">
-              <div style={{
-                width: 44, height: 44, borderRadius: 14, flexShrink: 0,
-                background: twoFaEnabled ? 'rgba(0,48,135,0.08)' : 'rgba(0,0,0,0.04)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                {twoFaEnabled
-                  ? <ShieldCheck size={20} color="#003087" strokeWidth={2} />
-                  : <ShieldOff size={20} color="#7a8aaa" strokeWidth={2} />}
-              </div>
-              <div>
-                <h2 style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-strong)' }}>
-                  Two-Factor Authentication
-                </h2>
-                <p style={{ fontSize: '0.78rem', color: 'var(--text)', marginTop: 2 }}>
-                  {twoFaEnabled
-                    ? 'A verification code will be sent to your email each time you sign in.'
-                    : 'Toggle on to receive an email code at every sign-in for extra security.'}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              {twoFaEnabled ? (
-                <>
-                  <span className="text-xs font-bold px-2.5 py-1 rounded-full"
-                    style={{ background: '#d4f5e2', color: '#065f46', border: '1px solid #a7f3d0' }}>
-                    Enabled
-                  </span>
-                  <button
-                    onClick={() => { setTwoFaMsg(null); setShowDisable2fa(true); }}
-                    className="clay-btn clay-btn-ghost text-sm px-4 py-2"
-                    style={{ color: '#c03030' }}>
-                    Disable
-                  </button>
-                </>
-              ) : (
-                <>
-                  <span className="text-xs font-bold px-2.5 py-1 rounded-full"
-                    style={{ background: 'rgba(0,0,0,0.06)', color: '#7a8aaa', border: '1px solid rgba(0,0,0,0.1)' }}>
-                    Disabled
-                  </span>
-                  <button
-                    onClick={handleEnable2fa}
-                    disabled={enabling2fa}
-                    className="clay-btn clay-btn-primary text-sm px-4 py-2"
-                    style={{ opacity: enabling2fa ? 0.65 : 1 }}>
-                    {enabling2fa ? 'Enabling…' : 'Enable 2FA'}
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-
-          {twoFaMsg && (
-            <div className="mt-4">
-              <StatusMsg msg={twoFaMsg} />
-            </div>
-          )}
-        </div>
-
         {/* Notifications & Privacy (FR-19 / FR-20) */}
-        <div className="clay-card p-6 mt-5">
+        <div className="clay-card p-6">
           <div className="flex items-center gap-2 mb-5">
             <div style={{ width: 32, height: 32, borderRadius: 10, background: 'rgba(0,48,135,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Bell size={15} color="#003087" strokeWidth={2} />
@@ -489,28 +450,91 @@ export default function ProfilePage() {
             {savingPrefs ? 'Saving…' : 'Save Preferences'}
           </button>
           {prefsMsg && <StatusMsg msg={prefsMsg} />}
+        </div>
 
-          <div style={{ height: 1, background: 'rgba(0,0,0,0.07)', margin: '20px 0' }} />
-          <h2 style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-strong)' }} className="mb-1.5">Guided Tour</h2>
-          <p className="text-sm mb-3" style={{ color: 'var(--text)' }}>
-            New here or need a refresher? Replay the walkthrough of the system's main features.
-          </p>
-          <button onClick={openTutorial} className="clay-btn clay-btn-ghost px-5 py-2.5 text-sm flex items-center gap-2">
-            <Sparkles size={15} strokeWidth={2.4} /> Replay Tutorial
-          </button>
+          </div>
 
-          {user?.role === 'Scholar' && (
-            <>
-              <div style={{ height: 1, background: 'rgba(0,0,0,0.07)', margin: '20px 0' }} />
-              <h2 style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-strong)' }} className="mb-1.5">Your Data (RA 10173)</h2>
-              <p className="text-sm mb-3" style={{ color: 'var(--text)' }}>
-                Download a copy of the personal data PSU e-Iskolar holds about you.
+          {/* ── Rail: account posture and one-off actions ── */}
+          <aside className="page-rail space-y-5">
+
+            {/* 2FA — laid out vertically for the rail's width, status leading. */}
+            <div className="clay-card p-5">
+              <div className="flex items-center gap-3 mb-3">
+                <div style={{
+                  width: 40, height: 40, borderRadius: 13, flexShrink: 0,
+                  background: twoFaEnabled ? 'rgba(0,48,135,0.08)' : 'rgba(0,0,0,0.04)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  {twoFaEnabled
+                    ? <ShieldCheck size={18} color="#003087" strokeWidth={2} />
+                    : <ShieldOff size={18} color="#7a8aaa" strokeWidth={2} />}
+                </div>
+                <div className="min-w-0">
+                  <h2 style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-strong)' }}>
+                    Two-Factor Authentication
+                  </h2>
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full inline-block mt-1"
+                    style={twoFaEnabled
+                      ? { background: '#d4f5e2', color: '#065f46', border: '1px solid #a7f3d0' }
+                      : { background: 'rgba(0,0,0,0.06)', color: '#7a8aaa', border: '1px solid rgba(0,0,0,0.1)' }}>
+                    {twoFaEnabled ? 'Enabled' : 'Disabled'}
+                  </span>
+                </div>
+              </div>
+
+              <p style={{ fontSize: '0.78rem', color: 'var(--text)', lineHeight: 1.5 }} className="mb-3">
+                {twoFaEnabled
+                  ? 'A verification code is sent to your email each time you sign in.'
+                  : 'Turn on to receive an email code at every sign-in for extra security.'}
               </p>
-              <button onClick={handleDownloadData} className="clay-btn clay-btn-ghost px-5 py-2.5 text-sm flex items-center gap-2">
-                <Download size={15} strokeWidth={2.4} /> Download my data
+
+              {twoFaEnabled ? (
+                <button
+                  onClick={() => { setTwoFaMsg(null); setShowDisable2fa(true); }}
+                  className="clay-btn clay-btn-ghost text-sm px-4 py-2 w-full"
+                  style={{ color: '#c03030' }}>
+                  Disable 2FA
+                </button>
+              ) : (
+                <button
+                  onClick={handleEnable2fa}
+                  disabled={enabling2fa}
+                  className="clay-btn clay-btn-primary text-sm px-4 py-2 w-full"
+                  style={{ opacity: enabling2fa ? 0.65 : 1 }}>
+                  {enabling2fa ? 'Enabling…' : 'Enable 2FA'}
+                </button>
+              )}
+
+              {twoFaMsg && <StatusMsg msg={twoFaMsg} />}
+            </div>
+
+            {/* Guided tour */}
+            <div className="clay-card p-5">
+              <h2 style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-strong)' }} className="mb-1.5">
+                Guided Tour
+              </h2>
+              <p className="text-sm mb-3" style={{ color: 'var(--text)', lineHeight: 1.5 }}>
+                New here or need a refresher? Replay the walkthrough of the system's main features.
+              </p>
+              <button onClick={openTutorial} className="clay-btn clay-btn-ghost px-4 py-2 text-sm w-full flex items-center justify-center gap-2">
+                <Sparkles size={15} strokeWidth={2.4} /> Replay Tutorial
               </button>
-            </>
-          )}
+            </div>
+
+            {user?.role === 'Scholar' && (
+              <div className="clay-card p-5">
+                <h2 style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-strong)' }} className="mb-1.5">
+                  Your Data (RA 10173)
+                </h2>
+                <p className="text-sm mb-3" style={{ color: 'var(--text)', lineHeight: 1.5 }}>
+                  Download a copy of the personal data PSU e-Iskolar holds about you.
+                </p>
+                <button onClick={handleDownloadData} className="clay-btn clay-btn-ghost px-4 py-2 text-sm w-full flex items-center justify-center gap-2">
+                  <Download size={15} strokeWidth={2.4} /> Download my data
+                </button>
+              </div>
+            )}
+          </aside>
         </div>
 
       </div>

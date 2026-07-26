@@ -8,7 +8,7 @@ import { getScholarshipTypes } from '../api/lookups';
 import { getActiveSemester } from '../api/settings';
 import { getDeadlines } from '../api/deadlines';
 import { useTitle } from '../hooks/useTitle';
-import { Eye, X, Download, FileText, Image, FileX, Loader, BookOpen, ChevronDown, ChevronUp, CalendarClock, Lock } from 'lucide-react';
+import { Eye, X, Download, Image, FileX, Loader, BookOpen, ChevronDown, ChevronUp, CalendarClock, Lock } from 'lucide-react';
 import ImageLightbox from '../components/ImageLightbox';
 import InfoTip from '../components/InfoTip';
 
@@ -211,9 +211,12 @@ export default function MyDocumentsPage() {
             borderRight: preview ? '1.5px solid var(--surface-inset)' : 'none',
           }}
         >
-          <div className="p-4 sm:p-8" style={{ maxWidth: preview ? undefined : '768px' }}>
+          {/* A checklist is a single-column reading task, so it keeps a readable measure —
+              but centred in the pane rather than pinned to the left with a void beside it.
+              With the preview open the pane is already half-width, so it fills instead. */}
+          <div className={`page-shell${preview ? '' : ' page-shell-narrow'}`}>
 
-            <div className="flex items-start justify-between mb-6 flex-wrap gap-3">
+            <div className="page-head">
               <div>
                 <h1 className="page-title">My Documents</h1>
                 <p className="page-subtitle" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

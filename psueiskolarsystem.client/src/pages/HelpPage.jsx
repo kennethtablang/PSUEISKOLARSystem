@@ -1,9 +1,10 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { useTutorial } from '../context/TutorialContext';
 import { useTitle } from '../hooks/useTitle';
-import { HelpCircle, ChevronDown, ChevronUp, PlayCircle, Mail } from 'lucide-react';
+import { HelpCircle, ChevronDown, ChevronUp, PlayCircle, Mail, MessageSquare, Clock } from 'lucide-react';
 
 // Role-tagged FAQ entries. Entries with no `roles` show for everyone.
 const FAQS = [
@@ -79,35 +80,66 @@ export default function HelpPage() {
 
   return (
     <Layout>
-      <div className="p-4 sm:p-8" style={{ maxWidth: 760 }}>
-        <div className="mb-7">
-          <h1 className="page-title flex items-center gap-2">
-            <HelpCircle size={22} strokeWidth={2.2} style={{ color: '#003087' }} /> Help &amp; FAQ
-          </h1>
-          <p className="page-subtitle">Answers to common questions about using PSU e-Iskolar.</p>
-          <span className="page-title-bar" />
-        </div>
-
-        {openTutorial && (
-          <button onClick={openTutorial} className="clay-btn clay-btn-ghost px-4 py-2.5 text-sm flex items-center gap-2 mb-6">
-            <PlayCircle size={15} strokeWidth={2.3} /> Replay the guided tour
-          </button>
-        )}
-
-        <div className="space-y-3">
-          {faqs.map(f => <FaqItem key={f.q} {...f} />)}
-        </div>
-
-        <div className="clay-card p-5 mt-6 flex items-start gap-3">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(0,48,135,0.08)' }}>
-            <Mail size={16} strokeWidth={2.2} color="#003087" />
-          </div>
+      <div className="page-shell">
+        <div className="page-head">
           <div>
-            <p className="text-sm font-bold" style={{ color: 'var(--text-strong)' }}>Still need help?</p>
-            <p className="text-sm mt-0.5" style={{ color: 'var(--text)' }}>
-              Use the Messages page to reach a scholarship coordinator, or contact the PSU Lingayen scholarship office directly.
+            <h1 className="page-title flex items-center gap-2">
+              <HelpCircle size={22} strokeWidth={2.2} style={{ color: '#003087' }} /> Help &amp; FAQ
+            </h1>
+            <p className="page-subtitle">
+              {faqs.length} answer{faqs.length === 1 ? '' : 's'} to common questions about using PSU e-Iskolar.
             </p>
+            <span className="page-title-bar" />
           </div>
+          {openTutorial && (
+            <div className="page-head-actions">
+              <button onClick={openTutorial} className="clay-btn clay-btn-ghost px-4 py-2.5 text-sm flex items-center gap-2">
+                <PlayCircle size={15} strokeWidth={2.3} /> Replay the guided tour
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="page-split">
+          {/* Questions stay one per row: an accordion in a grid would shunt its
+              neighbours down every time an answer opened. */}
+          <div className="space-y-3">
+            {faqs.map(f => <FaqItem key={f.q} {...f} />)}
+          </div>
+
+          <aside className="page-rail space-y-5">
+            <div className="clay-card p-5">
+              <div className="flex items-center gap-2.5 mb-2">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(0,48,135,0.08)' }}>
+                  <Mail size={16} strokeWidth={2.2} color="#003087" />
+                </div>
+                <p className="text-sm font-bold" style={{ color: 'var(--text-strong)' }}>Still need help?</p>
+              </div>
+              <p className="text-sm mb-3" style={{ color: 'var(--text)', lineHeight: 1.55 }}>
+                Message a scholarship coordinator and they'll reply within 2 working days, or
+                visit the scholarship office in person.
+              </p>
+              <Link to="/messages" className="clay-btn clay-btn-primary px-4 py-2 text-sm w-full flex items-center justify-center gap-2">
+                <MessageSquare size={14} strokeWidth={2.4} /> Message a coordinator
+              </Link>
+            </div>
+
+            <div className="clay-card p-5">
+              <p className="rail-heading">Scholarship Office</p>
+              <p className="text-sm font-bold" style={{ color: 'var(--text-strong)' }}>
+                Office of the Coordinator for School Student Affairs
+              </p>
+              <p className="text-sm mt-1" style={{ color: 'var(--text)', lineHeight: 1.55 }}>
+                Pangasinan State University — Lingayen Campus
+              </p>
+              <div className="flex items-center gap-1.5 mt-3">
+                <Clock size={13} strokeWidth={2.2} style={{ color: '#7a8aaa' }} />
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  Monday to Friday, 8:00 AM – 5:00 PM
+                </p>
+              </div>
+            </div>
+          </aside>
         </div>
       </div>
     </Layout>

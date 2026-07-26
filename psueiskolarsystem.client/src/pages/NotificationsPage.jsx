@@ -1,12 +1,12 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
 import { getNotifications, markRead, markUnread, markAllRead, deleteNotification } from '../api/notifications';
 import { useTitle } from '../hooks/useTitle';
 import { NOTIFICATION_CATEGORIES, NOTIFICATION_FILTER_CATEGORIES } from '../constants/notifications';
-import { Bell, FileCheck, Megaphone, Clock, MessageSquare, UserCog, CheckCheck, Undo2, Trash2 } from 'lucide-react';
+import { Bell, FileCheck, Megaphone, Clock, MessageSquare, UserCog, CheckCheck, Undo2, Trash2, Settings } from 'lucide-react';
 
 const C = NOTIFICATION_CATEGORIES;
 const CATEGORY_META = {
@@ -81,38 +81,22 @@ export default function NotificationsPage() {
 
   return (
     <Layout>
-      <div className="p-4 sm:p-8 max-w-3xl">
-        <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+      <div className="page-shell">
+        <div className="page-head">
           <div>
             <h1 className="page-title">Notifications</h1>
             <p className="page-subtitle">{paging.total} total</p>
             <span className="page-title-bar" />
           </div>
-          <button onClick={handleMarkAll} className="clay-btn clay-btn-ghost px-4 py-2 text-sm flex items-center gap-2">
-            <CheckCheck size={15} strokeWidth={2.4} /> Mark all read
-          </button>
-        </div>
-
-        {/* Filters */}
-        <div className="flex flex-wrap gap-2 mb-5 items-center">
-          {FILTERS.map(f => (
-            <button
-              key={f || 'all'}
-              onClick={() => setCategory(f)}
-              className="clay-btn px-3 py-1.5 text-xs font-semibold"
-              style={category === f
-                ? { background: 'rgba(0,37,112,0.10)', color: '#002570', border: '1.5px solid rgba(0,37,112,0.25)' }
-                : { color: 'var(--text)' }}
-            >
-              {f ? (CATEGORY_META[f]?.label ?? f) : 'All'}
+          <div className="page-head-actions">
+            <button onClick={handleMarkAll} className="clay-btn clay-btn-ghost px-4 py-2 text-sm flex items-center gap-2">
+              <CheckCheck size={15} strokeWidth={2.4} /> Mark all read
             </button>
-          ))}
-          <label className="flex items-center gap-1.5 text-xs font-semibold ml-2 cursor-pointer" style={{ color: 'var(--text)' }}>
-            <input type="checkbox" checked={unreadOnly} onChange={e => setUnreadOnly(e.target.checked)} style={{ accentColor: '#003087' }} />
-            Unread only
-          </label>
+          </div>
         </div>
 
+        <div className="page-split">
+          <div>
         <div className="clay-card overflow-hidden">
           {loading ? (
             <p className="text-center py-12 text-sm" style={{ color: '#7a8aaa' }}>Loading…</p>
@@ -176,6 +160,58 @@ export default function NotificationsPage() {
             </div>
           </div>
         )}
+          </div>
+
+          {/* Filters live in the rail: as a vertical list they read as a table of
+              contents for the feed, and the feed itself gets the full column. */}
+          <aside className="page-rail space-y-5">
+            <div className="clay-card p-5">
+              <p className="rail-heading">Filter by category</p>
+              <div className="space-y-1">
+                {FILTERS.map(f => {
+                  const active = category === f;
+                  const meta = f ? CATEGORY_META[f] : null;
+                  const Icon = meta?.Icon ?? Bell;
+                  return (
+                    <button
+                      key={f || 'all'}
+                      onClick={() => setCategory(f)}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-semibold text-left"
+                      style={active
+                        ? { background: 'rgba(0,37,112,0.10)', color: '#002570', border: '1.5px solid rgba(0,37,112,0.25)' }
+                        : { color: 'var(--text)', border: '1.5px solid transparent' }}
+                    >
+                      <span className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+                        style={{ background: meta?.bg ?? 'rgba(0,48,135,0.08)' }}>
+                        <Icon size={14} strokeWidth={2.2} color={meta?.color ?? '#003087'} />
+                      </span>
+                      {f ? (meta?.label ?? f) : 'All notifications'}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div style={{ height: 1, background: 'rgba(0,0,0,0.07)', margin: '14px 0 12px' }} />
+
+              <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer" style={{ color: 'var(--text)' }}>
+                <input type="checkbox" checked={unreadOnly} onChange={e => setUnreadOnly(e.target.checked)}
+                  style={{ width: 16, height: 16, accentColor: '#003087' }} />
+                Unread only
+              </label>
+            </div>
+
+            <div className="clay-card p-5">
+              <p className="rail-heading">Too many notifications?</p>
+              <p className="text-sm mb-3" style={{ color: 'var(--text)', lineHeight: 1.55 }}>
+                You can silence a whole category in the bell — account and security notices
+                always come through.
+              </p>
+              <Link to="/profile" className="clay-btn clay-btn-ghost px-4 py-2 text-sm w-full flex items-center justify-center gap-2">
+                <Settings size={14} strokeWidth={2.4} /> Notification preferences
+              </Link>
+            </div>
+          </aside>
+        </div>
       </div>
     </Layout>
   );

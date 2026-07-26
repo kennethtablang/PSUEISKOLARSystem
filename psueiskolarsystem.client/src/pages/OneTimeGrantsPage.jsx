@@ -96,8 +96,8 @@ export default function OneTimeGrantsPage() {
 
   return (
     <Layout>
-      <div className="p-4 sm:p-8">
-        <div className="flex items-center justify-between gap-3 flex-wrap mb-6">
+      <div className="page-shell">
+        <div className="page-head">
           <div>
             <h1 className="page-title">One-Time Grants</h1>
             <p className="page-subtitle">
