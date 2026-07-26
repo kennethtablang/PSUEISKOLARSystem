@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { AlertTriangle, Printer, Award, ShieldCheck, ShieldX, Plus, BanknoteArrowUp, History } from 'lucide-react';
+import { AlertTriangle, Printer, Award, ShieldCheck, ShieldX, Plus, BanknoteArrowUp, History, Camera } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
@@ -9,6 +9,7 @@ import { getScholarProfile, upsertScholarProfile, getGrades, addGrade, setLifecy
 import { getPrograms, getScholarshipTypes } from '../api/lookups';
 import { getOneTimeGrants, releaseOneTimeGrant } from '../api/oneTimeGrants';
 import { approveScholar, rejectScholar } from '../api/scholarApprovals';
+import { uploadAvatarFor, clearAvatarCache } from '../api/avatars';
 import { useTitle } from '../hooks/useTitle';
 import { useTheme } from '../context/ThemeContext';
 import { vizTokens, tooltipStyle } from '../constants/viz';
@@ -83,6 +84,38 @@ export default function ScholarDetailPage() {
   const targetUserId   = userId ?? currentUser?.id;
   const isOwnProfile   = !isAdminOrCoord && currentUser?.id === targetUserId;
 
+  /* Staff-side profile photo. Scholars manage their own from My Profile; this is here so
+     the office can attach an ID photo or take down an inappropriate one. */
+  const [photoBusy, setPhotoBusy]       = useState(false);
+  const [photoVersion, setPhotoVersion] = useState(0);
+  const photoInput = useRef(null);
+
+  async function handlePhotoPicked(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    if (!/\.(png|jpe?g|webp)$/i.test(file.name)) {
+      toast('Profile photo must be a PNG, JPG, or WEBP image.', 'error');
+      return;
+    }
+    if (file.size > 4 * 1024 * 1024) {
+      toast('Profile photo must be 4 MB or smaller.', 'error');
+      return;
+    }
+
+    setPhotoBusy(true);
+    try {
+      await uploadAvatarFor(targetUserId, file, token);
+      clearAvatarCache(targetUserId);
+      setPhotoVersion(v => v + 1);
+      await load();
+      toast('Profile photo updated.', 'success');
+    } catch (err) {
+      toast(err.message, 'error');
+    } finally { setPhotoBusy(false); }
+  }
+
   async function load() {
     setLoading(true);
     try {
@@ -122,7 +155,7 @@ export default function ScholarDetailPage() {
 
   return (
     <Layout>
-      <div className="p-4 sm:p-8 max-w-5xl">
+      <div className="page-shell">
         <button onClick={() => navigate(-1)} className="text-sm mb-5 flex items-center gap-1 hover:underline" style={{ color: 'var(--text)' }}>
           ← Back
         </button>
@@ -130,14 +163,50 @@ export default function ScholarDetailPage() {
         <div className="flex items-start justify-between mb-6 gap-4 flex-wrap">
           <div className="flex items-center gap-4 min-w-0">
             {profile && (
-              <Avatar
-                userId={profile.userId}
-                name={profile.fullName}
-                hasAvatar={profile.hasAvatar}
-                size={56}
-                radius={16}
-                style={{ boxShadow: '4px 4px 0 rgba(0,0,0,0.1)' }}
-              />
+              <div style={{ position: 'relative', flexShrink: 0 }}>
+                <Avatar
+                  userId={profile.userId}
+                  name={profile.fullName}
+                  hasAvatar={profile.hasAvatar}
+                  version={photoVersion}
+                  size={56}
+                  radius={16}
+                  style={{
+                    boxShadow: '4px 4px 0 rgba(0,0,0,0.1)',
+                    opacity: photoBusy ? 0.55 : 1,
+                    transition: 'opacity 0.15s',
+                  }}
+                />
+                {/* Staff can set or clear a scholar's photo — e.g. attaching an ID photo
+                    on their behalf, or removing an inappropriate one. */}
+                {isAdminOrCoord && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => photoInput.current?.click()}
+                      disabled={photoBusy}
+                      title={profile.hasAvatar ? 'Replace photo' : 'Upload a photo'}
+                      style={{
+                        position: 'absolute', right: -5, bottom: -5,
+                        width: 24, height: 24, borderRadius: 8, border: 'none',
+                        cursor: photoBusy ? 'wait' : 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        background: '#003087', color: '#fff',
+                        boxShadow: '2px 2px 0 rgba(0,0,0,0.15)',
+                      }}
+                    >
+                      <Camera size={12} strokeWidth={2.4} />
+                    </button>
+                    <input
+                      ref={photoInput}
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      onChange={handlePhotoPicked}
+                      style={{ display: 'none' }}
+                    />
+                  </>
+                )}
+              </div>
             )}
             <div className="min-w-0">
               <h1 className="page-title">{profile?.fullName ?? 'Scholar Profile'}</h1>
@@ -249,28 +318,32 @@ export default function ScholarDetailPage() {
               )}
             </div>
 
-            <div className="clay-card p-6 mb-5">
-              <h2 className="text-xs font-bold uppercase tracking-wider mb-4" style={{ color: '#7a8aaa' }}>Scholar Information</h2>
-              <dl className="grid grid-cols-2 gap-x-8 gap-y-4">
-                <Detail label="Student ID" value={profile.studentId} />
-                <Detail label="Year Level" value={`Year ${profile.yearLevel}`} />
-                <Detail label="Program" value={profile.programName ?? '—'} />
-                <Detail label="Scholarship Type" value={profile.scholarshipTypeName ?? '—'} />
-                <Detail label="Type Category" value={profile.scholarshipTypeCategory ?? '—'} />
-                <Detail label="Min. GWA Required" value={profile.minimumGwa?.toFixed(2) ?? '—'} />
-                <Detail label="Contact Number" value={profile.contactNumber ?? '—'} />
-                <Detail label="Birth Date" value={profile.birthDate ? new Date(profile.birthDate).toLocaleDateString('en-PH') : '—'} />
-                {profile.address && <Detail label="Address" value={profile.address} />}
-              </dl>
-            </div>
+            {/* The two reference cards sit side by side on a wide screen — who the scholar
+                is, and what they hold — instead of stacking down a narrow column. */}
+            <div className="card-grid-wide mb-5">
+              <div className="clay-card p-6">
+                <h2 className="text-xs font-bold uppercase tracking-wider mb-4" style={{ color: '#7a8aaa' }}>Scholar Information</h2>
+                <dl className="grid grid-cols-2 gap-x-8 gap-y-4">
+                  <Detail label="Student ID" value={profile.studentId} />
+                  <Detail label="Year Level" value={`Year ${profile.yearLevel}`} />
+                  <Detail label="Program" value={profile.programName ?? '—'} />
+                  <Detail label="Scholarship Type" value={profile.scholarshipTypeName ?? '—'} />
+                  <Detail label="Type Category" value={profile.scholarshipTypeCategory ?? '—'} />
+                  <Detail label="Min. GWA Required" value={profile.minimumGwa?.toFixed(2) ?? '—'} />
+                  <Detail label="Contact Number" value={profile.contactNumber ?? '—'} />
+                  <Detail label="Birth Date" value={profile.birthDate ? new Date(profile.birthDate).toLocaleDateString('en-PH') : '—'} />
+                  {profile.address && <Detail label="Address" value={profile.address} />}
+                </dl>
+              </div>
 
-            {/* The one scholarship this student holds, plus the full assignment trail */}
-            <ScholarshipCard
-              profile={profile}
-              history={scholarshipHistory}
-              isAdminOrCoord={isAdminOrCoord}
-              onChange={() => setEditing(true)}
-            />
+              {/* The one scholarship this student holds, plus the full assignment trail */}
+              <ScholarshipCard
+                profile={profile}
+                history={scholarshipHistory}
+                isAdminOrCoord={isAdminOrCoord}
+                onChange={() => setEditing(true)}
+              />
+            </div>
 
             {/* One-time grants — one-off awards on top of the scholarship */}
             <OneTimeGrantsCard
@@ -391,7 +464,8 @@ function ScholarshipCard({ profile, history, isAdminOrCoord, onChange }) {
   const conflict = history.filter(h => h.isActive).length > 1;
 
   return (
-    <div className="clay-card p-6 mb-5">
+    /* No bottom margin: this card is a grid item now, so the grid owns the spacing. */
+    <div className="clay-card p-6">
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
         <h2 className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5" style={{ color: '#7a8aaa' }}>
           <Award size={13} strokeWidth={2.4} /> Scholarship

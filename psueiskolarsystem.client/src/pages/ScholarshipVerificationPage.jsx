@@ -39,7 +39,7 @@ export default function ScholarshipVerificationPage() {
 
   return (
     <Layout>
-      <div className="p-4 sm:p-8">
+      <div className="page-shell">
         <div className="flex items-start justify-between gap-3 flex-wrap mb-6">
           <div>
             <h1 className="page-title">Scholarship Verification</h1>
