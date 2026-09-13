@@ -79,7 +79,7 @@ namespace PSUEISKOLARSystem.Server.Data
             // Seed accounts: Administrator, Coordinator, Scholar
             var seedAccounts = new[]
             {
-                (Email: "c",       FirstName: "System", MiddleName: (string?)null, LastName: "Administrator", Role: UserRoles.Administrator,          Password: "ChangeMe123!"),
+                (Email: "admin@psu.edu.ph",       FirstName: "System", MiddleName: (string?)null, LastName: "Administrator", Role: UserRoles.Administrator,          Password: "ChangeMe123!"),
                 (Email: "coordinator@psu.edu.ph", FirstName: "Maria",  MiddleName: (string?)null, LastName: "Santos",        Role: UserRoles.ScholarshipCoordinator, Password: "ChangeMe123!"),
                 (Email: "scholar@psu.edu.ph",     FirstName: "Juan",   MiddleName: "Dela",        LastName: "Cruz",          Role: UserRoles.Scholar,               Password: "ChangeMe123!"),
             };
