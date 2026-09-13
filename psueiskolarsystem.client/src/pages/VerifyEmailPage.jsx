@@ -40,7 +40,7 @@ export default function VerifyEmailPage() {
           <Logo size={44} shadow="0 3px 0px rgba(0,37,112,0.35)" />
           <div>
             <p className="font-black text-lg leading-tight" style={{ color: 'var(--text-strong)' }}>e-Iskolar</p>
-            <p className="text-xs" style={{ color: '#7a8aaa' }}>Lingayen Campus</p>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Lingayen Campus</p>
           </div>
         </div>
 
@@ -50,7 +50,7 @@ export default function VerifyEmailPage() {
             <>
               <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
                 style={{ background: 'rgba(0,37,112,0.08)', border: '2px solid rgba(0,37,112,0.15)' }}>
-                <Loader size={28} color="#002570" strokeWidth={2} className="animate-spin" />
+                <Loader size={28} style={{ color: 'var(--accent-strong)' }} strokeWidth={2} className="animate-spin" />
               </div>
               <p className="font-black text-lg mb-2" style={{ color: 'var(--text-strong)' }}>Verifying your email…</p>
               <p className="text-sm" style={{ color: 'var(--text)' }}>Please wait a moment.</p>
@@ -79,8 +79,8 @@ export default function VerifyEmailPage() {
           {status === 'error' && (
             <>
               <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
-                style={{ background: '#fff0f0', border: '2px solid #f5b0b0' }}>
-                <AlertTriangle size={28} color="#b03030" strokeWidth={2} />
+                style={{ background: 'var(--danger-bg)', border: '2px solid var(--danger-border)' }}>
+                <AlertTriangle size={28} style={{ color: 'var(--danger)' }} strokeWidth={2} />
               </div>
               <p className="font-black text-lg mb-2" style={{ color: 'var(--text-strong)' }}>Verification Failed</p>
               <p className="text-sm mb-6 leading-relaxed" style={{ color: 'var(--text)' }}>
@@ -97,7 +97,7 @@ export default function VerifyEmailPage() {
 
         </div>
 
-        <p className="text-center text-xs mt-5" style={{ color: '#9aaabb' }}>
+        <p className="text-center text-xs mt-5" style={{ color: 'var(--text-faint)' }}>
           PSU e-Iskolar · Scholar Profiling and Records Management System
         </p>
       </div>

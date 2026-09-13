@@ -16,7 +16,7 @@ const CATEGORY_META = {
   [C.Message]:        { Icon: MessageSquare, color: '#4338ca', bg: 'rgba(67,56,202,0.1)', label: 'Message' },
   [C.Account]:        { Icon: UserCog,   color: '#334155', bg: 'rgba(51,65,85,0.1)', label: 'Account' },
 };
-const DEFAULT_META = { Icon: Bell, color: '#003087', bg: 'rgba(0,48,135,0.08)', label: 'General' };
+const DEFAULT_META = { Icon: Bell, color: 'var(--accent)', bg: 'var(--accent-wash)', label: 'General' };
 const FILTERS = ['', ...NOTIFICATION_FILTER_CATEGORIES];
 
 function timeAgo(iso) {
@@ -99,11 +99,11 @@ export default function NotificationsPage() {
           <div>
         <div className="clay-card overflow-hidden">
           {loading ? (
-            <p className="text-center py-12 text-sm" style={{ color: '#7a8aaa' }}>Loading…</p>
+            <p className="text-center py-12 text-sm" style={{ color: 'var(--text-muted)' }}>Loading…</p>
           ) : items.length === 0 ? (
             <div className="text-center py-14">
               <Bell size={28} strokeWidth={1.5} color="rgba(0,48,135,0.25)" />
-              <p className="mt-2 text-sm" style={{ color: '#7a8aaa' }}>No notifications.</p>
+              <p className="mt-2 text-sm" style={{ color: 'var(--text-muted)' }}>No notifications.</p>
             </div>
           ) : items.map(n => {
             const meta = CATEGORY_META[n.category] ?? DEFAULT_META;
@@ -116,7 +116,7 @@ export default function NotificationsPage() {
                 style={{ borderBottom: '1px solid rgba(0,48,135,0.05)', background: n.isRead ? 'transparent' : 'rgba(0,48,135,0.035)' }}
               >
                 <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: meta.bg }}>
-                  <Icon size={17} strokeWidth={2.2} color={meta.color} />
+                  <Icon size={17} strokeWidth={2.2} style={{ color: meta.color }} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -132,7 +132,7 @@ export default function NotificationsPage() {
                       onClick={e => { e.stopPropagation(); handleMarkUnread(n); }}
                       title="Mark as unread"
                       className="p-1.5 rounded-lg hover:bg-black/5"
-                      style={{ color: '#7a8aaa' }}>
+                      style={{ color: 'var(--text-muted)' }}>
                       <Undo2 size={15} strokeWidth={2.2} />
                     </button>
                   )}
@@ -151,7 +151,7 @@ export default function NotificationsPage() {
 
         {!loading && paging.totalPages > 1 && (
           <div className="flex items-center justify-between mt-4">
-            <p className="text-xs" style={{ color: '#7a8aaa' }}>Page {paging.page} of {paging.totalPages}</p>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Page {paging.page} of {paging.totalPages}</p>
             <div className="flex gap-2">
               <button onClick={() => load(paging.page - 1)} disabled={paging.page <= 1}
                 className="clay-btn clay-btn-ghost text-xs px-4" style={{ minHeight: 34, opacity: paging.page <= 1 ? 0.4 : 1 }}>Previous</button>
@@ -178,12 +178,12 @@ export default function NotificationsPage() {
                       onClick={() => setCategory(f)}
                       className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-semibold text-left"
                       style={active
-                        ? { background: 'rgba(0,37,112,0.10)', color: '#002570', border: '1.5px solid rgba(0,37,112,0.25)' }
+                        ? { background: 'rgba(0,37,112,0.10)', color: 'var(--accent-strong)', border: '1.5px solid rgba(0,37,112,0.25)' }
                         : { color: 'var(--text)', border: '1.5px solid transparent' }}
                     >
                       <span className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
                         style={{ background: meta?.bg ?? 'rgba(0,48,135,0.08)' }}>
-                        <Icon size={14} strokeWidth={2.2} color={meta?.color ?? '#003087'} />
+                        <Icon size={14} strokeWidth={2.2} style={{ color: meta?.color ?? 'var(--accent)' }} />
                       </span>
                       {f ? (meta?.label ?? f) : 'All notifications'}
                     </button>
@@ -195,7 +195,7 @@ export default function NotificationsPage() {
 
               <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer" style={{ color: 'var(--text)' }}>
                 <input type="checkbox" checked={unreadOnly} onChange={e => setUnreadOnly(e.target.checked)}
-                  style={{ width: 16, height: 16, accentColor: '#003087' }} />
+                  style={{ width: 16, height: 16, accentColor: 'var(--accent)' }} />
                 Unread only
               </label>
             </div>

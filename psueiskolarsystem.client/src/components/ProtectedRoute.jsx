@@ -7,7 +7,7 @@ export default function ProtectedRoute({ children, roles }) {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen" style={{ background: 'var(--bg)' }}>
-        <div className="text-sm" style={{ color: '#7a8aaa' }}>Loading…</div>
+        <div className="text-sm" style={{ color: 'var(--text-muted)' }}>Loading…</div>
       </div>
     );
   }

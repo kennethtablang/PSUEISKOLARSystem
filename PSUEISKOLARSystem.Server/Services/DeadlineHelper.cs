@@ -8,10 +8,16 @@ namespace PSUEISKOLARSystem.Server.Services
 
     public static class DeadlineHelper
     {
-        // Active scholars to whom a requirement applies, mirroring the fallback semantics
-        // of DocumentRequirementsController.GetAll: a scholar sees a requirement if they have
-        // no scholarship type, or their type has no configured requirement links, or their
-        // type is explicitly linked to this requirement.
+        /* Scholars to whom a requirement applies, mirroring the fallback semantics of
+           DocumentRequirementsController.GetAll: a scholar sees a requirement if they have no
+           scholarship type, or their type has no configured requirement links, or their type
+           is explicitly linked to this requirement.
+
+           "Applies" also means the scholar can actually act on it. The roster used to be
+           filtered on the Scholar role and IsActive alone, so the reminder sweep chased
+           people whose upload the server refuses: Pending-approval scholars are told to
+           submit and then blocked from submitting, Rejected ones permanently, and Graduated
+           ones have nothing left to submit. */
         public static async Task<List<ApplicableScholar>> GetApplicableScholarsAsync(ApplicationDbContext db, int requirementId)
         {
             var batch = await GetApplicableScholarsBatchAsync(db, [requirementId]);
@@ -44,8 +50,11 @@ namespace PSUEISKOLARSystem.Server.Services
                 from u in db.Users
                 join ur in db.UserRoles on u.Id equals ur.UserId
                 join r in db.Roles on ur.RoleId equals r.Id
-                where r.Name == UserRoles.Scholar && u.IsActive
+                where r.Name == UserRoles.Scholar
+                   && u.IsActive
+                   && u.ApprovalStatus == ApprovalStatuses.Approved
                 from sp in db.ScholarProfiles.Where(p => p.UserId == u.Id).DefaultIfEmpty()
+                where sp == null || LifecycleStatuses.Holding.Contains(sp.LifecycleStatus)
                 select new
                 {
                     u.Id,

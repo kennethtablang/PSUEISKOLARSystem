@@ -6,7 +6,7 @@ import { useTitle } from '../hooks/useTitle';
 import { Activity, ChevronLeft, ChevronRight, RefreshCw, Download } from 'lucide-react';
 
 const ACTION_COLORS = {
-  Login:          { bg: '#dce8ff', color: '#003087' },
+  Login:          { bg: 'var(--accent-soft-bg)', color: 'var(--accent)' },
   CreateUser:     { bg: '#d4f5e2', color: '#0a5a3a' },
   UpdateUser:     { bg: '#fff3cd', color: '#7d5a00' },
   DeleteUser:     { bg: '#ffe8d6', color: '#c05000' },
@@ -167,13 +167,13 @@ export default function ActivityLogPage() {
         {/* Table */}
         <div className="clay-card overflow-hidden">
           {loading ? (
-            <p className="text-center py-12 text-sm" style={{ color: '#7a8aaa' }}>Loading…</p>
+            <p className="text-center py-12 text-sm" style={{ color: 'var(--text-muted)' }}>Loading…</p>
           ) : error ? (
-            <p className="text-center py-12 text-sm" style={{ color: '#e03030' }}>{error}</p>
+            <p className="text-center py-12 text-sm" style={{ color: 'var(--danger)' }}>{error}</p>
           ) : !data || data.items.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 gap-3">
               <Activity size={32} strokeWidth={1.5} style={{ color: '#c0cce0' }} />
-              <p className="text-sm" style={{ color: '#7a8aaa' }}>No events found.</p>
+              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No events found.</p>
             </div>
           ) : (
             <div className="overflow-x-auto"><table className="w-full min-w-[640px] text-sm">
@@ -181,27 +181,27 @@ export default function ActivityLogPage() {
                 <tr>
                   {['Timestamp', 'User', 'Action', 'Details'].map(h => (
                     <th key={h} className="text-left px-5 py-3 text-xs font-bold uppercase tracking-wider"
-                      style={{ color: '#7a8aaa' }}>{h}</th>
+                      style={{ color: 'var(--text-muted)' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {data.items.map(log => (
                   <tr key={log.id} className="clay-table-row">
-                    <td className="px-5 py-3.5 whitespace-nowrap text-xs" style={{ color: '#7a8aaa' }}>
+                    <td className="px-5 py-3.5 whitespace-nowrap text-xs" style={{ color: 'var(--text-muted)' }}>
                       {formatTs(log.timestampUtc)}
                     </td>
                     <td className="px-5 py-3.5">
                       <p className="font-semibold text-sm" style={{ color: 'var(--text-strong)' }}>{log.userName}</p>
                       {log.userEmail && (
-                        <p className="text-xs mt-0.5" style={{ color: '#7a8aaa' }}>{log.userEmail}</p>
+                        <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{log.userEmail}</p>
                       )}
                     </td>
                     <td className="px-5 py-3.5">
                       <ActionBadge action={log.action} />
                     </td>
                     <td className="px-5 py-3.5 text-sm" style={{ color: 'var(--text)' }}>
-                      {log.details ?? <span style={{ color: '#b0bdd0', fontStyle: 'italic' }}>—</span>}
+                      {log.details ?? <span style={{ color: 'var(--text-faint)', fontStyle: 'italic' }}>—</span>}
                     </td>
                   </tr>
                 ))}
@@ -213,7 +213,7 @@ export default function ActivityLogPage() {
         {/* Pagination */}
         {data && data.total > PAGE_SIZE && (
           <div className="flex items-center justify-between mt-5">
-            <p className="text-xs" style={{ color: '#7a8aaa' }}>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
               Page {page} of {totalPages} · {data.total.toLocaleString()} total
             </p>
             <div className="flex gap-2">

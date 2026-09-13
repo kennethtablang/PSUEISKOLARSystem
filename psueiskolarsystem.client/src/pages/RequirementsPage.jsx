@@ -7,7 +7,8 @@ import { getRequirements, createRequirement, updateRequirement, deleteRequiremen
   reorderRequirements, getRequirementGroups } from '../api/documents';
 import { getScholarshipTypes } from '../api/lookups';
 import { useTitle } from '../hooks/useTitle';
-import { ClayModal, ErrorBox, Field, ModalButtons } from './UsersPage';
+import { ClayModal, ErrorBox, ModalButtons } from './UsersPage';
+import Field from '../components/Field';
 import { TableSkeleton, EmptyState } from '../components/ListState';
 import { ImageIcon, Layers, ChevronUp, ChevronDown, FolderOpen } from 'lucide-react';
 import ImageLightbox from '../components/ImageLightbox';
@@ -63,9 +64,16 @@ export default function RequirementsPage() {
 
     // Optimistic swap so the row moves immediately; the group is contiguous in the
     // flat list, so filling its slots in the new order is enough.
+    //
+    // The cursor MUST be declared inside the updater. React invokes state updaters twice
+    // under StrictMode to check they're pure — a cursor closed over from out here survives
+    // the first pass, so the second one reads past the end of `reordered` and fills the
+    // list with `undefined`, crashing the next render on `r.groupName`.
     const slots = new Set(groupItems.map(r => r.id));
-    let cursor = 0;
-    setRequirements(prev => prev.map(r => (slots.has(r.id) ? reordered[cursor++] : r)));
+    setRequirements(prev => {
+      let cursor = 0;
+      return prev.map(r => (slots.has(r.id) ? reordered[cursor++] ?? r : r));
+    });
 
     try {
       await reorderRequirements(reordered.map(r => r.id), token);
@@ -156,7 +164,7 @@ export default function RequirementsPage() {
               <thead className="clay-table-head">
                 <tr>
                   {['', 'Requirement', 'Status', 'Sample', ''].map((h, i) => (
-                    <th key={i} className="text-left px-5 py-3 text-xs font-bold uppercase tracking-wider" style={{ color: '#7a8aaa' }}>{h}</th>
+                    <th key={i} className="text-left px-5 py-3 text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -167,10 +175,10 @@ export default function RequirementsPage() {
                     <td colSpan={5} className="px-5 py-2"
                       style={{ background: 'rgba(0,37,112,0.045)', borderTop: '1px solid rgba(0,37,112,0.08)' }}>
                       <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider"
-                        style={{ color: group.name === UNGROUPED ? '#9aaabb' : '#003087' }}>
+                        style={{ color: group.name === UNGROUPED ? 'var(--text-faint)' : 'var(--accent)' }}>
                         <FolderOpen size={12} strokeWidth={2.4} />
                         {group.name}
-                        <span style={{ color: '#b0bdd0', fontWeight: 600 }}>({group.items.length})</span>
+                        <span style={{ color: 'var(--text-faint)', fontWeight: 600 }}>({group.items.length})</span>
                       </span>
                     </td>
                   </tr>,
@@ -201,16 +209,16 @@ export default function RequirementsPage() {
                     <td className="px-5 py-3.5">
                       <p className="font-semibold" style={{ color: 'var(--text-strong)' }}>{r.name}</p>
                       {r.description && (
-                        <p className="text-xs mt-0.5" style={{ color: '#7a8aaa' }}>{r.description}</p>
+                        <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{r.description}</p>
                       )}
                     </td>
                     <td className="px-5 py-3.5">
                       {r.isRequired ? (
-                        <span className="clay-badge" style={{ background: '#dce8ff', color: '#003087', border: '1px solid #80aaee' }}>
+                        <span className="clay-badge" style={{ background: 'var(--accent-soft-bg)', color: 'var(--accent)', border: '1px solid var(--accent-soft-border)' }}>
                           Required
                         </span>
                       ) : (
-                        <span className="clay-badge" style={{ background: 'var(--bg)', color: '#7a8aaa', border: '1px solid rgba(0,0,0,0.08)' }}>
+                        <span className="clay-badge" style={{ background: 'var(--bg)', color: 'var(--text-muted)', border: '1px solid rgba(0,0,0,0.08)' }}>
                           Optional
                         </span>
                       )}
@@ -218,7 +226,7 @@ export default function RequirementsPage() {
                     <td className="px-5 py-3.5">
                       {r.hasSample ? (
                         <div className="flex items-center gap-2.5 text-xs">
-                          <button onClick={() => handleViewSample(r.id)} className="font-medium hover:underline flex items-center gap-1" style={{ color: '#003087' }}>
+                          <button onClick={() => handleViewSample(r.id)} className="font-medium hover:underline flex items-center gap-1" style={{ color: 'var(--accent)' }}>
                             <ImageIcon size={12} /> View
                           </button>
                           <label className="font-medium hover:underline cursor-pointer" style={{ color: '#1a3a7a' }}>
@@ -226,10 +234,10 @@ export default function RequirementsPage() {
                             <input type="file" accept=".png,.jpg,.jpeg,.webp" className="hidden"
                               onChange={e => { if (e.target.files?.[0]) handleUploadSample(r.id, e.target.files[0]); e.target.value = ''; }} />
                           </label>
-                          <button onClick={() => handleRemoveSample(r.id)} className="font-medium hover:underline" style={{ color: '#e03030' }}>Remove</button>
+                          <button onClick={() => handleRemoveSample(r.id)} className="font-medium hover:underline" style={{ color: 'var(--danger)' }}>Remove</button>
                         </div>
                       ) : (
-                        <label className="text-xs font-medium hover:underline cursor-pointer flex items-center gap-1" style={{ color: '#7a8aaa' }}>
+                        <label className="text-xs font-medium hover:underline cursor-pointer flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
                           <ImageIcon size={12} /> {busySample === r.id ? 'Uploading…' : 'Add sample'}
                           <input type="file" accept=".png,.jpg,.jpeg,.webp" className="hidden"
                             onChange={e => { if (e.target.files?.[0]) handleUploadSample(r.id, e.target.files[0]); e.target.value = ''; }} />
@@ -248,14 +256,14 @@ export default function RequirementsPage() {
                         <button
                           onClick={() => openEdit(r)}
                           className="text-xs font-medium hover:underline"
-                          style={{ color: '#003087' }}
+                          style={{ color: 'var(--accent)' }}
                         >
                           Edit
                         </button>
                         <button
                           onClick={() => handleDelete(r.id)}
                           className="text-xs font-medium hover:underline"
-                          style={{ color: '#e03030' }}
+                          style={{ color: 'var(--danger)' }}
                         >
                           Remove
                         </button>
@@ -312,7 +320,7 @@ function ReorderBtn({ label, disabled, onClick, children }) {
       style={{
         width: 22, height: 18, borderRadius: 6, border: '1px solid rgba(0,37,112,0.12)',
         background: disabled ? 'transparent' : 'var(--bg)',
-        color: disabled ? '#d0d8e4' : '#003087',
+        color: disabled ? 'var(--text-faint)' : 'var(--accent)',
         cursor: disabled ? 'default' : 'pointer',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         transition: 'background 0.12s',
@@ -399,7 +407,7 @@ function RequirementModal({ initial, token, onClose, onSaved }) {
           <datalist id="requirement-groups">
             {groups.map(g => <option key={g} value={g} />)}
           </datalist>
-          <p className="text-xs mt-1.5" style={{ color: '#7a8aaa' }}>
+          <p className="text-xs mt-1.5" style={{ color: 'var(--text-muted)' }}>
             Documents in the same group are listed together under this heading, in the order
             you set on this page. Leave blank to put it under “{UNGROUPED}”.
           </p>
@@ -411,12 +419,12 @@ function RequirementModal({ initial, token, onClose, onSaved }) {
             checked={form.isRequired}
             onChange={e => set('isRequired', e.target.checked)}
             className="w-4 h-4 rounded"
-            style={{ accentColor: '#003087' }}
+            style={{ accentColor: 'var(--accent)' }}
           />
           <span className="text-sm font-medium" style={{ color: 'var(--text-strong)' }}>
             Mark as required
           </span>
-          <span className="text-xs" style={{ color: '#7a8aaa' }}>
+          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
             (required docs block compliance if missing)
           </span>
         </label>
@@ -472,9 +480,9 @@ function AssignTypesModal({ requirement, scholarshipTypes, token, onClose, onSav
         require it. A type with <em>no</em> requirements configured sees all requirements by default.
       </p>
       {selected === null ? (
-        <p className="text-sm" style={{ color: '#7a8aaa' }}>Loading…</p>
+        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Loading…</p>
       ) : scholarshipTypes.length === 0 ? (
-        <p className="text-sm" style={{ color: '#7a8aaa' }}>No scholarship types exist yet.</p>
+        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No scholarship types exist yet.</p>
       ) : (
         <form onSubmit={handleSubmit}>
           <div className="space-y-1.5 mb-5 max-h-72 overflow-y-auto">
@@ -485,7 +493,7 @@ function AssignTypesModal({ requirement, scholarshipTypes, token, onClose, onSav
                   checked={selected.has(t.id)}
                   onChange={() => toggle(t.id)}
                   className="w-4 h-4 rounded"
-                  style={{ accentColor: '#003087' }}
+                  style={{ accentColor: 'var(--accent)' }}
                 />
                 <span className="text-sm font-medium" style={{ color: 'var(--text-strong)' }}>{t.name}</span>
               </label>

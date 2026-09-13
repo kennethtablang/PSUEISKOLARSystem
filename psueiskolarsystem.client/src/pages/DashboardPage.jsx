@@ -2,24 +2,16 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
-import { getAnnouncements } from '../api/announcements';
 import AnnouncementCard from '../components/AnnouncementCard';
 import CollapsibleSection from '../components/CollapsibleSection';
-import { getScholarProfile, getScholars } from '../api/scholars';
-import { getUsers } from '../api/users';
-import { getRecentActivity } from '../api/auditLog';
-import { getAnalyticsOverview } from '../api/analytics';
-import { getSubmissions, getRequirements } from '../api/documents';
-import { getActiveSemester } from '../api/settings';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import { getDeadlines } from '../api/deadlines';
+import { getDashboard } from '../api/dashboard';
+import { PieChart, Pie, Cell, Tooltip } from 'recharts';
 import { useTheme } from '../context/ThemeContext';
 import { vizTokens, tooltipStyle } from '../constants/viz';
 import InfoTip from '../components/InfoTip';
-import { getPendingApprovalCount } from '../api/scholarApprovals';
-import { getOneTimeGrantSummary } from '../api/oneTimeGrants';
 import { GraduationCap, ClipboardList, AlertTriangle, BarChart2, Inbox, Clock, FileCheck, ArrowRight, RefreshCw, CalendarClock, MessageSquare, Megaphone, FolderOpen, User, Activity, UserCheck, Banknote, ShieldX, ShieldQuestion } from 'lucide-react';
 import { useTitle } from '../hooks/useTitle';
+import { useNow, daysUntil } from '../hooks/useNow';
 
 export default function DashboardPage() {
   useTitle('Dashboard');
@@ -27,126 +19,62 @@ export default function DashboardPage() {
   const [announcements, setAnnouncements] = useState([]);
   const [stats, setStats] = useState(null);
   const [compliance, setCompliance] = useState(null);
-  const [scholarGwa, setScholarGwa] = useState(null); // { latestGwa, minimumGwa, scholarshipTypeName, meetsRequirement }
-  const [renewal, setRenewal] = useState(null); // { count } of lapsed/suspended scholars
-  const [overview, setOverview] = useState(null); // full analytics overview (admin/coord)
-  const [deadlines, setDeadlines] = useState([]); // upcoming deadlines (scholar)
-  const [activity, setActivity] = useState([]); // recent audit-log activity (staff)
-  const [pendingApprovals, setPendingApprovals] = useState(0); // scholars awaiting verification (staff)
-  const [grantSummary, setGrantSummary] = useState(null); // one-time grant totals (staff)
+  const [scholarGwa, setScholarGwa] = useState(null);      // { latestGwa, minimumGwa, scholarshipTypeName, meetsRequirement }
+  const [renewal, setRenewal] = useState(null);            // { count } of lapsed/suspended scholars
+  const [overview, setOverview] = useState(null);          // analytics overview (staff)
+  const [deadlines, setDeadlines] = useState([]);          // next open deadlines (scholar)
+  const [activity, setActivity] = useState([]);            // recent audit-log activity (staff)
+  const [pendingApprovals, setPendingApprovals] = useState(0);
+  const [grantSummary, setGrantSummary] = useState(null);  // one-time grant totals (staff)
+
+  // Deadline countdowns are rendered against this rather than a Date.now() in the loop, so
+  // they stay pure and a dashboard left open still counts down.
+  const now = useNow(60 * 60 * 1000);
 
   // The signed-in scholar's own verification state travels on the auth user.
   const approval = user?.approvalStatus
     ? { status: user.approvalStatus, note: user.approvalNote }
     : null;
 
+  /* One request for the whole screen. This page used to fire eleven — analytics, scholars,
+     submissions, requirements, users, announcements, deadlines, activity, approvals, grants,
+     and the active semester — and then cross-reference three of the responses in the browser
+     to work out compliance. GET /api/dashboard returns the payload for whichever role the
+     token carries, so there is no role branch here beyond unpacking it. */
   useEffect(() => {
-    getAnnouncements(token).then(setAnnouncements).catch(() => {});
-    loadStats();
-    if (user?.role === 'Scholar') {
-      loadScholarCompliance();
-      loadScholarGwa();
-    } else {
-      loadRenewal();
-      getRecentActivity(token).then(setActivity).catch(() => {});
-      getPendingApprovalCount(token).then(setPendingApprovals).catch(() => {});
-      getOneTimeGrantSummary(token).then(setGrantSummary).catch(() => {});
-    }
-  }, []);
+    let cancelled = false;
 
-  async function loadRenewal() {
-    try {
-      const [lapsed, suspended] = await Promise.all([
-        getScholars(token, { lifecycleStatus: 'Lapsed', pageSize: 1 }),
-        getScholars(token, { lifecycleStatus: 'Suspended', pageSize: 1 }),
-      ]);
-      setRenewal({ count: (lapsed.total ?? 0) + (suspended.total ?? 0) });
-    } catch { /* optional */ }
-  }
+    getDashboard(token)
+      .then(data => {
+        if (cancelled) return;
+        setAnnouncements(data.announcements ?? []);
 
-  async function loadStats() {
-    try {
-      if (user?.role === 'Administrator') {
-        const [coords, ov] = await Promise.all([
-          getUsers(token, { role: 'ScholarshipCoordinator', pageSize: 100 }),
-          getAnalyticsOverview(token),
-        ]);
-        setOverview(ov);
-        setStats({
-          totalScholars: ov.totalScholars,
-          coordinators: (coords.items ?? []).filter(u => u.isActive).length,
-          flagged: ov.nonCompliant,
-          pendingReview: ov.submissions.pending,
-        });
-      } else if (user?.role === 'ScholarshipCoordinator') {
-        const ov = await getAnalyticsOverview(token);
-        setOverview(ov);
-        setStats({
-          totalScholars: ov.totalScholars,
-          noGwa: ov.noGwa,
-          flagged: ov.nonCompliant,
-          pendingReview: ov.submissions.pending,
-        });
-      }
-    } catch { /* stats are optional */ }
-  }
+        if (data.scholar) {
+          setCompliance(data.scholar.compliance);
+          setScholarGwa(data.scholar.gwa);
+          setDeadlines(data.scholar.deadlines ?? []);
+        }
 
-  async function loadScholarGwa() {
-    try {
-      const profile = await getScholarProfile(user.id, token).catch(() => null);
-      if (profile?.latestGwa != null) {
-        setScholarGwa({
-          latestGwa: profile.latestGwa,
-          minimumGwa: profile.minimumGwa,
-          scholarshipTypeName: profile.scholarshipTypeName,
-          meetsRequirement: profile.meetsRequirement,
-        });
-      }
-    } catch { /* optional */ }
-  }
+        if (data.staff) {
+          const { overview: ov, coordinators, renewalCount, pendingApprovals: pending, grants, activity: log } = data.staff;
+          setOverview(ov);
+          setStats({
+            totalScholars: ov.totalScholars,
+            coordinators,
+            noGwa: ov.noGwa,
+            flagged: ov.nonCompliant,
+            pendingReview: ov.submissions.pending,
+          });
+          setRenewal({ count: renewalCount });
+          setPendingApprovals(pending);
+          setGrantSummary(grants);
+          setActivity(log ?? []);
+        }
+      })
+      .catch(() => { /* the empty states below already read as "nothing to show" */ });
 
-  async function loadScholarCompliance() {
-    try {
-      const [profile, period] = await Promise.all([
-        getScholarProfile(user.id, token).catch(() => null),
-        getActiveSemester(token).catch(() => null),
-      ]);
-      const CURRENT_YEAR = period?.academicYear ?? (() => {
-        const m = new Date().getMonth() + 1, y = new Date().getFullYear(), s = m >= 8 ? y : y - 1;
-        return `${s}-${s + 1}`;
-      })();
-      const semester = period?.semester ?? 1;
-      const [reqs, subs, dls] = await Promise.all([
-        getRequirements(token, { scholarshipTypeId: profile?.scholarshipTypeId }),
-        getSubmissions(token, { academicYear: CURRENT_YEAR }),
-        getDeadlines(token, { academicYear: CURRENT_YEAR, semester }).catch(() => []),
-      ]);
-
-      // Upcoming deadlines for requirements not yet verified, due in the future.
-      const reqIds = new Set(reqs.map(r => r.id));
-      const submittedVerified = new Set(subs.filter(s => s.status === 'Verified').map(s => s.requirementId));
-      const upcoming = dls
-        .filter(d => reqIds.has(d.requirementId) && !submittedVerified.has(d.requirementId) && new Date(d.dueDate) > new Date())
-        .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
-        .slice(0, 3);
-      setDeadlines(upcoming);
-
-      const required = reqs.filter(r => r.isRequired);
-      const verified = subs.filter(s => s.status === 'Verified');
-      const pending = subs.filter(s => s.status === 'Pending');
-      const incomplete = reqs.filter(r =>
-        subs.find(s => s.requirementId === r.id)?.status === 'Incomplete'
-      );
-      setCompliance({
-        totalRequired: required.length,
-        verifiedCount: verified.length,
-        pendingCount: pending.length,
-        incompleteItems: incomplete.map(r => r.name),
-        scholarshipTypeName: profile?.scholarshipTypeName ?? null,
-        academicYear: CURRENT_YEAR,
-      });
-    } catch { /* compliance is optional */ }
-  }
+    return () => { cancelled = true; };
+  }, [token]);
 
   const isStaff = user?.role !== 'Scholar';
 
@@ -369,7 +297,7 @@ export default function DashboardPage() {
                     {compliance.verifiedCount} of {compliance.totalRequired} required documents verified
                   </p>
                 </div>
-                <span className="text-2xl font-black" style={{ color: '#003087' }}>
+                <span className="text-2xl font-black" style={{ color: 'var(--accent)' }}>
                   {compliance.totalRequired > 0
                     ? `${Math.round((compliance.verifiedCount / compliance.totalRequired) * 100)}%`
                     : '—'}
@@ -388,7 +316,7 @@ export default function DashboardPage() {
                       width: `${pct}%`,
                       background: isComplete
                         ? 'linear-gradient(90deg, #f5b800, #ffd060)'
-                        : 'linear-gradient(90deg, #003087, #0040b8)',
+                        : 'linear-gradient(90deg, var(--accent-bar-from), var(--accent-bar-to))',
                     }} />
                   </div>
                 );
@@ -483,18 +411,18 @@ export default function DashboardPage() {
             <Link to="/one-time-grants" className="block mb-6">
               <div className="clay-card p-5 flex items-center gap-4">
                 <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0"
-                  style={{ background: 'rgba(0,48,135,0.08)' }}>
-                  <Banknote size={20} strokeWidth={2} color="#003087" />
+                  style={{ background: 'var(--accent-wash)' }}>
+                  <Banknote size={20} strokeWidth={2} style={{ color: 'var(--accent)' }} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-black" style={{ color: 'var(--text-strong)' }}>
                     {grantSummary.pendingCount} grant{grantSummary.pendingCount !== 1 ? 's' : ''} to release
                   </p>
-                  <p className="text-xs mt-0.5" style={{ color: '#7a8aaa' }}>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
                     ₱{Number(grantSummary.pendingAmount).toLocaleString('en-PH', { minimumFractionDigits: 2 })} awarded but not yet disbursed.
                   </p>
                 </div>
-                <ArrowRight size={18} strokeWidth={2.5} color="#003087" />
+                <ArrowRight size={18} strokeWidth={2.5} style={{ color: 'var(--accent)' }} />
               </div>
             </Link>
           )}
@@ -505,7 +433,7 @@ export default function DashboardPage() {
               <h2 className="text-base font-black mb-4" style={{ color: 'var(--text-strong)' }}>Upcoming Deadlines</h2>
               <div className="space-y-2">
                 {deadlines.map(d => {
-                  const days = Math.ceil((new Date(d.dueDate) - Date.now()) / 86400000);
+                  const days = daysUntil(d.dueDate, now);
                   return (
                     <Link key={d.id} to="/my-documents" className="clay-card p-4 flex items-center gap-3">
                       <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(234,88,12,0.1)' }}>
@@ -513,7 +441,7 @@ export default function DashboardPage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-bold" style={{ color: 'var(--text-strong)' }}>{d.requirementName}</p>
-                        <p className="text-xs" style={{ color: days <= 3 ? '#c2410c' : '#7a8aaa' }}>
+                        <p className="text-xs" style={{ color: days <= 3 ? '#c2410c' : 'var(--text-muted)' }}>
                           Due {new Date(d.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} · {days <= 0 ? 'today' : `in ${days} day${days > 1 ? 's' : ''}`}
                         </p>
                       </div>
@@ -531,8 +459,8 @@ export default function DashboardPage() {
               <div className="clay-card divide-y" style={{ borderColor: 'transparent' }}>
                 {activity.map(a => (
                   <div key={a.id} className="flex items-start gap-3 px-5 py-3.5" style={{ borderTop: '1px solid rgba(0,48,135,0.05)' }}>
-                    <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(0,48,135,0.08)' }}>
-                      <Activity size={15} strokeWidth={2.2} color="#003087" />
+                    <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'var(--accent-wash)' }}>
+                      <Activity size={15} strokeWidth={2.2} style={{ color: 'var(--accent)' }} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm" style={{ color: 'var(--text-strong)' }}>
@@ -551,11 +479,11 @@ export default function DashboardPage() {
           <CollapsibleSection id="announcements" title="Announcements">
             {announcements.length === 0 ? (
               <div className="clay-card p-8 text-center">
-                <Inbox size={32} strokeWidth={1.5} className="mx-auto mb-3" style={{ color: '#b0bdd0' }} />
-                <p className="text-sm" style={{ color: '#7a8aaa' }}>No announcements at this time.</p>
+                <Inbox size={32} strokeWidth={1.5} className="mx-auto mb-3" style={{ color: 'var(--text-faint)' }} />
+                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No announcements at this time.</p>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-5">
                 {announcements.map(a => <AnnouncementCard key={a.id} a={a} variant="feed" />)}
               </div>
             )}
@@ -609,11 +537,11 @@ function Pill({ label, bg, color, Icon }) {
 function QuickAction({ to, Icon, label }) {
   return (
     <Link to={to} className="clay-card px-4 py-3 flex items-center gap-3 transition-opacity hover:opacity-90">
-      <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(0,48,135,0.08)' }}>
-        <Icon size={17} color="#003087" strokeWidth={2.2} />
+      <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'var(--accent-wash)' }}>
+        <Icon size={17} style={{ color: 'var(--accent)' }} strokeWidth={2.2} />
       </div>
       <span className="text-xs font-bold flex-1 min-w-0" style={{ color: 'var(--text-strong)' }}>{label}</span>
-      <ArrowRight size={14} strokeWidth={2.5} style={{ color: '#9aaabb', flexShrink: 0 }} />
+      <ArrowRight size={14} strokeWidth={2.5} style={{ color: 'var(--text-faint)', flexShrink: 0 }} />
     </Link>
   );
 }
@@ -625,12 +553,12 @@ function DonutCard({ title, data, info }) {
   const total = data.reduce((s, d) => s + d.value, 0);
   return (
     <div className="clay-card p-5">
-      <h3 className="text-xs font-bold uppercase tracking-wider mb-3 flex items-center gap-1.5" style={{ color: '#7a8aaa' }}>
+      <h3 className="text-xs font-bold uppercase tracking-wider mb-3 flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
         {title}
         {info && <InfoTip text={info} size={12} />}
       </h3>
       {total === 0 ? (
-        <p className="text-sm text-center py-8" style={{ color: '#9aaabb' }}>No data yet.</p>
+        <p className="text-sm text-center py-8" style={{ color: 'var(--text-faint)' }}>No data yet.</p>
       ) : (
         <div className="flex items-center gap-4">
           {/* Fixed pixel size rather than a ResponsiveContainer: the donut is always

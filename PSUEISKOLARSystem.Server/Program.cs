@@ -46,7 +46,8 @@ namespace PSUEISKOLARSystem.Server
                     options.Password.RequireNonAlphanumeric = true;
                     options.User.RequireUniqueEmail = true;
 
-                    // Lockout / brute-force protection: 5 failed attempts → 15-minute cooldown.
+                    // Starting values only — the live threshold and cooldown come from
+                    // System Settings and are applied per sign-in in AuthService.
                     options.Lockout.MaxFailedAccessAttempts = 5;
                     options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
                     options.Lockout.AllowedForNewUsers = true;
@@ -78,10 +79,10 @@ namespace PSUEISKOLARSystem.Server
                         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.Key))
                     };
 
-                    // SignalR clients pass the JWT via the access_token query string
-                    // (WebSockets can't set Authorization headers). Accept it for hub paths.
                     options.Events = new JwtBearerEvents
                     {
+                        // SignalR clients pass the JWT via the access_token query string
+                        // (WebSockets can't set Authorization headers). Accept it for hub paths.
                         OnMessageReceived = context =>
                         {
                             var accessToken = context.Request.Query["access_token"];
@@ -89,7 +90,15 @@ namespace PSUEISKOLARSystem.Server
                             if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
                                 context.Token = accessToken;
                             return Task.CompletedTask;
-                        }
+                        },
+
+                        // A valid signature only proves the token was ours when it was issued.
+                        // SessionValidator confirms the account still backs it — see that file
+                        // for why this is not merely a login-time concern.
+                        OnTokenValidated = context =>
+                            context.HttpContext.RequestServices
+                                .GetRequiredService<SessionValidator>()
+                                .ValidateAsync(context)
                     };
                 });
 
@@ -102,13 +111,30 @@ namespace PSUEISKOLARSystem.Server
             builder.Services.AddScoped<INotificationService, NotificationService>();
             builder.Services.AddScoped<IAnnouncementDelivery, AnnouncementDelivery>();
             builder.Services.AddScoped<DatabaseExporter>();
+            builder.Services.AddScoped<AnalyticsQueries>();
+            builder.Services.AddScoped<DashboardQueries>();
+
+            // Singleton: it holds no state and takes its own scope per send, which is the
+            // whole point of it. See BackgroundEmailer.
+            builder.Services.AddSingleton<BackgroundEmailer>();
             builder.Services.AddHostedService<DeadlineReminderService>();
             builder.Services.AddHostedService<AnnouncementPublisherService>();
+            builder.Services.AddHostedService<NotificationRetentionService>();
             builder.Services.AddSingleton<IFileStorageService, LocalFileStorageService>();
 
+            // Singleton so the account snapshots it caches are shared by every request.
+            builder.Services.AddMemoryCache();
+            builder.Services.AddSingleton<SessionValidator>();
+
+            /* The real upload cap is SystemSettings.MaxUploadMb, which an administrator can
+               change at runtime; this is only the transport ceiling and is fixed at startup.
+               It is set to the largest value SystemSettingsController will accept (100 MB) so
+               that the configured setting is always the binding constraint — otherwise raising
+               MaxUploadMb past this number would fail with a bare 413 instead of the
+               controller's explanatory message. */
             builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
             {
-                options.MultipartBodyLengthLimit = 10 * 1024 * 1024; // 10 MB
+                options.MultipartBodyLengthLimit = 100L * 1024 * 1024;
             });
 
             builder.Services.AddSwaggerGen(options =>
@@ -178,6 +204,11 @@ namespace PSUEISKOLARSystem.Server
                 await dbContext.Database.MigrateAsync();
                 await DbSeeder.SeedAsync(scope.ServiceProvider);
             }
+
+            // First in the pipeline so the headers reach static assets and error responses too.
+            // The CSP is held back in development, where Swagger UI's inline bootstrap script
+            // would trip script-src 'self'.
+            app.UseSecurityHeaders(sendCsp: !app.Environment.IsDevelopment());
 
             app.UseDefaultFiles();
             app.MapStaticAssets();

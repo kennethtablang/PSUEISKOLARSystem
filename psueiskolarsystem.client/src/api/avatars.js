@@ -1,3 +1,5 @@
+import { apiBlobUrl, apiDelete, apiForm } from './_client';
+
 const API = '/api/avatars';
 
 /* Profile photos. The server only stores a flag on the user record (hasAvatar); the image
@@ -9,10 +11,10 @@ const API = '/api/avatars';
    nothing but its component (React Fast Refresh). */
 const cache = new Map();
 
+// A missing photo is the common case, so a failure here resolves to null rather than
+// throwing — but a 401 still tears the session down, because it goes through apiFetch.
 export async function getAvatar(userId, token) {
-  const res = await fetch(`${API}/${userId}`, { headers: { Authorization: `Bearer ${token}` } });
-  if (!res.ok) return null;
-  return URL.createObjectURL(await res.blob());
+  return apiBlobUrl(`${API}/${userId}`, token, 'No photo.').catch(() => null);
 }
 
 // Cache-first fetch. Always returns a promise, so callers never set state synchronously.
@@ -44,32 +46,15 @@ export async function uploadAvatarFor(userId, file, token) {
 }
 
 export async function deleteMyAvatar(token) {
-  return remove(`${API}/me`, token);
+  return apiDelete(`${API}/me`, token, 'Failed to remove the photo.');
 }
 
 export async function deleteAvatarFor(userId, token) {
-  return remove(`${API}/${userId}`, token);
+  return apiDelete(`${API}/${userId}`, token, 'Failed to remove the photo.');
 }
 
 async function upload(url, file, token) {
   const form = new FormData();
   form.append('file', file);
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
-    body: form,
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || 'Failed to upload the photo.');
-  }
-  return res.json();
-}
-
-async function remove(url, token) {
-  const res = await fetch(url, {
-    method: 'DELETE',
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error('Failed to remove the photo.');
+  return apiForm(url, form, token, 'Failed to upload the photo.');
 }

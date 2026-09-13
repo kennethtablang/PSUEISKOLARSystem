@@ -17,11 +17,50 @@ jobs:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: psueiskolarsystem.client/package-lock.json
-      - name: Install & build
+      - name: Install
         working-directory: psueiskolarsystem.client
-        run: |
-          npm ci
-          npm run build
+        run: npm ci
+
+      # A ratchet rather than a zero-tolerance gate: the client carries a real lint backlog,
+      # so this fails only when a change makes it worse. See scripts/lint-ratchet.mjs for why,
+      # and for how to tighten it to `--max-warnings 0` once the count reaches zero.
+      - name: Lint
+        working-directory: psueiskolarsystem.client
+        run: npm run lint:ci
+
+      - name: Build
+        working-directory: psueiskolarsystem.client
+        run: npm run build
+
+  audit-client:
+    name: Audit client dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: psueiskolarsystem.client/package-lock.json
+      - name: Install
+        working-directory: psueiskolarsystem.client
+        run: npm ci
+
+      # Hard gate: a critical advisory stops the build outright.
+      - name: Audit (critical blocks)
+        working-directory: psueiskolarsystem.client
+        run: npm audit --audit-level=critical
+
+      # Reported, not blocking — and meant to become the gate above. One high advisory is
+      # outstanding: GHSA-qwww-vcr4-c8h2 in react-router. Its vulnerable range is 7.12.0–8.2.0,
+      # so clearing it means either downgrading to 7.11.0 or moving to react-router 8.3+ —
+      # both breaking changes that need a deliberate decision rather than an `audit fix`.
+      # Once that decision is made, change this to `--audit-level=high` and drop the
+      # continue-on-error.
+      - name: Audit (high, reported)
+        working-directory: psueiskolarsystem.client
+        continue-on-error: true
+        run: npm audit --audit-level=high
 
   build-test-server:
     name: Build & test server
@@ -33,7 +72,11 @@ jobs:
           dotnet-version: '10.0.x'
       - name: Restore
         run: dotnet restore
+
+      # TreatWarningsAsErrors lives in PSUEISKOLARSystem.Server.csproj rather than here, so a
+      # C# warning fails the IDE build too and not only CI. See the comment there.
       - name: Build
         run: dotnet build --no-restore -c Release
+
       - name: Test
         run: dotnet test PSUEISKOLARSystem.Server.Tests/PSUEISKOLARSystem.Server.Tests.csproj --no-build -c Release --verbosity normal

@@ -9,6 +9,7 @@ using Microsoft.IdentityModel.Tokens;
 using PSUEISKOLARSystem.Server.Data;
 using PSUEISKOLARSystem.Server.DTOs.Auth;
 using PSUEISKOLARSystem.Server.Exceptions;
+using PSUEISKOLARSystem.Server.Infrastructure;
 using PSUEISKOLARSystem.Server.Interfaces;
 using PSUEISKOLARSystem.Server.Models;
 using PSUEISKOLARSystem.Server.Models.Enums;
@@ -46,6 +47,13 @@ namespace PSUEISKOLARSystem.Server.Services
                 throw new UnauthorizedException("Invalid email or password.");
             }
 
+            var policy = await SystemSettingsStore.GetAsync(dbContext);
+
+            // Identity reads its lockout policy from options fixed at startup, so the
+            // configurable threshold and duration are applied to the user here instead.
+            userManager.Options.Lockout.MaxFailedAccessAttempts = policy.MaxFailedLoginAttempts;
+            userManager.Options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(policy.LockoutMinutes);
+
             // Enforce lockout before checking the password (brute-force protection).
             if (await userManager.IsLockedOutAsync(user))
             {
@@ -78,7 +86,7 @@ namespace PSUEISKOLARSystem.Server.Services
             // Correct password — clear any accumulated failed attempts.
             await userManager.ResetAccessFailedCountAsync(user);
 
-            if (!user.EmailConfirmed)
+            if (policy.RequireEmailVerification && !user.EmailConfirmed)
             {
                 dbContext.AuditLogs.Add(new AuditLog
                 {
@@ -99,6 +107,20 @@ namespace PSUEISKOLARSystem.Server.Services
 
             var roles = await userManager.GetRolesAsync(user);
             var role = roles.FirstOrDefault() ?? throw new UnauthorizedException("User has no assigned role.");
+
+            // Administrators are exempt: locking them out during maintenance would leave
+            // nobody able to turn maintenance off again.
+            if (policy.MaintenanceMode && role != UserRoles.Administrator)
+            {
+                dbContext.AuditLogs.Add(new AuditLog
+                {
+                    UserId  = user.Id,
+                    Action  = "LoginFailed",
+                    Details = $"Login blocked for '{request.Email}': maintenance mode",
+                });
+                await dbContext.SaveChangesAsync();
+                throw new UnauthorizedException(policy.MaintenanceMessage);
+            }
 
             user.LastLoginAt = DateTime.UtcNow;
             dbContext.AuditLogs.Add(new AuditLog { UserId = user.Id, Action = "Login" });
@@ -142,6 +164,8 @@ namespace PSUEISKOLARSystem.Server.Services
             if (await userManager.FindByEmailAsync(request.Email) is not null)
                 throw new BadRequestException("An account with this email already exists.");
 
+            var policy = await SystemSettingsStore.GetAsync(dbContext);
+
             var user = new ApplicationUser
             {
                 UserName = request.Email,
@@ -149,10 +173,15 @@ namespace PSUEISKOLARSystem.Server.Services
                 FirstName = request.FirstName.Trim(),
                 MiddleName = string.IsNullOrWhiteSpace(request.MiddleName) ? null : request.MiddleName.Trim(),
                 LastName = request.LastName.Trim(),
-                EmailConfirmed = false,
-                // Self-registration needs an administrator to verify the scholar before
-                // they can submit documents (see ScholarApprovalsController).
-                ApprovalStatus = ApprovalStatuses.Pending,
+                // Skipping verification only makes sense if nothing is going to be emailed
+                // to that address anyway, which is what the email switch decides.
+                EmailConfirmed = !policy.RequireEmailVerification || !policy.EmailEnabled,
+                // Self-registration normally needs an administrator to verify the scholar
+                // before they can submit documents (see ScholarApprovalsController); an
+                // institution that vets applicants elsewhere can skip that queue.
+                ApprovalStatus = policy.AutoApproveScholars
+                    ? ApprovalStatuses.Approved
+                    : ApprovalStatuses.Pending,
             };
 
             var result = await userManager.CreateAsync(user, request.Password);
@@ -161,7 +190,8 @@ namespace PSUEISKOLARSystem.Server.Services
 
             await userManager.AddToRoleAsync(user, "Scholar");
 
-            await SendVerificationEmailAsync(user);
+            if (policy.RequireEmailVerification && policy.EmailEnabled)
+                await SendVerificationEmailAsync(user);
 
             var userDto = mapper.Map<UserDto>(user);
             userDto.Role = "Scholar";
@@ -396,7 +426,12 @@ namespace PSUEISKOLARSystem.Server.Services
                 new(ClaimTypes.Email, user.Email ?? string.Empty),
                 new(ClaimTypes.Name, user.FullName),
                 new(ClaimTypes.Role, role),
-                new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+                new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+
+                // Pins the token to the account as it stands right now. SessionValidator
+                // compares it per request, so a password change or reset invalidates every
+                // token issued before it instead of leaving them live until they expire.
+                new(SessionValidator.StampClaim, user.SecurityStamp ?? string.Empty)
             };
 
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSettings.Key));

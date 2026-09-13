@@ -6,7 +6,7 @@ const PAGE_SIZES = [10, 20, 50, 100];
 export default function Pagination({ page, totalPages, total, pageSize, onPageChange, onPageSizeChange, label = 'items' }) {
   return (
     <div className="flex items-center justify-between gap-3 mt-4 flex-wrap">
-      <div className="flex items-center gap-2 text-xs" style={{ color: '#7a8aaa' }}>
+      <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
         <span>Show</span>
         <select
           value={pageSize}
@@ -26,7 +26,7 @@ export default function Pagination({ page, totalPages, total, pageSize, onPageCh
           className="w-8 h-8 rounded-lg flex items-center justify-center"
           style={{ border: '1px solid rgba(0,48,135,0.14)', background: 'var(--surface-2)', opacity: page <= 1 ? 0.4 : 1, cursor: page <= 1 ? 'default' : 'pointer' }}
         >
-          <ChevronLeft size={15} strokeWidth={2.4} color="#003087" />
+          <ChevronLeft size={15} strokeWidth={2.4} style={{ color: 'var(--accent)' }} />
         </button>
         <span className="text-xs font-semibold px-2" style={{ color: 'var(--text)' }}>
           {page} / {Math.max(totalPages, 1)}
@@ -37,7 +37,7 @@ export default function Pagination({ page, totalPages, total, pageSize, onPageCh
           className="w-8 h-8 rounded-lg flex items-center justify-center"
           style={{ border: '1px solid rgba(0,48,135,0.14)', background: 'var(--surface-2)', opacity: page >= totalPages ? 0.4 : 1, cursor: page >= totalPages ? 'default' : 'pointer' }}
         >
-          <ChevronRight size={15} strokeWidth={2.4} color="#003087" />
+          <ChevronRight size={15} strokeWidth={2.4} style={{ color: 'var(--accent)' }} />
         </button>
       </div>
     </div>

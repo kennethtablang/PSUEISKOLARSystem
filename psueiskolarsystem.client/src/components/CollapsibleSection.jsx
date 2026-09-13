@@ -22,8 +22,8 @@ export default function CollapsibleSection({ id, title, children, right = null }
       <div className="flex items-center justify-between mb-4">
         <button onClick={toggle} className="flex items-center gap-1.5 group" aria-expanded={!collapsed}>
           {collapsed
-            ? <ChevronRight size={17} strokeWidth={2.5} style={{ color: '#7a8aaa' }} />
-            : <ChevronDown size={17} strokeWidth={2.5} style={{ color: '#7a8aaa' }} />}
+            ? <ChevronRight size={17} strokeWidth={2.5} style={{ color: 'var(--text-muted)' }} />
+            : <ChevronDown size={17} strokeWidth={2.5} style={{ color: 'var(--text-muted)' }} />}
           <h2 className="text-base font-black group-hover:opacity-80" style={{ color: 'var(--text-strong)' }}>{title}</h2>
         </button>
         {right}

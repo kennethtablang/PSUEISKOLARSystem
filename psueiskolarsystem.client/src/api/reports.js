@@ -1,14 +1,11 @@
+import { apiFetch } from './_client';
+
 const API = '/api/reports';
 
 async function downloadFile(url, token, filename) {
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || 'Export failed.');
-  }
-  const blob = await res.blob();
+  const res = await apiFetch(url, { token, fallback: 'Export failed.' });
   const link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
+  link.href = URL.createObjectURL(await res.blob());
   link.download = filename;
   link.click();
   URL.revokeObjectURL(link.href);

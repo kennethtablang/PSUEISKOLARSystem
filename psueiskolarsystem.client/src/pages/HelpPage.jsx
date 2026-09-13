@@ -61,8 +61,8 @@ function FaqItem({ q, a }) {
         className="w-full flex items-center justify-between gap-3 px-5 py-4 text-left">
         <span className="text-sm font-bold" style={{ color: 'var(--text-strong)' }}>{q}</span>
         {open
-          ? <ChevronUp size={16} strokeWidth={2.5} style={{ color: '#7a8aaa', flexShrink: 0 }} />
-          : <ChevronDown size={16} strokeWidth={2.5} style={{ color: '#7a8aaa', flexShrink: 0 }} />}
+          ? <ChevronUp size={16} strokeWidth={2.5} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+          : <ChevronDown size={16} strokeWidth={2.5} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />}
       </button>
       {open && (
         <p className="px-5 pb-4 -mt-1 text-sm leading-relaxed" style={{ color: 'var(--text)' }}>{a}</p>
@@ -84,7 +84,7 @@ export default function HelpPage() {
         <div className="page-head">
           <div>
             <h1 className="page-title flex items-center gap-2">
-              <HelpCircle size={22} strokeWidth={2.2} style={{ color: '#003087' }} /> Help &amp; FAQ
+              <HelpCircle size={22} strokeWidth={2.2} style={{ color: 'var(--accent)' }} /> Help &amp; FAQ
             </h1>
             <p className="page-subtitle">
               {faqs.length} answer{faqs.length === 1 ? '' : 's'} to common questions about using PSU e-Iskolar.
@@ -110,8 +110,8 @@ export default function HelpPage() {
           <aside className="page-rail space-y-5">
             <div className="clay-card p-5">
               <div className="flex items-center gap-2.5 mb-2">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(0,48,135,0.08)' }}>
-                  <Mail size={16} strokeWidth={2.2} color="#003087" />
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'var(--accent-wash)' }}>
+                  <Mail size={16} strokeWidth={2.2} style={{ color: 'var(--accent)' }} />
                 </div>
                 <p className="text-sm font-bold" style={{ color: 'var(--text-strong)' }}>Still need help?</p>
               </div>
@@ -133,7 +133,7 @@ export default function HelpPage() {
                 Pangasinan State University — Lingayen Campus
               </p>
               <div className="flex items-center gap-1.5 mt-3">
-                <Clock size={13} strokeWidth={2.2} style={{ color: '#7a8aaa' }} />
+                <Clock size={13} strokeWidth={2.2} style={{ color: 'var(--text-muted)' }} />
                 <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
                   Monday to Friday, 8:00 AM – 5:00 PM
                 </p>

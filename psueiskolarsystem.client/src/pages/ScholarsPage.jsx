@@ -8,22 +8,14 @@ import Pagination from '../components/Pagination';
 import { TableSkeleton, EmptyState } from '../components/ListState';
 import { useTitle } from '../hooks/useTitle';
 import { ctlStyle } from '../constants/ui';
-import { StatusBadge } from './ScholarApprovalsPage';
+import StatusBadge from '../components/StatusBadge';
 import Avatar from '../components/Avatar';
 import { Award, AlertTriangle } from 'lucide-react';
 
-const GWA_BADGE = (meets) => {
-  if (meets === null || meets === undefined) return 'bg-[#e8edf5] text-[#7a8aaa]';
-  return meets ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700';
-};
+/* Compliance reads as a status, so it takes a tone rather than its own Tailwind literals —
+   `bg-emerald-100` has no dark variant and cannot get one. */
+const GWA_TONE = meets => meets == null ? 'neutral' : meets ? 'ok' : 'bad';
 
-const LIFECYCLE_STYLE = {
-  Active:    { bg: '#d4f4e2', color: '#166534' },
-  Renewed:   { bg: '#dbeafe', color: '#1e40af' },
-  Lapsed:    { bg: '#fee2e2', color: '#991b1b' },
-  Suspended: { bg: '#ffedd5', color: '#9a3412' },
-  Graduated: { bg: '#e5e7eb', color: '#374151' },
-};
 const LIFECYCLE_OPTIONS = ['Active', 'Renewed', 'Lapsed', 'Suspended', 'Graduated'];
 const APPROVAL_OPTIONS = ['Pending', 'Approved', 'Rejected'];
 
@@ -143,7 +135,7 @@ export default function ScholarsPage() {
           </select>
         </div>
 
-        {error && <p className="text-sm mb-4" style={{ color: '#e03030' }}>{error}</p>}
+        {error && <p className="text-sm mb-4" style={{ color: 'var(--danger)' }}>{error}</p>}
 
         <div className="clay-card overflow-hidden">
           {loading ? (
@@ -155,7 +147,7 @@ export default function ScholarsPage() {
               <thead className="clay-table-head">
                 <tr>
                   {['Scholar', 'Student ID', 'Program', 'Scholarship', 'GWA', 'Status', 'Verified', ''].map(h => (
-                    <th key={h} className="text-left px-5 py-3 text-xs font-bold uppercase tracking-wider" style={{ color: '#7a8aaa' }}>{h}</th>
+                    <th key={h} className="text-left px-5 py-3 text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -167,7 +159,7 @@ export default function ScholarsPage() {
                         <Avatar userId={s.userId} name={s.fullName} hasAvatar={s.hasAvatar} size={34} />
                         <div className="min-w-0">
                           <p className="font-semibold" style={{ color: 'var(--text-strong)' }}>{s.fullName}</p>
-                          <p className="text-xs" style={{ color: '#7a8aaa' }}>{s.email}</p>
+                          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{s.email}</p>
                         </div>
                       </div>
                     </td>
@@ -192,7 +184,7 @@ export default function ScholarsPage() {
                               </span>
                             )}
                             {s.minimumGwa != null && (
-                              <span className="text-xs" style={{ color: '#7a8aaa' }}>
+                              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
                                 max GWA {s.minimumGwa.toFixed(2)}
                               </span>
                             )}
@@ -215,22 +207,15 @@ export default function ScholarsPage() {
                     </td>
                     <td className="px-5 py-3.5">
                       {s.latestGwa != null ? (
-                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${GWA_BADGE(s.meetsRequirement)}`}>
+                        <span className={`status-badge tone-${GWA_TONE(s.meetsRequirement)}`}>
                           {s.latestGwa.toFixed(2)}
                         </span>
                       ) : (
-                        <span className="text-xs" style={{ color: '#7a8aaa' }}>—</span>
+                        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>—</span>
                       )}
                     </td>
                     <td className="px-5 py-3.5">
-                      {(() => {
-                        const st = LIFECYCLE_STYLE[s.lifecycleStatus] ?? LIFECYCLE_STYLE.Active;
-                        return (
-                          <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-bold" style={{ background: st.bg, color: st.color }}>
-                            {s.lifecycleStatus ?? 'Active'}
-                          </span>
-                        );
-                      })()}
+                      <StatusBadge status={s.lifecycleStatus ?? 'Active'} icon={false} />
                     </td>
                     <td className="px-5 py-3.5">
                       <StatusBadge status={s.approvalStatus || 'Approved'} />
@@ -239,7 +224,7 @@ export default function ScholarsPage() {
                       <button
                         onClick={() => navigate(`/scholars/${s.userId}`)}
                         className="clay-btn clay-btn-ghost text-xs px-3"
-                        style={{ minHeight: '32px', borderRadius: '10px', color: '#003087', fontWeight: 700 }}
+                        style={{ minHeight: '32px', borderRadius: '10px', color: 'var(--accent)', fontWeight: 700 }}
                       >
                         View
                       </button>

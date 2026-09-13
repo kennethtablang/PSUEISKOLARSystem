@@ -195,7 +195,8 @@ namespace PSUEISKOLARSystem.Server.Migrations
 
                     b.HasIndex("RecordedById");
 
-                    b.HasIndex("ScholarProfileId");
+                    b.HasIndex("ScholarProfileId", "AcademicYear", "Semester")
+                        .IsUnique();
 
                     b.ToTable("AcademicGrades");
                 });
@@ -475,9 +476,13 @@ namespace PSUEISKOLARSystem.Server.Migrations
 
                     b.Property<string>("UserId")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("TimestampUtc");
+
+                    b.HasIndex("UserId", "TimestampUtc");
 
                     b.ToTable("AuditLogs");
                 });
@@ -625,7 +630,13 @@ namespace PSUEISKOLARSystem.Server.Migrations
 
                     b.HasIndex("ReviewedById");
 
-                    b.HasIndex("ScholarId");
+                    b.HasIndex("ScholarId", "Status");
+
+                    b.HasIndex("AcademicYear", "Semester", "Status");
+
+                    b.HasIndex("ScholarId", "RequirementId", "AcademicYear", "Semester")
+                        .IsUnique()
+                        .HasFilter("[Status] <> 2");
 
                     b.ToTable("DocumentSubmissions");
                 });
@@ -798,6 +809,9 @@ namespace PSUEISKOLARSystem.Server.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(450)");
 
+                    b.Property<int?>("ScholarshipTypeId")
+                        .HasColumnType("int");
+
                     b.Property<string>("Source")
                         .HasMaxLength(150)
                         .HasColumnType("nvarchar(150)");
@@ -810,6 +824,8 @@ namespace PSUEISKOLARSystem.Server.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("RecordedById");
+
+                    b.HasIndex("ScholarshipTypeId");
 
                     b.HasIndex("ScholarId", "AwardedOn");
 
@@ -867,6 +883,10 @@ namespace PSUEISKOLARSystem.Server.Migrations
 
                     b.HasIndex("ScholarshipTypeId");
 
+                    b.HasIndex("StudentId")
+                        .IsUnique()
+                        .HasFilter("[StudentId] <> ''");
+
                     b.HasIndex("UserId")
                         .IsUnique();
 
@@ -920,6 +940,67 @@ namespace PSUEISKOLARSystem.Server.Migrations
                     b.ToTable("ScholarshipAssignments");
                 });
 
+            modelBuilder.Entity("PSUEISKOLARSystem.Server.Models.ScholarshipRelease", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AcademicYear")
+                        .IsRequired()
+                        .HasMaxLength(9)
+                        .HasColumnType("nvarchar(9)");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("decimal(12,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("RecordedById")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("ReferenceNo")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<DateTime?>("ReleasedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ScholarId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("ScholarshipTypeId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Semester")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RecordedById");
+
+                    b.HasIndex("ScholarshipTypeId", "AcademicYear", "Semester");
+
+                    b.HasIndex("ScholarId", "ScholarshipTypeId", "AcademicYear", "Semester")
+                        .IsUnique();
+
+                    b.ToTable("ScholarshipReleases");
+                });
+
             modelBuilder.Entity("PSUEISKOLARSystem.Server.Models.ScholarshipType", b =>
                 {
                     b.Property<int>("Id")
@@ -928,6 +1009,10 @@ namespace PSUEISKOLARSystem.Server.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<decimal?>("Amount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("decimal(12,2)");
+
                     b.Property<string>("Category")
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
@@ -935,6 +1020,11 @@ namespace PSUEISKOLARSystem.Server.Migrations
                     b.Property<string>("Description")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Frequency")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
@@ -993,6 +1083,9 @@ namespace PSUEISKOLARSystem.Server.Migrations
                     b.Property<DateTime>("DueDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<int>("ReminderStage")
+                        .HasColumnType("int");
+
                     b.Property<DateTime?>("RemindersSentAt")
                         .HasColumnType("datetime2");
 
@@ -1010,6 +1103,80 @@ namespace PSUEISKOLARSystem.Server.Migrations
                         .IsUnique();
 
                     b.ToTable("SubmissionDeadlines");
+                });
+
+            modelBuilder.Entity("PSUEISKOLARSystem.Server.Models.SystemSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("AllowLateSubmissions")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("AllowReplaceVerified")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("AllowedFileExtensions")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<bool>("AutoApproveScholars")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("DeadlineReminderDays")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("DefaultMinimumGwa")
+                        .HasPrecision(4, 2)
+                        .HasColumnType("decimal(4,2)");
+
+                    b.Property<bool>("EmailEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("LockoutMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<string>("MaintenanceMessage")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<bool>("MaintenanceMode")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("MaxFailedLoginAttempts")
+                        .HasColumnType("int");
+
+                    b.Property<int>("MaxUploadMb")
+                        .HasColumnType("int");
+
+                    b.Property<int>("NotificationRetentionDays")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("RequireEmailVerification")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("RequireProfileBeforeSubmission")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("SessionTimeoutMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedById")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UpdatedById");
+
+                    b.ToTable("SystemSettings");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
@@ -1247,9 +1414,16 @@ namespace PSUEISKOLARSystem.Server.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("PSUEISKOLARSystem.Server.Models.ScholarshipType", "ScholarshipType")
+                        .WithMany()
+                        .HasForeignKey("ScholarshipTypeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("RecordedBy");
 
                     b.Navigation("Scholar");
+
+                    b.Navigation("ScholarshipType");
                 });
 
             modelBuilder.Entity("PSUEISKOLARSystem.Server.Models.ScholarProfile", b =>
@@ -1302,6 +1476,31 @@ namespace PSUEISKOLARSystem.Server.Migrations
                     b.Navigation("ScholarshipType");
                 });
 
+            modelBuilder.Entity("PSUEISKOLARSystem.Server.Models.ScholarshipRelease", b =>
+                {
+                    b.HasOne("PSUEISKOLARSystem.Server.Models.ApplicationUser", "RecordedBy")
+                        .WithMany()
+                        .HasForeignKey("RecordedById");
+
+                    b.HasOne("PSUEISKOLARSystem.Server.Models.ApplicationUser", "Scholar")
+                        .WithMany()
+                        .HasForeignKey("ScholarId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("PSUEISKOLARSystem.Server.Models.ScholarshipType", "ScholarshipType")
+                        .WithMany()
+                        .HasForeignKey("ScholarshipTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("RecordedBy");
+
+                    b.Navigation("Scholar");
+
+                    b.Navigation("ScholarshipType");
+                });
+
             modelBuilder.Entity("PSUEISKOLARSystem.Server.Models.ScholarshipTypeRequirement", b =>
                 {
                     b.HasOne("PSUEISKOLARSystem.Server.Models.DocumentRequirement", "Requirement")
@@ -1337,6 +1536,16 @@ namespace PSUEISKOLARSystem.Server.Migrations
                     b.Navigation("CreatedBy");
 
                     b.Navigation("Requirement");
+                });
+
+            modelBuilder.Entity("PSUEISKOLARSystem.Server.Models.SystemSettings", b =>
+                {
+                    b.HasOne("PSUEISKOLARSystem.Server.Models.ApplicationUser", "UpdatedBy")
+                        .WithMany()
+                        .HasForeignKey("UpdatedById")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("UpdatedBy");
                 });
 
             modelBuilder.Entity("PSUEISKOLARSystem.Server.Models.AcademicProgram", b =>

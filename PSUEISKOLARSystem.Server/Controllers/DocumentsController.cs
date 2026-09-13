@@ -13,7 +13,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
     [ApiController]
     [Route("api/documents")]
     [Authorize]
-    public class DocumentsController(ApplicationDbContext db, IFileStorageService storage, IEmailService emailService, INotificationService notifications) : ControllerBase
+    public class DocumentsController(ApplicationDbContext db, IFileStorageService storage, BackgroundEmailer mail, INotificationService notifications) : ControllerBase
     {
         // Only these types may be rendered inline; everything else is forced to download.
         private static readonly HashSet<string> PreviewableTypes = new(StringComparer.OrdinalIgnoreCase)
@@ -106,26 +106,83 @@ namespace PSUEISKOLARSystem.Server.Controllers
             return Ok(submissions);
         }
 
-        // POST /api/documents  (multipart/form-data)
+        /// <summary>
+        /// POST /api/documents (multipart/form-data). Files a submission for the caller, or —
+        /// when <paramref name="scholarId"/> names someone else — for that scholar.
+        /// </summary>
+        /// <param name="scholarId">
+        /// Whose checklist this belongs on. Omitted for a scholar filing their own document.
+        /// Staff use it to file a document a scholar handed in at the counter or by mail: the
+        /// exemptions below (bypassing the profile gate, backfilling a closed period,
+        /// replacing a verified file, submitting past a deadline) exist precisely for that
+        /// case, and until this parameter existed there was no way to reach them — a staff
+        /// upload filed the document under the staff member's own account.
+        /// </param>
         [HttpPost]
         public async Task<IActionResult> Upload(
             [FromForm] int requirementId,
             [FromForm] string academicYear,
             [FromForm] int semester,
-            IFormFile file)
+            IFormFile file,
+            [FromForm] string? scholarId = null)
         {
-            var scholarId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            var actorId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            var isStaff = User.IsInRole(UserRoles.Administrator) || User.IsInRole(UserRoles.ScholarshipCoordinator);
+
+            scholarId = string.IsNullOrWhiteSpace(scholarId) ? actorId : scholarId.Trim();
+            var onBehalf = scholarId != actorId;
+
+            if (onBehalf && !isStaff) return Forbid();
 
             // Registration must be verified by the scholarship office before a scholar can
             // submit anything (see ScholarApprovalsController).
             var scholar = await db.Users.FindAsync(scholarId);
-            if (scholar is null) return BadRequest(new { message = "Account not found." });
+            if (scholar is null)
+                return BadRequest(new { message = onBehalf ? "That scholar was not found." : "Account not found." });
+
+            if (onBehalf && !await db.UserRoles
+                    .AnyAsync(ur => ur.UserId == scholarId &&
+                                    db.Roles.Any(r => r.Id == ur.RoleId && r.Name == UserRoles.Scholar)))
+                return BadRequest(new { message = $"{scholar.FullName} is not a scholar." });
+
             if (scholar.ApprovalStatus != ApprovalStatuses.Approved)
                 return BadRequest(new
                 {
-                    message = scholar.ApprovalStatus == ApprovalStatuses.Rejected
-                        ? "Your scholar registration was not approved, so document submission is locked. Please contact the scholarship office."
-                        : "Your scholar registration is still awaiting verification by the scholarship office. You can submit documents once it has been approved."
+                    message = onBehalf
+                        ? $"{scholar.FullName}'s registration is {scholar.ApprovalStatus.ToLowerInvariant()}. " +
+                          "Approve the registration before filing documents for them."
+                        : scholar.ApprovalStatus == ApprovalStatuses.Rejected
+                            ? "Your scholar registration was not approved, so document submission is locked. Please contact the scholarship office."
+                            : "Your scholar registration is still awaiting verification by the scholarship office. You can submit documents once it has been approved."
+                });
+
+            var policy = await SystemSettingsStore.GetAsync(db);
+
+            // A profile is what tells the system which requirements, deadlines, and GWA
+            // threshold apply to this scholar. Without it a submission belongs to no
+            // checklist, so setting up the profile has to come before submitting anything.
+            if (policy.RequireProfileBeforeSubmission && !isStaff)
+            {
+                var profile = await db.ScholarProfiles.AsNoTracking().FirstOrDefaultAsync(p => p.UserId == scholarId);
+                if (!ScholarOnboarding.IsComplete(profile))
+                    return BadRequest(new { message = ScholarOnboarding.BlockedMessage(profile) });
+            }
+
+            // File policy (size + type) is configurable in System Settings. The same policy is
+            // handed to the storage layer below, so the two cannot disagree; storage adds the
+            // magic-byte check on top of it.
+            var ext = Path.GetExtension(file?.FileName ?? "").ToLowerInvariant();
+            if (file is null || file.Length == 0)
+                return BadRequest(new { message = "Please choose a file to upload." });
+            if (!policy.ExtensionSet().Contains(ext))
+                return BadRequest(new
+                {
+                    message = $"That file type isn't accepted. Allowed types: {policy.AllowedFileExtensions}."
+                });
+            if (file.Length > (long)policy.MaxUploadMb * 1024 * 1024)
+                return BadRequest(new
+                {
+                    message = $"That file is {file.Length / 1024.0 / 1024.0:N1} MB — the limit is {policy.MaxUploadMb} MB."
                 });
 
             // The period was previously taken on trust — any string reached the database, which
@@ -133,7 +190,6 @@ namespace PSUEISKOLARSystem.Server.Controllers
             if (!AcademicPeriod.TryParse(academicYear, semester, out var period, out var periodError))
                 return BadRequest(new { message = periodError });
 
-            var isStaff = User.IsInRole(UserRoles.Administrator) || User.IsInRole(UserRoles.ScholarshipCoordinator);
             var active = await db.ActiveSemesters.FirstOrDefaultAsync();
 
             if (active is not null &&
@@ -169,49 +225,139 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 ds.Semester == semester &&
                 ds.Status != DocumentStatus.Incomplete);
 
-            if (existing is not null)
-                return BadRequest(new { message = "A submission already exists for this requirement and period. Remove it or wait for the coordinator to mark it Incomplete before resubmitting." });
+            /* Whether this upload is allowed to stand in for the existing one.
+
+               A verified document is a decision the office has already made, so swapping the
+               file underneath it is a policy call (AllowReplaceVerified). Staff are exempt —
+               they are the ones the scholar would otherwise have to ask.
+
+               These two conditions used to be written as a pair of guards that both fell
+               through when a replacement was permitted, so the upload carried on and inserted
+               a *second* row for the period: the old file orphaned on disk, the checklist
+               showing whichever row came back first, and compliance counting the requirement
+               twice. */
+            var mayReplace = existing is not null
+                && (isStaff || (existing.Status == DocumentStatus.Verified && policy.AllowReplaceVerified));
+
+            if (existing is not null && !mayReplace)
+                return BadRequest(new
+                {
+                    message = existing.Status == DocumentStatus.Verified
+                        ? "This document has already been verified and can no longer be replaced. " +
+                          "Message your coordinator if it needs to be changed."
+                        : "A submission already exists for this requirement and period. Remove it or " +
+                          "wait for the coordinator to mark it Incomplete before resubmitting.",
+                });
+
+            // Late submissions: the deadline for this requirement and period, if one is set.
+            if (!policy.AllowLateSubmissions && !isStaff)
+            {
+                var due = await db.SubmissionDeadlines
+                    .Where(d => d.RequirementId == requirementId
+                             && d.AcademicYear == academicYear
+                             && d.Semester == semester)
+                    .Select(d => (DateTime?)d.DueDate)
+                    .FirstOrDefaultAsync();
+
+                if (due is DateTime dueDate && DateTime.UtcNow > dueDate)
+                    return BadRequest(new
+                    {
+                        message = $"The deadline for this requirement passed on {dueDate:d MMMM yyyy}. " +
+                                  "Late submissions are currently closed — contact your coordinator."
+                    });
+            }
 
             try
             {
-                var (storedFileName, sizeBytes) = await storage.SaveAsync(file);
+                var (storedFileName, sizeBytes) = await storage.SaveAsync(file, FileUploadPolicy.ForDocuments(policy));
 
-                var submission = new DocumentSubmission
+                DocumentSubmission submission;
+                string? supersededFile = null;
+                string historyNote;
+
+                if (mayReplace)
                 {
-                    ScholarId = scholarId,
-                    RequirementId = requirementId,
-                    FileName = file.FileName,
-                    StoredFileName = storedFileName,
-                    ContentType = file.ContentType,
-                    FileSizeBytes = sizeBytes,
-                    AcademicYear = academicYear,
-                    Semester = semester,
-                };
+                    /* Replace in place rather than inserting alongside. Keeping the row means
+                       the status history, and any message thread hanging off this submission,
+                       stay attached to the requirement they belong to; the review resets
+                       because the file a coordinator signed off on is no longer there. */
+                    supersededFile = existing!.StoredFileName;
+                    historyNote = $"Replaced the previous {existing.Status} submission " +
+                                  $"('{existing.FileName}').";
 
-                db.DocumentSubmissions.Add(submission);
+                    existing.FileName = file.FileName;
+                    existing.StoredFileName = storedFileName;
+                    existing.ContentType = file.ContentType;
+                    existing.FileSizeBytes = sizeBytes;
+                    existing.SubmittedAt = DateTime.UtcNow;
+                    existing.Status = DocumentStatus.Pending;
+                    existing.FeedbackNote = null;
+                    existing.ReviewedById = null;
+                    existing.ReviewedAt = null;
+                    submission = existing;
+                }
+                else
+                {
+                    historyNote = onBehalf
+                        ? $"Filed by {User.FindFirstValue(ClaimTypes.Name)} on the scholar's behalf."
+                        : "Document submitted by scholar.";
+                    submission = new DocumentSubmission
+                    {
+                        ScholarId = scholarId,
+                        RequirementId = requirementId,
+                        FileName = file.FileName,
+                        StoredFileName = storedFileName,
+                        ContentType = file.ContentType,
+                        FileSizeBytes = sizeBytes,
+                        AcademicYear = academicYear,
+                        Semester = semester,
+                    };
+                    db.DocumentSubmissions.Add(submission);
+                }
+
                 await db.SaveChangesAsync();
 
-                // Record initial Pending history entry
                 db.DocumentStatusHistories.Add(new DocumentStatusHistory
                 {
                     SubmissionId = submission.Id,
                     Status = "Pending",
-                    Note = "Document submitted by scholar.",
-                    ChangedById = scholarId,
+                    Note = historyNote,
+                    // Who performed the upload, which is not the scholar when staff file it.
+                    ChangedById = actorId,
                     ChangedAt = submission.SubmittedAt,
                 });
-                db.Audit(this, "UploadDocument", $"Submitted '{requirement.Name}' ({academicYear} Sem {semester})");
+                db.Audit(this, mayReplace ? "ReplaceDocument" : "UploadDocument",
+                    $"{(mayReplace ? "Replaced" : "Submitted")} '{requirement.Name}' ({academicYear} Sem {semester})" +
+                    (onBehalf ? $" on behalf of {scholar.FullName}" : ""));
                 await db.SaveChangesAsync();
 
-                // Notify scholar (fire-and-forget)
+                // Only once the row points at the new file, so a failure above cannot leave a
+                // submission referring to a file that has already been deleted.
+                if (supersededFile is not null) await storage.DeleteAsync(supersededFile);
+
+                // Notify scholar (sent after the response returns — see BackgroundEmailer)
                 if (scholar.Email is not null)
                 {
-                    _ = emailService.SendDocumentUploadConfirmationAsync(
-                        scholar.Email,
-                        scholar.FullName,
-                        requirement.Name,
-                        academicYear,
-                        semester);
+                    mail.Queue($"upload confirmation to {scholar.Email}", email =>
+                        email.SendDocumentUploadConfirmationAsync(
+                            scholar.Email,
+                            scholar.FullName,
+                            requirement.Name,
+                            academicYear,
+                            semester));
+                }
+
+                // The scholar did not perform this upload, so nothing else would tell them a
+                // document just appeared on their checklist under their name.
+                if (onBehalf)
+                {
+                    await notifications.CreateAsync(
+                        scholarId,
+                        "Document filed for you",
+                        $"The scholarship office filed your \"{requirement.Name}\" for {academicYear} " +
+                        $"Sem {semester}. Check that it is the document you handed in.",
+                        NotificationCategories.DocumentStatus,
+                        "/my-documents");
                 }
 
                 _ = notifications.BroadcastAsync("AnalyticsChanged");
@@ -326,15 +472,17 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
             _ = notifications.BroadcastAsync("AnalyticsChanged");
 
-            // Notify scholar by email (fire-and-forget — respects their email preference, FR-20)
+            // Notify scholar by email (after the response — respects their preference, FR-20)
             if (submission.Scholar?.Email is not null && submission.Scholar.EmailDocumentStatus)
             {
-                _ = emailService.SendDocumentStatusEmailAsync(
-                    submission.Scholar.Email,
-                    submission.Scholar.FullName,
-                    requirementName,
-                    status.ToString(),
-                    dto.FeedbackNote);
+                var scholar = submission.Scholar;
+                mail.Queue($"document status to {scholar.Email}", email =>
+                    email.SendDocumentStatusEmailAsync(
+                        scholar.Email!,
+                        scholar.FullName,
+                        requirementName,
+                        status.ToString(),
+                        dto.FeedbackNote));
             }
 
             return NoContent();
@@ -389,9 +537,13 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     "/my-documents");
 
                 if (submission.Scholar?.Email is not null && submission.Scholar.EmailDocumentStatus)
-                    _ = emailService.SendDocumentStatusEmailAsync(
-                        submission.Scholar.Email, submission.Scholar.FullName,
-                        requirementName, status.ToString(), dto.FeedbackNote);
+                {
+                    var scholar = submission.Scholar;
+                    mail.Queue($"document status to {scholar.Email}", email =>
+                        email.SendDocumentStatusEmailAsync(
+                            scholar.Email!, scholar.FullName,
+                            requirementName, status.ToString(), dto.FeedbackNote));
+                }
             }
 
             _ = notifications.BroadcastAsync("AnalyticsChanged");
@@ -446,10 +598,18 @@ namespace PSUEISKOLARSystem.Server.Controllers
             if (!isAdmin && submission.Status == DocumentStatus.Verified)
                 return BadRequest(new { message = "Verified documents cannot be deleted." });
 
-            await storage.DeleteAsync(submission.StoredFileName);
+            var storedFile = submission.StoredFileName;
+
             db.Audit(this, "DeleteDocument", $"Deleted submission #{id} ({submission.FileName})");
             db.DocumentSubmissions.Remove(submission);
             await db.SaveChangesAsync();
+
+            /* Commit first, delete the file second. The other order left a surviving row
+               pointing at a file that no longer existed whenever SaveChangesAsync threw —
+               preview and download then returned "File not found on server." forever, with no
+               way to clear it from the checklist. An orphaned file is recoverable; a row
+               pointing at nothing is not. */
+            await storage.DeleteAsync(storedFile);
             return NoContent();
         }
     }

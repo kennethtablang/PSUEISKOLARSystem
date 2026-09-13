@@ -84,6 +84,8 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     st.Category,
                     st.MinimumGwa,
                     st.SlotLimit,
+                    st.Frequency,
+                    st.Amount,
                     // Slot figures so a picker can show "3 of 50 left" and grey out full ones
                     // before the save is rejected.
                     ScholarCount = db.ScholarProfiles.Count(sp => sp.ScholarshipTypeId == st.Id),

@@ -8,6 +8,7 @@ using PSUEISKOLARSystem.Server.Hubs;
 using PSUEISKOLARSystem.Server.Interfaces;
 using PSUEISKOLARSystem.Server.Models;
 using PSUEISKOLARSystem.Server.Models.Enums;
+using PSUEISKOLARSystem.Server.Services;
 
 namespace PSUEISKOLARSystem.Server.Controllers
 {
@@ -18,9 +19,10 @@ namespace PSUEISKOLARSystem.Server.Controllers
     public class MessagesController(
         ApplicationDbContext db,
         INotificationService notifications,
-        IEmailService emailService,
+        // No IEmailService here: the notification email is sent after the response returns,
+        // from a scope of its own. BackgroundEmailer owns that.
         IHubContext<NotificationHub> hub,
-        IServiceScopeFactory scopeFactory) : ControllerBase
+        BackgroundEmailer mail) : ControllerBase
     {
         private string UserId => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
         private bool IsStaff => User.IsInRole(UserRoles.Administrator) || User.IsInRole(UserRoles.ScholarshipCoordinator);
@@ -192,7 +194,8 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
                 // When a coordinator/admin messages a scholar, also email the scholar (FR add-on).
                 if (IsStaff && scholar.Email is not null)
-                    _ = SendMessageEmailSafeAsync(scholar.Email, scholar.FullName, senderName, preview);
+                    mail.Queue($"message notification to {scholar.Email}", email =>
+                        email.SendMessageEmailAsync(scholar.Email!, scholar.FullName, senderName, preview));
 
                 // Live thread append for anyone with the conversation open (FR-17.3).
                 await hub.Clients.Users(recipientIds).SendAsync("ReceiveMessage", new
@@ -286,18 +289,6 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 ? await db.Messages.CountAsync(m => !m.ReadByStaff && !m.IsAutoReply && m.SenderId != UserId)
                 : await db.Messages.CountAsync(m => m.ScholarId == UserId && !m.ReadByScholar && m.SenderId != UserId);
             return Ok(new { count });
-        }
-
-        // Runs after the response returns — use a fresh scope, not the request-scoped emailService.
-        private async Task SendMessageEmailSafeAsync(string email, string name, string senderName, string preview)
-        {
-            try
-            {
-                using var scope = scopeFactory.CreateScope();
-                var scopedEmail = scope.ServiceProvider.GetRequiredService<IEmailService>();
-                await scopedEmail.SendMessageEmailAsync(email, name, senderName, preview);
-            }
-            catch { /* fire-and-forget */ }
         }
 
         public record SendMessageRequest(string? ScholarId, int? RequirementId, string Body);

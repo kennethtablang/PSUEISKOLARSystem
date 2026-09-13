@@ -1,25 +1,16 @@
+import { apiFetch, apiForm } from './_client';
+
 const API = '/api/users/import';
 
 export async function downloadImportTemplate(token) {
-  const res = await fetch(`${API}/template.xlsx`, { headers: { Authorization: `Bearer ${token}` } });
-  if (!res.ok) throw new Error('Failed to download template.');
-  const blob = await res.blob();
-  triggerDownload(blob, 'scholar_import_template.xlsx');
+  const res = await apiFetch(`${API}/template.xlsx`, { token, fallback: 'Failed to download template.' });
+  triggerDownload(await res.blob(), 'scholar_import_template.xlsx');
 }
 
 export async function importScholars(file, token) {
   const body = new FormData();
   body.append('file', file);
-  const res = await fetch(API, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
-    body,
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || 'Import failed.');
-  }
-  return res.json();
+  return apiForm(API, body, token, 'Import failed.');
 }
 
 export function triggerDownload(blob, filename) {

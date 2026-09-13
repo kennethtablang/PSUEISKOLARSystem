@@ -13,10 +13,11 @@ import Modal from '../components/Modal';
 import Avatar from '../components/Avatar';
 import { useToast, useConfirm } from '../context/UIContext';
 import PasswordStrengthMeter, { getPasswordStrength } from '../components/PasswordStrengthMeter';
+import Field from '../components/Field';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 function FieldError({ children }) {
-  return children ? <p className="text-xs mt-1 font-medium" style={{ color: '#dc2626' }}>{children}</p> : null;
+  return children ? <p className="text-xs mt-1 font-medium" style={{ color: 'var(--danger)' }}>{children}</p> : null;
 }
 
 const ROLES = ['Administrator', 'ScholarshipCoordinator', 'Scholar'];
@@ -52,7 +53,7 @@ export default function UsersPage() {
     return () => clearTimeout(t);
   }, [search]);
 
-  const load = useCallback(async (p = page) => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
@@ -60,24 +61,32 @@ export default function UsersPage() {
         role:     filterRole   || undefined,
         search:   debouncedSearch || undefined,
         isActive: filterStatus || undefined,
-        page:     p,
+        page,
         pageSize,
       });
       setUsers(data.items);
       setTotal(data.total);
-      setPage(data.page);
     } catch (e) {
       setError(e.message);
     } finally {
       setLoading(false);
     }
-  }, [token, filterRole, filterStatus, debouncedSearch, pageSize, page]);
+  }, [token, filterRole, filterStatus, debouncedSearch, page, pageSize]);
 
-  /* Reset to page 1 whenever filters/search change */
-  useEffect(() => { setPage(1); }, [debouncedSearch, filterRole, filterStatus, pageSize]);
+  /* Every filter resets the page as part of the same update.
 
-  /* Load whenever the query inputs change */
-  useEffect(() => { load(page); /* eslint-disable-next-line */ }, [page, debouncedSearch, filterRole, filterStatus, pageSize]);
+     This used to be an effect that watched the filters and set the page back to 1, next to
+     a second effect that loaded. Changing a filter while on page 3 then fired the loader
+     twice — once against the stale page, then again once the reset landed — so the list
+     flickered through the wrong page's results and the server took two queries per keystroke
+     group. One state update, one fetch. */
+  const changePage = p => setPage(p);
+  const changeSearch = v => { setSearch(v); setPage(1); };
+  const changeRole = v => { setFilterRole(v); setPage(1); };
+  const changeStatus = v => { setFilterStatus(v); setPage(1); };
+  const changePageSize = v => { setPageSize(v); setPage(1); };
+
+  useEffect(() => { load(); }, [load]);
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
@@ -92,7 +101,7 @@ export default function UsersPage() {
     if (!(await confirm({ title: 'Delete user', message: `Delete ${user.fullName}? This cannot be undone.`, confirmLabel: 'Delete', danger: true }))) return;
     try {
       await deleteUser(user.id, token);
-      load(page); // reload the page so totals/paging stay correct
+      load(); // reload so totals/paging stay correct
     } catch (e) { toast(e.message, 'error'); }
   }
 
@@ -135,23 +144,23 @@ export default function UsersPage() {
         <div className="flex flex-wrap gap-2 mb-5 items-center">
           <input
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => changeSearch(e.target.value)}
             className="clay-input"
             style={{ ...ctlStyle, width: 220 }}
             placeholder="Search name or email…"
           />
-          <select value={filterRole} onChange={e => setFilterRole(e.target.value)} className="clay-input" style={{ ...ctlStyle, width: 'auto' }}>
+          <select value={filterRole} onChange={e => changeRole(e.target.value)} className="clay-input" style={{ ...ctlStyle, width: 'auto' }}>
             <option value="">All Roles</option>
             {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
           </select>
-          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="clay-input" style={{ ...ctlStyle, width: 'auto' }}>
+          <select value={filterStatus} onChange={e => changeStatus(e.target.value)} className="clay-input" style={{ ...ctlStyle, width: 'auto' }}>
             <option value="">All Statuses</option>
             <option value="true">Active</option>
             <option value="false">Archived</option>
           </select>
         </div>
 
-        {error && <p className="text-sm mb-4" style={{ color: '#003087' }}>{error}</p>}
+        {error && <p className="text-sm mb-4" style={{ color: 'var(--accent)' }}>{error}</p>}
 
         <div className="clay-card overflow-hidden">
           {loading ? (
@@ -163,7 +172,7 @@ export default function UsersPage() {
               <thead className="clay-table-head">
                 <tr>
                   {['Name', 'Email', 'Role', 'Status', ''].map(h => (
-                    <th key={h} className="text-left px-5 py-3 text-xs font-bold uppercase tracking-wider" style={{ color: '#7a8aaa' }}>{h}</th>
+                    <th key={h} className="text-left px-5 py-3 text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -187,7 +196,7 @@ export default function UsersPage() {
                     </td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-3 justify-end">
-                        <button onClick={() => openEdit(u)} className="text-xs font-medium hover:underline" style={{ color: '#003087' }}>
+                        <button onClick={() => openEdit(u)} className="text-xs font-medium hover:underline" style={{ color: 'var(--accent)' }}>
                           Edit
                         </button>
                         <button onClick={() => handleToggleStatus(u)} className="text-xs font-medium hover:underline" style={{ color: u.isActive ? '#1a3a7a' : '#0a7d43' }}>
@@ -196,7 +205,7 @@ export default function UsersPage() {
                         <button onClick={() => handleSendReset(u)} disabled={resetting === u.id} className="text-xs font-medium hover:underline" style={{ color: '#8a5a00', opacity: resetting === u.id ? 0.6 : 1 }}>
                           {resetting === u.id ? 'Sending…' : 'Reset Password'}
                         </button>
-                        <button onClick={() => handleDelete(u)} className="text-xs font-medium hover:underline" style={{ color: '#e03030' }}>
+                        <button onClick={() => handleDelete(u)} className="text-xs font-medium hover:underline" style={{ color: 'var(--danger)' }}>
                           Delete
                         </button>
                       </div>
@@ -214,8 +223,8 @@ export default function UsersPage() {
             totalPages={totalPages}
             total={total}
             pageSize={pageSize}
-            onPageChange={setPage}
-            onPageSizeChange={setPageSize}
+            onPageChange={changePage}
+            onPageSizeChange={changePageSize}
             label="users"
           />
         )}
@@ -326,7 +335,7 @@ function ImportScholarsModal({ token, onClose, onDone }) {
         {result && (
           <>
             <div className="flex gap-3 mb-4">
-              <SummaryStat label="Total rows" value={result.total} color="#003087" />
+              <SummaryStat label="Total rows" value={result.total} color="var(--accent)" />
               <SummaryStat label="Created" value={result.created} color="#0a7d43" />
               <SummaryStat label="Failed" value={result.failed} color="#c0342c" />
             </div>
@@ -336,14 +345,14 @@ function ImportScholarsModal({ token, onClose, onDone }) {
                 <thead className="clay-table-head">
                   <tr>
                     {['#', 'Email', 'Result'].map(h => (
-                      <th key={h} className="text-left px-3 py-2 font-bold uppercase tracking-wider" style={{ color: '#7a8aaa' }}>{h}</th>
+                      <th key={h} className="text-left px-3 py-2 font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {result.results.map(r => (
                     <tr key={r.row} className="clay-table-row">
-                      <td className="px-3 py-2" style={{ color: '#7a8aaa' }}>{r.row}</td>
+                      <td className="px-3 py-2" style={{ color: 'var(--text-muted)' }}>{r.row}</td>
                       <td className="px-3 py-2" style={{ color: 'var(--text-strong)' }}>{r.email || '—'}</td>
                       <td className="px-3 py-2">
                         <span className="inline-flex items-center gap-1.5" style={{ color: r.success ? '#0a7d43' : '#c0342c' }}>
@@ -375,7 +384,7 @@ function SummaryStat({ label, value, color }) {
   return (
     <div className="clay-card flex-1 px-4 py-3 text-center">
       <p className="text-2xl font-black" style={{ color }}>{value}</p>
-      <p className="text-xs font-semibold uppercase tracking-wider mt-0.5" style={{ color: '#7a8aaa' }}>{label}</p>
+      <p className="text-xs font-semibold uppercase tracking-wider mt-0.5" style={{ color: 'var(--text-muted)' }}>{label}</p>
     </div>
   );
 }
@@ -530,16 +539,7 @@ export function ClayModal({ title, subtitle, onClose, children, width = 460, dis
 export function ErrorBox({ children }) {
   return (
     <div className="mb-4 p-3 rounded-2xl text-sm font-medium"
-      style={{ background: '#dce8ff', color: '#003087', border: '1.5px solid #80aaee' }}>
-      {children}
-    </div>
-  );
-}
-
-export function Field({ label, children }) {
-  return (
-    <div>
-      <label className="block text-xs font-bold mb-1.5 uppercase tracking-wider" style={{ color: 'var(--text)' }}>{label}</label>
+      style={{ background: 'var(--accent-soft-bg)', color: 'var(--accent)', border: '1.5px solid var(--accent-soft-border)' }}>
       {children}
     </div>
   );

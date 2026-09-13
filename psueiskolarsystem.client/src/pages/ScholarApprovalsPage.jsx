@@ -7,16 +7,12 @@ import { getScholarApprovals, approveScholar, rejectScholar } from '../api/schol
 import Pagination from '../components/Pagination';
 import { TableSkeleton, EmptyState } from '../components/ListState';
 import Modal from '../components/Modal';
-import { ErrorBox, Field } from './UsersPage';
+import { ErrorBox } from './UsersPage';
+import Field from '../components/Field';
 import { useTitle } from '../hooks/useTitle';
 import { ctlStyle } from '../constants/ui';
-import { ShieldCheck, ShieldX, AlertTriangle, MailCheck, MailWarning, Clock, UserCheck } from 'lucide-react';
-
-const STATUS_STYLE = {
-  Pending:  { bg: '#fff3cd', color: '#7d5a00', border: '#f5d060' },
-  Approved: { bg: '#d4f4e2', color: '#166534', border: '#86efac' },
-  Rejected: { bg: '#fee2e2', color: '#991b1b', border: '#fca5a5' },
-};
+import { ShieldCheck, ShieldX, AlertTriangle, MailCheck, MailWarning, UserCheck } from 'lucide-react';
+import StatusBadge from '../components/StatusBadge';
 
 export default function ScholarApprovalsPage() {
   useTitle('Scholar Approvals');
@@ -113,7 +109,7 @@ export default function ScholarApprovalsPage() {
           </div>
         </div>
 
-        {error && <p className="text-sm mb-4" style={{ color: '#e03030' }}>{error}</p>}
+        {error && <p className="text-sm mb-4" style={{ color: 'var(--danger)' }}>{error}</p>}
 
         <div className="clay-card overflow-hidden">
           {loading ? (
@@ -130,7 +126,7 @@ export default function ScholarApprovalsPage() {
               <thead className="clay-table-head">
                 <tr>
                   {['Scholar', 'Student ID', 'Program', 'Scholarship', 'Registered', 'Checks', 'Status', ''].map(h => (
-                    <th key={h} className="text-left px-5 py-3 text-xs font-bold uppercase tracking-wider" style={{ color: '#7a8aaa' }}>{h}</th>
+                    <th key={h} className="text-left px-5 py-3 text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -139,7 +135,7 @@ export default function ScholarApprovalsPage() {
                   <tr key={s.id} className="clay-table-row">
                     <td className="px-5 py-3.5">
                       <p className="font-semibold" style={{ color: 'var(--text-strong)' }}>{s.fullName}</p>
-                      <p className="text-xs flex items-center gap-1" style={{ color: '#7a8aaa' }}>
+                      <p className="text-xs flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
                         {s.emailConfirmed
                           ? <MailCheck size={11} strokeWidth={2.4} style={{ color: '#166534' }} />
                           : <MailWarning size={11} strokeWidth={2.4} style={{ color: '#b45309' }} />}
@@ -153,7 +149,7 @@ export default function ScholarApprovalsPage() {
                         <div>
                           <p className="text-sm font-medium" style={{ color: 'var(--text-strong)' }}>{s.scholarshipTypeName}</p>
                           {s.scholarshipTypeCategory && (
-                            <p className="text-xs" style={{ color: '#7a8aaa' }}>{s.scholarshipTypeCategory}</p>
+                            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{s.scholarshipTypeCategory}</p>
                           )}
                         </div>
                       ) : (
@@ -182,12 +178,12 @@ export default function ScholarApprovalsPage() {
                     <td className="px-5 py-3.5">
                       <StatusBadge status={s.approvalStatus} />
                       {s.approvalDecidedAt && (
-                        <p className="text-xs mt-1" style={{ color: '#9aaabb' }}>
+                        <p className="text-xs mt-1" style={{ color: 'var(--text-faint)' }}>
                           {s.decidedBy ? `by ${s.decidedBy}` : ''}
                         </p>
                       )}
                       {s.approvalNote && (
-                        <p className="text-xs mt-0.5 italic" style={{ color: '#7a8aaa' }}>“{s.approvalNote}”</p>
+                        <p className="text-xs mt-0.5 italic" style={{ color: 'var(--text-muted)' }}>“{s.approvalNote}”</p>
                       )}
                     </td>
                     <td className="px-5 py-3.5 text-right">
@@ -195,7 +191,7 @@ export default function ScholarApprovalsPage() {
                         <button
                           onClick={() => navigate(`/scholars/${s.id}`)}
                           className="text-xs font-medium hover:underline"
-                          style={{ color: '#003087' }}
+                          style={{ color: 'var(--accent)' }}
                         >
                           View profile
                         </button>
@@ -212,7 +208,7 @@ export default function ScholarApprovalsPage() {
                           <button
                             onClick={() => setDeciding({ scholar: s, approved: false })}
                             className="text-xs font-bold hover:underline flex items-center gap-1"
-                            style={{ color: '#e03030' }}
+                            style={{ color: 'var(--danger)' }}
                           >
                             <ShieldX size={12} strokeWidth={2.6} /> Reject
                           </button>
@@ -252,18 +248,6 @@ export default function ScholarApprovalsPage() {
   );
 }
 
-export function StatusBadge({ status }) {
-  const s = STATUS_STYLE[status] ?? STATUS_STYLE.Pending;
-  const Icon = status === 'Approved' ? ShieldCheck : status === 'Rejected' ? ShieldX : Clock;
-  return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold"
-      style={{ background: s.bg, color: s.color, border: `1px solid ${s.border}` }}>
-      <Icon size={11} strokeWidth={2.6} />
-      {status === 'Pending' ? 'Pending' : status}
-    </span>
-  );
-}
-
 function DecisionModal({ scholar, approved, token, onClose, onDone }) {
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
@@ -300,7 +284,7 @@ function DecisionModal({ scholar, approved, token, onClose, onDone }) {
             style={{ background: approved ? 'rgba(22,101,52,0.10)' : 'rgba(224,48,48,0.10)' }}>
             {approved
               ? <UserCheck size={15} strokeWidth={2.4} style={{ color: '#166534' }} />
-              : <ShieldX size={15} strokeWidth={2.4} style={{ color: '#e03030' }} />}
+              : <ShieldX size={15} strokeWidth={2.4} style={{ color: 'var(--danger)' }} />}
           </span>
           {approved ? 'Approve registration' : 'Reject registration'}
         </span>
@@ -349,13 +333,13 @@ function DecisionModal({ scholar, approved, token, onClose, onDone }) {
               : 'Anything the scholar should know…'}
           />
           {noteRequired && !canSubmit && note.length > 0 && (
-            <p className="text-xs mt-1 font-medium" style={{ color: '#dc2626' }}>
+            <p className="text-xs mt-1 font-medium" style={{ color: 'var(--danger)' }}>
               Please give the scholar a usable reason (at least 5 characters).
             </p>
           )}
         </Field>
 
-        <p className="text-xs" style={{ color: '#7a8aaa' }}>
+        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
           {approved
             ? 'The scholar is notified by email and in-app, and can start submitting documents right away.'
             : 'The scholar is notified with your reason. Their account stays active but document submission stays locked.'}
@@ -385,7 +369,7 @@ function DecisionModal({ scholar, approved, token, onClose, onDone }) {
 function Row({ label, value }) {
   return (
     <div className="flex items-baseline justify-between gap-3 text-xs">
-      <span style={{ color: '#7a8aaa' }}>{label}</span>
+      <span style={{ color: 'var(--text-muted)' }}>{label}</span>
       <span className="font-semibold text-right" style={{ color: 'var(--text-strong)' }}>{value}</span>
     </div>
   );

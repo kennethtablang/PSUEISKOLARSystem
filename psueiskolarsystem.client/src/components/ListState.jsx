@@ -24,9 +24,9 @@ export function TableSkeleton({ rows = 6 }) {
 export function EmptyState({ icon: Icon = Inbox, title = 'Nothing here yet', message }) {
   return (
     <div className="text-center py-14 px-6">
-      <Icon size={34} strokeWidth={1.5} className="mx-auto mb-3" style={{ color: '#b0bdd0' }} />
+      <Icon size={34} strokeWidth={1.5} className="mx-auto mb-3" style={{ color: 'var(--text-faint)' }} />
       <p className="text-sm font-bold" style={{ color: 'var(--text-strong)' }}>{title}</p>
-      {message && <p className="text-sm mt-1" style={{ color: '#7a8aaa' }}>{message}</p>}
+      {message && <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>{message}</p>}
     </div>
   );
 }

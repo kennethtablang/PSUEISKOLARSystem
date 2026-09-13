@@ -323,7 +323,7 @@ export default function LoginPage() {
           <Logo size={40} shadow="0 3px 0px rgba(0,37,112,0.35)" />
           <div>
             <p className="font-black text-base leading-tight" style={{ color: 'var(--text-strong)' }}>e-Iskolar</p>
-            <p className="text-xs" style={{ color: '#7a8aaa' }}>Lingayen Campus</p>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Lingayen Campus</p>
           </div>
         </div>
 
@@ -343,7 +343,7 @@ export default function LoginPage() {
 
             {error && (
               <div className="mb-5 flex items-start gap-2.5 p-3.5 rounded-2xl text-sm"
-                style={{ background: '#fff0f0', color: '#b03030', border: '1.5px solid #f5b0b0' }}>
+                style={{ background: 'var(--danger-bg)', color: 'var(--danger)', border: '1.5px solid var(--danger-border)' }}>
                 <AlertTriangle size={14} strokeWidth={2.5} className="mt-px shrink-0" />
                 <span>{error}</span>
               </div>
@@ -353,7 +353,7 @@ export default function LoginPage() {
               <div className="mb-5 -mt-2">
                 {resend.msg ? (
                   <p className="flex items-start gap-2 text-xs p-3 rounded-2xl"
-                    style={{ background: '#eef6ff', color: '#003087', border: '1px solid #bcd4f5' }}>
+                    style={{ background: 'var(--accent-soft-bg)', color: 'var(--accent)', border: '1px solid var(--accent-soft-border)' }}>
                     <MailCheck size={14} strokeWidth={2.5} className="mt-px shrink-0" />
                     <span>{resend.msg}</span>
                   </p>
@@ -375,15 +375,16 @@ export default function LoginPage() {
 
               {/* Email field */}
               <div>
-                <label className="block text-xs font-bold mb-2 uppercase tracking-wider"
+                <label htmlFor="signin-email" className="block text-xs font-bold mb-2 uppercase tracking-wider"
                   style={{ color: 'var(--text)' }}>
                   Email Address
                 </label>
                 <div className="relative">
                   <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
-                    <Mail size={15} color="#7a8aaa" strokeWidth={2} />
+                    <Mail size={15} style={{ color: 'var(--text-muted)' }} strokeWidth={2} />
                   </span>
                   <input
+                    id="signin-email"
                     type="email"
                     required
                     value={email}
@@ -398,15 +399,16 @@ export default function LoginPage() {
 
               {/* Password field */}
               <div>
-                <label className="block text-xs font-bold mb-2 uppercase tracking-wider"
+                <label htmlFor="signin-password" className="block text-xs font-bold mb-2 uppercase tracking-wider"
                   style={{ color: 'var(--text)' }}>
                   Password
                 </label>
                 <div className="relative">
                   <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
-                    <Lock size={15} color="#7a8aaa" strokeWidth={2} />
+                    <Lock size={15} style={{ color: 'var(--text-muted)' }} strokeWidth={2} />
                   </span>
                   <input
+                    id="signin-password"
                     type="password"
                     required
                     value={password}
@@ -425,7 +427,7 @@ export default function LoginPage() {
                   type="button"
                   onClick={() => setShowForgot(true)}
                   className="text-xs font-medium hover:underline"
-                  style={{ color: '#002570' }}>
+                  style={{ color: 'var(--accent-strong)' }}>
                   Forgot password?
                 </button>
               </div>
@@ -459,7 +461,7 @@ export default function LoginPage() {
           </div>
 
           {/* Below-card note */}
-          <p className="text-center text-xs mt-4" style={{ color: '#9aaabb' }}>
+          <p className="text-center text-xs mt-4" style={{ color: 'var(--text-faint)' }}>
             Access is restricted to authorized PSU personnel only.
           </p>
         </div>
@@ -503,7 +505,7 @@ function TwoFaModal({ ticket, onBack, onSuccess }) {
         <div className="flex flex-col items-center text-center mb-6">
           <div className="w-12 h-12 rounded-full flex items-center justify-center mb-3"
             style={{ background: 'rgba(0,37,112,0.08)', border: '2px solid rgba(0,37,112,0.15)' }}>
-            <ShieldCheck size={24} color="#002570" strokeWidth={2} />
+            <ShieldCheck size={24} style={{ color: 'var(--accent-strong)' }} strokeWidth={2} />
           </div>
           <h2 className="text-base font-black" style={{ color: 'var(--text-strong)' }}>Two-Factor Verification</h2>
           <p className="text-sm mt-1" style={{ color: 'var(--text)' }}>
@@ -513,7 +515,7 @@ function TwoFaModal({ ticket, onBack, onSuccess }) {
 
         {error && (
           <div className="mb-4 flex items-start gap-2 p-3 rounded-2xl text-sm"
-            style={{ background: '#fff0f0', color: '#b03030', border: '1.5px solid #f5b0b0' }}>
+            style={{ background: 'var(--danger-bg)', color: 'var(--danger)', border: '1.5px solid var(--danger-border)' }}>
             <AlertTriangle size={14} strokeWidth={2.5} className="shrink-0 mt-px" />
             <span>{error}</span>
           </div>
@@ -521,11 +523,12 @@ function TwoFaModal({ ticket, onBack, onSuccess }) {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-bold mb-2 uppercase tracking-wider"
+            <label htmlFor="twofa-code" className="block text-xs font-bold mb-2 uppercase tracking-wider"
               style={{ color: 'var(--text)' }}>
               Authentication Code
             </label>
             <input
+              id="twofa-code"
               type="text"
               inputMode="numeric"
               pattern="[0-9 ]*"
@@ -584,7 +587,7 @@ function ForgotPasswordModal({ onClose }) {
         <span className="flex items-center gap-2.5">
           <span className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
             style={{ background: 'rgba(0,37,112,0.08)', border: '1px solid rgba(0,37,112,0.12)' }}>
-            <KeyRound size={15} color="#002570" strokeWidth={2} />
+            <KeyRound size={15} style={{ color: 'var(--accent-strong)' }} strokeWidth={2} />
           </span>
           Reset Password
         </span>
@@ -601,7 +604,7 @@ function ForgotPasswordModal({ onClose }) {
 
             {error && (
               <div className="mb-4 flex items-start gap-2 p-3 rounded-2xl text-sm"
-                style={{ background: '#fff0f0', color: '#b03030', border: '1.5px solid #f5b0b0' }}>
+                style={{ background: 'var(--danger-bg)', color: 'var(--danger)', border: '1.5px solid var(--danger-border)' }}>
                 <AlertTriangle size={14} strokeWidth={2.5} className="shrink-0" />
                 <span>{error}</span>
               </div>
@@ -609,15 +612,16 @@ function ForgotPasswordModal({ onClose }) {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold mb-2 uppercase tracking-wider"
+                <label htmlFor="forgot-email" className="block text-xs font-bold mb-2 uppercase tracking-wider"
                   style={{ color: 'var(--text)' }}>
                   Email Address
                 </label>
                 <div className="relative">
                   <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
-                    <Mail size={15} color="#7a8aaa" strokeWidth={2} />
+                    <Mail size={15} style={{ color: 'var(--text-muted)' }} strokeWidth={2} />
                   </span>
                   <input
+                    id="forgot-email"
                     type="email"
                     required
                     value={email}
@@ -647,7 +651,7 @@ function ForgotPasswordModal({ onClose }) {
             <div className="flex flex-col items-center text-center py-2 mb-5">
               <div className="w-12 h-12 rounded-full flex items-center justify-center mb-3"
                 style={{ background: 'rgba(0,37,112,0.08)', border: '2px solid rgba(0,37,112,0.15)' }}>
-                <Mail size={22} color="#002570" strokeWidth={2} />
+                <Mail size={22} style={{ color: 'var(--accent-strong)' }} strokeWidth={2} />
               </div>
               <p className="font-black text-base mb-1" style={{ color: 'var(--text-strong)' }}>Check Your Inbox</p>
               <p className="text-sm leading-relaxed" style={{ color: 'var(--text)' }}>
@@ -655,7 +659,7 @@ function ForgotPasswordModal({ onClose }) {
                 Please check your email and follow the instructions.
               </p>
             </div>
-            <p className="text-xs text-center mb-4" style={{ color: '#9aaabb' }}>
+            <p className="text-xs text-center mb-4" style={{ color: 'var(--text-faint)' }}>
               The link expires in 24 hours. Check your spam folder if you don't see it.
             </p>
             <button onClick={onClose}
@@ -668,7 +672,7 @@ function ForgotPasswordModal({ onClose }) {
             <div className="flex flex-col items-center text-center py-2 mb-5">
               <div className="w-12 h-12 rounded-full flex items-center justify-center mb-3"
                 style={{ background: 'rgba(0,37,112,0.06)', border: '2px solid rgba(0,37,112,0.10)' }}>
-                <Mail size={22} color="#7a8aaa" strokeWidth={2} />
+                <Mail size={22} style={{ color: 'var(--text-muted)' }} strokeWidth={2} />
               </div>
               <p className="font-black text-base mb-1" style={{ color: 'var(--text-strong)' }}>Email Not Found</p>
               <p className="text-sm" style={{ color: 'var(--text)' }}>

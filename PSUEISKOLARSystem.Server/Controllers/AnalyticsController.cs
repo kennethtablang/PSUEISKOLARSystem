@@ -2,118 +2,27 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PSUEISKOLARSystem.Server.Data;
+using PSUEISKOLARSystem.Server.DTOs.Analytics;
 using PSUEISKOLARSystem.Server.Models;
 using PSUEISKOLARSystem.Server.Models.Enums;
+using PSUEISKOLARSystem.Server.Services;
 
 namespace PSUEISKOLARSystem.Server.Controllers
 {
     [ApiController]
     [Route("api/analytics")]
     [Authorize(Roles = $"{UserRoles.Administrator},{UserRoles.ScholarshipCoordinator}")]
-    public class AnalyticsController(ApplicationDbContext db) : ControllerBase
+    public class AnalyticsController(ApplicationDbContext db, AnalyticsQueries analytics) : ControllerBase
     {
         // GET /api/analytics/overview?academicYear=&semester=
+        // The aggregate itself lives in AnalyticsQueries — the staff dashboard needs the same
+        // numbers, and two copies of an eleven-query aggregate is two things to keep in step.
         [HttpGet("overview")]
-        public async Task<IActionResult> Overview(
+        public async Task<ActionResult<OverviewDto>> Overview(
             [FromQuery] string? academicYear = null,
-            [FromQuery] int? semester = null)
-        {
-            // Scholar counts — aggregated in SQL rather than materializing every profile.
-            var scholarQuery = db.ScholarProfiles.AsQueryable();
-
-            var totalScholars = await scholarQuery.CountAsync();
-
-            // Latest grade's compliance per scholar, evaluated as a correlated subquery.
-            var compliant = await scholarQuery.CountAsync(sp => sp.Grades
-                .OrderByDescending(g => g.AcademicYear).ThenByDescending(g => g.Semester)
-                .Select(g => (bool?)g.MeetsRequirement).FirstOrDefault() == true);
-            var nonCompliant = await scholarQuery.CountAsync(sp => sp.Grades
-                .OrderByDescending(g => g.AcademicYear).ThenByDescending(g => g.Semester)
-                .Select(g => (bool?)g.MeetsRequirement).FirstOrDefault() == false);
-            var noGwa = totalScholars - compliant - nonCompliant;
-
-            // By program
-            var byProgram = await scholarQuery
-                .Where(sp => sp.Program != null)
-                .GroupBy(sp => sp.Program!.Code)
-                .Select(g => new { program = g.Key, count = g.Count() })
-                .OrderByDescending(x => x.count)
-                .ToListAsync();
-
-            // By scholarship type
-            var byScholarshipType = await scholarQuery
-                .Where(sp => sp.ScholarshipType != null)
-                .GroupBy(sp => sp.ScholarshipType!.Name)
-                .Select(g => new { type = g.Key, count = g.Count() })
-                .OrderByDescending(x => x.count)
-                .ToListAsync();
-
-            // Submission stats
-            var submissionQuery = db.DocumentSubmissions.AsQueryable();
-
-            // Period options are computed before the period filter so the dropdown stays populated.
-            var periodKeys = await submissionQuery
-                .Select(s => new { s.AcademicYear, s.Semester })
-                .Distinct()
-                .ToListAsync();
-            var availablePeriods = periodKeys
-                .Select(p => new { academicYear = p.AcademicYear, semester = p.Semester, label = $"{p.AcademicYear} Sem {p.Semester}" })
-                .OrderByDescending(p => p.academicYear).ThenByDescending(p => p.semester)
-                .ToList();
-
-            // Academic-period filter (optional) — narrows submission stats to one period.
-            if (!string.IsNullOrWhiteSpace(academicYear))
-                submissionQuery = submissionQuery.Where(s => s.AcademicYear == academicYear);
-            if (semester is 1 or 2)
-                submissionQuery = submissionQuery.Where(s => s.Semester == semester);
-
-            var totalSubs = await submissionQuery.CountAsync();
-            var verifiedSubs = await submissionQuery.CountAsync(s => s.Status == DocumentStatus.Verified);
-            var pendingSubs = await submissionQuery.CountAsync(s => s.Status == DocumentStatus.Pending);
-            var incompleteSubs = await submissionQuery.CountAsync(s => s.Status == DocumentStatus.Incomplete);
-
-            // Submissions by academic period (grouped in SQL; label formatted after)
-            var byPeriodRaw = await submissionQuery
-                .GroupBy(s => new { s.AcademicYear, s.Semester })
-                .Select(g => new
-                {
-                    g.Key.AcademicYear,
-                    g.Key.Semester,
-                    total = g.Count(),
-                    verified = g.Count(s => s.Status == DocumentStatus.Verified),
-                    pending = g.Count(s => s.Status == DocumentStatus.Pending),
-                    incomplete = g.Count(s => s.Status == DocumentStatus.Incomplete),
-                })
-                .ToListAsync();
-
-            var byPeriod = byPeriodRaw
-                .Select(x => new
-                {
-                    period = $"{x.AcademicYear} Sem {x.Semester}",
-                    x.total, x.verified, x.pending, x.incomplete,
-                })
-                .OrderBy(x => x.period)
-                .ToList();
-
-            return Ok(new
-            {
-                totalScholars,
-                compliant,
-                nonCompliant,
-                noGwa,
-                byProgram,
-                byScholarshipType,
-                submissions = new
-                {
-                    total = totalSubs,
-                    verified = verifiedSubs,
-                    pending = pendingSubs,
-                    incomplete = incompleteSubs,
-                },
-                byPeriod,
-                availablePeriods,
-            });
-        }
+            [FromQuery] int? semester = null,
+            CancellationToken ct = default)
+            => Ok(await analytics.OverviewAsync(academicYear, semester, ct));
 
         // GET /api/analytics/trends
         // One row per academic period, ordered oldest → newest, for the stacked-area comparison
@@ -187,6 +96,152 @@ namespace PSUEISKOLARSystem.Server.Controllers
             }).ToList();
 
             return Ok(new { periods });
+        }
+
+        /// <summary>
+        /// GET /api/analytics/disbursements — the money side of the system.
+        /// <para>
+        /// Two streams feed it and they are reported separately on purpose: recurring
+        /// scholarship releases (per semester / per year) and one-off grants. Summing them
+        /// into a single "total disbursed" would hide the question staff actually ask, which
+        /// is whether the recurring obligation for the current period has been met.
+        /// </para>
+        /// Coverage per scholarship type is the headline: released ÷ holders. A type whose
+        /// holders outnumber its releases has scholars who have not been paid.
+        /// </summary>
+        [HttpGet("disbursements")]
+        public async Task<IActionResult> Disbursements(
+            [FromQuery] string? academicYear = null,
+            [FromQuery] int? semester = null)
+        {
+            var releases = db.ScholarshipReleases.AsQueryable();
+            if (!string.IsNullOrWhiteSpace(academicYear))
+                releases = releases.Where(r => r.AcademicYear == academicYear);
+            if (semester is int sem)
+                releases = releases.Where(r => r.Semester == sem);
+
+            var released = releases.Where(r => r.Status == GrantReleaseStatuses.Released);
+            var pending = releases.Where(r => r.Status == GrantReleaseStatuses.Pending);
+
+            var releasedCount = await released.CountAsync();
+            var pendingCount = await pending.CountAsync();
+            var cancelledCount = await releases.CountAsync(r => r.Status == GrantReleaseStatuses.Cancelled);
+
+            var releasedAmount = releasedCount == 0 ? 0m : await released.SumAsync(r => r.Amount);
+            var pendingAmount = pendingCount == 0 ? 0m : await pending.SumAsync(r => r.Amount);
+
+            // Holders per type, so coverage can be stated as a share of who is owed rather
+            // than a share of rows that happen to exist.
+            var holders = await db.ScholarProfiles
+                .Where(sp => sp.ScholarshipTypeId != null)
+                .GroupBy(sp => sp.ScholarshipTypeId!.Value)
+                .Select(g => new { TypeId = g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.TypeId, x => x.Count);
+
+            var perType = await releases
+                .GroupBy(r => new { r.ScholarshipTypeId, r.ScholarshipType.Name, r.ScholarshipType.Frequency })
+                .Select(g => new
+                {
+                    g.Key.ScholarshipTypeId,
+                    g.Key.Name,
+                    g.Key.Frequency,
+                    ReleasedCount = g.Count(r => r.Status == GrantReleaseStatuses.Released),
+                    PendingCount = g.Count(r => r.Status == GrantReleaseStatuses.Pending),
+                    ReleasedAmount = g.Where(r => r.Status == GrantReleaseStatuses.Released).Sum(r => (decimal?)r.Amount) ?? 0m,
+                    PendingAmount = g.Where(r => r.Status == GrantReleaseStatuses.Pending).Sum(r => (decimal?)r.Amount) ?? 0m,
+                })
+                .ToListAsync();
+
+            var byType = perType
+                .Select(t => new
+                {
+                    scholarshipTypeId = t.ScholarshipTypeId,
+                    type = t.Name,
+                    frequency = t.Frequency,
+                    holders = holders.GetValueOrDefault(t.ScholarshipTypeId),
+                    releasedCount = t.ReleasedCount,
+                    pendingCount = t.PendingCount,
+                    releasedAmount = t.ReleasedAmount,
+                    pendingAmount = t.PendingAmount,
+                    // Only meaningful for a single period; across "all periods" a scholar can
+                    // legitimately have several releases, so this is capped at 100.
+                    coverage = holders.GetValueOrDefault(t.ScholarshipTypeId) > 0
+                        ? Math.Min(100, (int)Math.Round(t.ReleasedCount * 100.0 / holders.GetValueOrDefault(t.ScholarshipTypeId)))
+                        : 0,
+                })
+                .OrderByDescending(t => t.releasedAmount)
+                .ToList();
+
+            var perPeriod = await db.ScholarshipReleases
+                .GroupBy(r => new { r.AcademicYear, r.Semester })
+                .Select(g => new
+                {
+                    g.Key.AcademicYear,
+                    g.Key.Semester,
+                    ReleasedAmount = g.Where(r => r.Status == GrantReleaseStatuses.Released).Sum(r => (decimal?)r.Amount) ?? 0m,
+                    PendingAmount = g.Where(r => r.Status == GrantReleaseStatuses.Pending).Sum(r => (decimal?)r.Amount) ?? 0m,
+                    ReleasedCount = g.Count(r => r.Status == GrantReleaseStatuses.Released),
+                    PendingCount = g.Count(r => r.Status == GrantReleaseStatuses.Pending),
+                })
+                .ToListAsync();
+
+            var byPeriod = perPeriod
+                .OrderBy(p => AcademicPeriod.SortKey(p.AcademicYear, p.Semester))
+                .Select(p => new
+                {
+                    period = p.Semester == ScholarshipFrequencies.WholeYearSemester
+                        ? $"{p.AcademicYear} (whole year)"
+                        : $"{p.AcademicYear} Sem {p.Semester}",
+                    shortLabel = p.Semester == ScholarshipFrequencies.WholeYearSemester
+                        ? $"{ShortYear(p.AcademicYear)} yr"
+                        : $"{ShortYear(p.AcademicYear)} S{p.Semester}",
+                    releasedAmount = p.ReleasedAmount,
+                    pendingAmount = p.PendingAmount,
+                    releasedCount = p.ReleasedCount,
+                    pendingCount = p.PendingCount,
+                })
+                .ToList();
+
+            // One-off grants, reported beside the recurring stream rather than folded into it.
+            var grantsReleased = db.OneTimeGrants.Where(g => g.ReleaseStatus == GrantReleaseStatuses.Released);
+            var grantsPending = db.OneTimeGrants.Where(g => g.ReleaseStatus == GrantReleaseStatuses.Pending);
+            var grantsReleasedCount = await grantsReleased.CountAsync();
+            var grantsPendingCount = await grantsPending.CountAsync();
+
+            var beneficiaries = await releases
+                .Where(r => r.Status == GrantReleaseStatuses.Released)
+                .Select(r => r.ScholarId)
+                .Distinct()
+                .CountAsync();
+
+            var awaiting = await releases
+                .Where(r => r.Status == GrantReleaseStatuses.Pending)
+                .Select(r => r.ScholarId)
+                .Distinct()
+                .CountAsync();
+
+            return Ok(new
+            {
+                releasedCount,
+                pendingCount,
+                cancelledCount,
+                releasedAmount,
+                pendingAmount,
+                scholarsPaid = beneficiaries,
+                scholarsAwaiting = awaiting,
+                releaseRate = releasedCount + pendingCount > 0
+                    ? (int)Math.Round(releasedCount * 100.0 / (releasedCount + pendingCount))
+                    : 0,
+                byType,
+                byPeriod,
+                grants = new
+                {
+                    releasedCount = grantsReleasedCount,
+                    pendingCount = grantsPendingCount,
+                    releasedAmount = grantsReleasedCount == 0 ? 0m : await grantsReleased.SumAsync(g => g.Amount),
+                    pendingAmount = grantsPendingCount == 0 ? 0m : await grantsPending.SumAsync(g => g.Amount),
+                },
+            });
         }
 
         // "2025-2026" → "25-26"; anything unparseable is passed through unchanged.

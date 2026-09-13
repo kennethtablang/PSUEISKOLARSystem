@@ -9,12 +9,20 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
   AreaChart, Area,
 } from 'recharts';
-import { GraduationCap, FileCheck, Clock, AlertTriangle, TrendingUp, Download, Loader, Table2, ChartColumn, ArrowRight, Minus, TrendingDown } from 'lucide-react';
+import { GraduationCap, FileCheck, Clock, AlertTriangle, TrendingUp, Download, Loader, Table2, ChartColumn, ArrowRight, Minus, TrendingDown, BanknoteArrowUp, Wallet } from 'lucide-react';
 import { useTitle } from '../hooks/useTitle';
 import { exportScholars, exportSubmissions } from '../api/reports';
-import { getAnalyticsTrends } from '../api/analytics';
+import { getAnalyticsTrends, getAnalyticsDisbursements } from '../api/analytics';
 import { vizTokens, tooltipStyle } from '../constants/viz';
+import { peso, FREQUENCY_LABELS } from '../constants/grants';
 import InfoTip from '../components/InfoTip';
+import { useNow } from '../hooks/useNow';
+
+/* Recharts reserves 60px for the Y axis and these charts count small integers, so the
+   old `left: -20` pulled the plot back over its own tick labels — three-digit counts
+   lost their leading digit. Narrowing the axis to 38px reclaims the same space without
+   cropping anything, and the bottom margin leaves room for tilted category labels. */
+const CHART_MARGIN = { top: 4, right: 10, left: 0, bottom: 0 };
 
 export default function AnalyticsPage() {
   useTitle('Data Visualization');
@@ -29,6 +37,7 @@ export default function AnalyticsPage() {
   const [exporting, setExporting] = useState(null); // "<report>:<format>" while downloading
   const [lastUpdated, setLastUpdated] = useState(null);
   const [trends, setTrends] = useState(null);       // per-period rows for the comparison charts
+  const [money, setMoney] = useState(null);         // release + grant disbursement figures
   const periodRef = useRef(period);
 
   // Mark colours are per-mode values, so they come from the resolved theme rather
@@ -79,22 +88,31 @@ export default function AnalyticsPage() {
   }, [token]);
   useEffect(() => { loadTrends(); }, [loadTrends]);
 
+  // Disbursements follow the period filter, same as the overview.
+  const loadMoney = useCallback(() => {
+    const [ay, sem] = (periodRef.current || '').split('__');
+    getAnalyticsDisbursements(token, { academicYear: ay || undefined, semester: sem || undefined })
+      .then(setMoney)
+      .catch(() => {});
+  }, [token]);
+  useEffect(() => { loadMoney(); }, [period, loadMoney]);
+
   // Real-time: refetch (silently) on server broadcast, plus a periodic fallback.
   useEffect(() => {
     let timer;
     const trigger = () => {
       clearTimeout(timer);
-      timer = setTimeout(() => { refetch(true); loadTrends(); }, 600);
+      timer = setTimeout(() => { refetch(true); loadTrends(); loadMoney(); }, 600);
     };
     const unsub = subscribeToAnalytics(trigger);
-    const interval = setInterval(() => { refetch(true); loadTrends(); }, 30000);
+    const interval = setInterval(() => { refetch(true); loadTrends(); loadMoney(); }, 30000);
     return () => { clearTimeout(timer); unsub(); clearInterval(interval); };
-  }, [subscribeToAnalytics, refetch, loadTrends]);
+  }, [subscribeToAnalytics, refetch, loadTrends, loadMoney]);
 
   if (loading) return (
     <Layout>
       <div className="p-4 sm:p-8 flex items-center justify-center h-64">
-        <p className="text-sm" style={{ color: '#7a8aaa' }}>Loading analytics…</p>
+        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Loading analytics…</p>
       </div>
     </Layout>
   );
@@ -102,7 +120,7 @@ export default function AnalyticsPage() {
   if (error) return (
     <Layout>
       <div className="page-shell">
-        <p className="text-sm" style={{ color: '#e03030' }}>{error}</p>
+        <p className="text-sm" style={{ color: 'var(--danger)' }}>{error}</p>
       </div>
     </Layout>
   );
@@ -120,22 +138,22 @@ export default function AnalyticsPage() {
       <div className="page-shell">
 
         {/* Header — filters and exports in one row above the charts */}
-        <div className="flex items-start justify-between gap-4 flex-wrap mb-7">
-          <div>
+        <div className="page-head">
+          <div style={{ minWidth: 0 }}>
             <h1 className="page-title">Data Visualization &amp; Reports</h1>
             <p className="page-subtitle">Descriptive analytics for PSU Lingayen Campus</p>
             <span className="page-title-bar" />
           </div>
           {/* Filters in one row above the charts. Exports live in the rail so this row
               stays a single line instead of wrapping. */}
-          <div className="flex items-center gap-2">
+          <div className="page-head-actions">
             <LiveBadge lastUpdated={lastUpdated} />
             {(data?.availablePeriods?.length ?? 0) > 0 && (
               <select
                 value={period}
                 onChange={e => setPeriod(e.target.value)}
                 className="clay-input text-sm"
-                style={{ width: 200, flex: '0 0 auto' }}
+                style={{ width: 200, maxWidth: '100%', flex: '0 1 auto' }}
                 aria-label="Academic period"
               >
                 <option value="">All Periods</option>
@@ -174,7 +192,7 @@ export default function AnalyticsPage() {
                 caption="of scholars meeting their GWA requirement"
                 fill={complianceRate === 100
                   ? 'linear-gradient(90deg, #f5b800, #ffd060)'
-                  : 'linear-gradient(90deg, #003087, #0040b8)'}
+                  : 'linear-gradient(90deg, var(--accent-bar-from), var(--accent-bar-to))'}
                 stats={[
                   { label: 'Compliant',  value: compliant,    color: '#d4f5e2', text: '#0a5a3a' },
                   { label: 'Flagged',    value: nonCompliant, color: '#ffe8d6', text: '#c05000' },
@@ -210,11 +228,24 @@ export default function AnalyticsPage() {
               }}
             >
               {byProgram.length === 0 ? <EmptyChart /> : (
-                <ResponsiveContainer width="100%" height={250}>
-                  <BarChart data={byProgram} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                <ResponsiveContainer width="100%" height={byProgram.length > 6 ? 300 : 250}>
+                  <BarChart data={byProgram} margin={CHART_MARGIN}>
                     <CartesianGrid strokeDasharray="3 3" stroke={t.grid} vertical={false} />
-                    <XAxis dataKey="program" tick={{ fontSize: 11, fill: t.axis }} axisLine={false} tickLine={false} interval={0} />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: t.axis }} axisLine={false} tickLine={false} />
+                    {/* `interval={0}` forces every program to be labelled, which is the point of
+                        the chart — so past a handful the labels have to tilt or they overlap into
+                        an unreadable smear. The extra height is what keeps the tilted text inside
+                        the plot area instead of clipped at the card's edge. */}
+                    <XAxis
+                      dataKey="program"
+                      tick={{ fontSize: 11, fill: t.axis }}
+                      axisLine={false}
+                      tickLine={false}
+                      interval={0}
+                      angle={byProgram.length > 6 ? -35 : 0}
+                      textAnchor={byProgram.length > 6 ? 'end' : 'middle'}
+                      height={byProgram.length > 6 ? 68 : 30}
+                    />
+                    <YAxis allowDecimals={false} width={38} tick={{ fontSize: 11, fill: t.axis }} axisLine={false} tickLine={false} />
                     <Tooltip contentStyle={tooltipStyle(t)} cursor={{ fill: t.cursor }} />
                     <Bar dataKey="count" name="Scholars" fill={t.markColor} radius={[4, 4, 0, 0]} maxBarSize={56} />
                   </BarChart>
@@ -235,10 +266,10 @@ export default function AnalyticsPage() {
                 }}
               >
                 <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={byPeriod} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                  <BarChart data={byPeriod} margin={CHART_MARGIN}>
                     <CartesianGrid strokeDasharray="3 3" stroke={t.grid} vertical={false} />
                     <XAxis dataKey="period" tick={{ fontSize: 11, fill: t.axis }} axisLine={false} tickLine={false} />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: t.axis }} axisLine={false} tickLine={false} />
+                    <YAxis allowDecimals={false} width={38} tick={{ fontSize: 11, fill: t.axis }} axisLine={false} tickLine={false} />
                     <Tooltip contentStyle={tooltipStyle(t)} cursor={{ fill: t.cursor }} />
                     <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12, color: t.axis }} />
                     {/* A 2px surface-coloured stroke keeps adjacent segments from fusing. */}
@@ -249,6 +280,9 @@ export default function AnalyticsPage() {
                 </ResponsiveContainer>
               </ChartCard>
             )}
+
+            {/* ── Scholarship money ── */}
+            <Disbursements money={money} t={t} />
 
             {/* ── Semester-over-semester comparison ── */}
             <PeriodComparison trends={trends} t={t} />
@@ -304,6 +338,186 @@ export default function AnalyticsPage() {
   );
 }
 
+/* ── Scholarship money ───────────────────────────────── */
+
+/**
+ * What has actually been paid out, and to whom.
+ *
+ * Two streams, kept apart: recurring scholarship releases (the per-semester / per-year
+ * obligation) and one-off grants. They answer different questions — "did we meet this
+ * period's obligation?" versus "how much extra assistance did we give?" — so folding them
+ * into a single total would destroy both.
+ *
+ * Coverage per type is the number that matters: released ÷ scholars holding the type. A
+ * bar short of 100% is scholars who hold the scholarship and have not been paid.
+ */
+function Disbursements({ money, t }) {
+  if (!money) {
+    return (
+      <div className="clay-card p-6">
+        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Loading scholarship releases…</p>
+      </div>
+    );
+  }
+
+  const nothingYet = money.releasedCount === 0 && money.pendingCount === 0
+    && money.grants.releasedCount === 0 && money.grants.pendingCount === 0;
+
+  if (nothingYet) {
+    return (
+      <div className="clay-card p-6">
+        <h2 className="text-sm font-black mb-1 flex items-center gap-1.5" style={{ color: 'var(--text-strong)' }}>
+          <BanknoteArrowUp size={15} strokeWidth={2.2} style={{ color: 'var(--accent)' }} />
+          Scholarship Releases
+        </h2>
+        <p className="text-sm" style={{ color: 'var(--text-faint)' }}>
+          Nothing recorded yet. Open a period on the Scholarship Releases page and the payout
+          figures appear here.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <RateCard
+        Icon={BanknoteArrowUp}
+        title="Scholarship Releases"
+        info="Released payouts as a share of everything scheduled for the selected period. Cancelled rows are excluded from the rate but still counted below — a cancellation is a decision, not a backlog."
+        rate={money.releaseRate}
+        caption={`released · ${peso(money.releasedAmount)} paid out to ${money.scholarsPaid} scholar${money.scholarsPaid === 1 ? '' : 's'}`}
+        fill={money.releaseRate === 100
+          ? 'linear-gradient(90deg, #f5b800, #ffd060)'
+          : 'linear-gradient(90deg, var(--accent-bar-from), var(--accent-bar-to))'}
+        stats={[
+          { label: 'Released',  value: money.releasedCount,  color: '#d4f5e2', text: '#0a5a3a' },
+          { label: 'Awaiting',  value: money.pendingCount,   color: '#fff3cd', text: '#7d5a00' },
+          { label: 'Cancelled', value: money.cancelledCount, color: '#e8edf5', text: '#4a5a7a' },
+        ]}
+      />
+
+      {money.byPeriod.length > 0 && (
+        <ChartCard
+          title="Disbursement by Period"
+          subtitle="Pesos released versus still awaiting release, per academic period"
+          info="Every recorded release, stacked by whether the money has actually gone out. A tall amber band is money the office has committed to but not yet disbursed. Spans all periods regardless of the filter above, so the trend stays readable."
+          table={{
+            columns: ['Period', 'Released', 'Awaiting', 'Paid', 'Awaiting'],
+            rows: money.byPeriod.map(p => [
+              p.period, peso(p.releasedAmount), peso(p.pendingAmount), p.releasedCount, p.pendingCount,
+            ]),
+          }}
+        >
+          <ChartLegend items={[
+            { label: 'Released', color: t.status.verified },
+            { label: 'Awaiting release', color: t.status.pending },
+          ]} />
+          <ResponsiveContainer width="100%" height={250}>
+            <BarChart data={money.byPeriod} margin={CHART_MARGIN}>
+              <CartesianGrid strokeDasharray="3 3" stroke={t.grid} vertical={false} />
+              <XAxis dataKey="shortLabel" tick={{ fontSize: 11, fill: t.axis }} axisLine={false} tickLine={false} />
+              {/* Peso amounts run to six figures, so the axis is abbreviated — the tooltip
+                  and the table view carry the exact number. */}
+              <YAxis
+                width={54}
+                tick={{ fontSize: 11, fill: t.axis }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={v => (v >= 1000 ? `${Math.round(v / 1000)}k` : v)}
+              />
+              <Tooltip
+                contentStyle={tooltipStyle(t)}
+                cursor={{ fill: t.cursor }}
+                formatter={v => peso(v)}
+                labelFormatter={l => money.byPeriod.find(p => p.shortLabel === l)?.period ?? l}
+              />
+              <Bar dataKey="releasedAmount" name="Released" stackId="m" fill={t.status.verified} stroke={t.gap} strokeWidth={2} maxBarSize={64} />
+              <Bar dataKey="pendingAmount"  name="Awaiting" stackId="m" fill={t.status.pending}  stroke={t.gap} strokeWidth={2} radius={[4, 4, 0, 0]} maxBarSize={64} />
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartCard>
+      )}
+
+      {money.byType.length > 0 && (
+        <div className="clay-card p-6">
+          <h2 className="text-sm font-black flex items-center gap-1.5" style={{ color: 'var(--text-strong)' }}>
+            Release Coverage by Scholarship
+            <InfoTip text="Scholars paid as a share of scholars holding the scholarship. Below 100% means holders who have not received this period's payout — the Scholarship Releases page names them." />
+          </h2>
+          <p className="text-xs mt-0.5 mb-4" style={{ color: 'var(--text-muted)' }}>
+            How much of each scholarship’s roster has actually been paid
+          </p>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[560px]">
+              <thead>
+                <tr style={{ borderBottom: '1.5px solid var(--hairline-strong)' }}>
+                  {['Scholarship', 'Paid', 'Awaiting', 'Released', 'Coverage'].map((c, i) => (
+                    <th key={c} className="text-xs font-bold uppercase tracking-wider py-2"
+                      style={{ color: 'var(--text-muted)', textAlign: i === 0 ? 'left' : 'right' }}>{c}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {money.byType.map((row, i) => (
+                  <tr key={row.scholarshipTypeId} style={{ borderTop: i > 0 ? '1px solid var(--hairline)' : undefined }}>
+                    <td className="py-2.5" style={{ color: 'var(--text)' }}>
+                      <span className="font-semibold" style={{ color: 'var(--text-strong)' }}>{row.type}</span>
+                      <span className="text-xs ml-1.5" style={{ color: 'var(--text-muted)' }}>
+                        {FREQUENCY_LABELS[row.frequency] ?? row.frequency}
+                      </span>
+                    </td>
+                    <td className="py-2.5 text-right tabular-nums font-semibold" style={{ color: 'var(--text-strong)' }}>
+                      {row.releasedCount}<span style={{ color: 'var(--text-muted)', fontWeight: 600 }}> / {row.holders}</span>
+                    </td>
+                    <td className="py-2.5 text-right tabular-nums" style={{ color: 'var(--text)' }}>{row.pendingCount}</td>
+                    <td className="py-2.5 text-right tabular-nums font-semibold" style={{ color: 'var(--text-strong)' }}>
+                      {peso(row.releasedAmount)}
+                    </td>
+                    <td className="py-2.5 pl-4" style={{ width: 150 }}>
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1" style={{ height: 6, borderRadius: 3, background: t.grid, overflow: 'hidden' }}>
+                          <div style={{
+                            width: `${row.coverage}%`,
+                            height: '100%',
+                            borderRadius: 3,
+                            background: row.coverage >= 100 ? t.status.verified : t.markColor,
+                          }} />
+                        </div>
+                        <span className="text-xs font-bold tabular-nums w-9 text-right" style={{ color: 'var(--text)' }}>
+                          {row.coverage}%
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* One-off grants sit beside the recurring figures, never inside them. */}
+          <div className="clay-card-inner mt-5 px-4 py-3 flex items-center gap-3 flex-wrap">
+            <Wallet size={15} strokeWidth={2.2} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+            <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+              One-time grants
+            </span>
+            <span className="text-sm font-bold tabular-nums" style={{ color: 'var(--text-strong)' }}>
+              {peso(money.grants.releasedAmount)} released
+            </span>
+            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+              {money.grants.releasedCount} paid · {money.grants.pendingCount} awaiting
+              {money.grants.pendingAmount > 0 && ` (${peso(money.grants.pendingAmount)})`}
+            </span>
+            <span className="text-xs ml-auto" style={{ color: 'var(--text-faint)' }}>
+              Counted separately — grants are on top of the scholarship, not part of it.
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Semester-over-semester comparison ───────────────── */
 
 /**
@@ -338,7 +552,7 @@ function PeriodComparison({ trends, t }) {
     return (
       <div className="clay-card p-6">
         <h2 className="text-sm font-black mb-1" style={{ color: 'var(--text-strong)' }}>Semester Comparison</h2>
-        <p className="text-sm" style={{ color: '#b0bdd0' }}>
+        <p className="text-sm" style={{ color: 'var(--text-faint)' }}>
           No period data yet. Comparisons appear once documents are submitted or grades recorded
           across at least one semester.
         </p>
@@ -375,10 +589,10 @@ function PeriodComparison({ trends, t }) {
               { label: 'Incomplete', color: t.status.incomplete },
             ]} />
             <ResponsiveContainer width="100%" height={250}>
-              <AreaChart data={periods} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+              <AreaChart data={periods} margin={CHART_MARGIN}>
                 <CartesianGrid strokeDasharray="3 3" stroke={t.grid} vertical={false} />
                 <XAxis dataKey="shortLabel" tick={{ fontSize: 11, fill: t.axis }} axisLine={false} tickLine={false} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: t.axis }} axisLine={false} tickLine={false} />
+                <YAxis allowDecimals={false} width={38} tick={{ fontSize: 11, fill: t.axis }} axisLine={false} tickLine={false} />
                 <Tooltip contentStyle={tooltipStyle(t)} labelFormatter={l => periodFor(periods, l)} />
                 {/* Semesters are discrete, so the bands step between them rather than curving —
                     a monotone spline would draw values that no period actually had. */}
@@ -409,10 +623,10 @@ function PeriodComparison({ trends, t }) {
               { label: 'Flagged',   color: t.status.incomplete },
             ]} />
             <ResponsiveContainer width="100%" height={250}>
-              <AreaChart data={periods} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+              <AreaChart data={periods} margin={CHART_MARGIN}>
                 <CartesianGrid strokeDasharray="3 3" stroke={t.grid} vertical={false} />
                 <XAxis dataKey="shortLabel" tick={{ fontSize: 11, fill: t.axis }} axisLine={false} tickLine={false} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: t.axis }} axisLine={false} tickLine={false} />
+                <YAxis allowDecimals={false} width={38} tick={{ fontSize: 11, fill: t.axis }} axisLine={false} tickLine={false} />
                 <Tooltip contentStyle={tooltipStyle(t)} labelFormatter={l => periodFor(periods, l)} />
                 <Area type="linear" dataKey="compliant" name="Compliant" stackId="g" stroke={t.gap} strokeWidth={2} fill={t.status.verified} fillOpacity={0.92} />
                 <Area type="linear" dataKey="flagged"   name="Flagged"   stackId="g" stroke={t.gap} strokeWidth={2} fill={t.status.incomplete} fillOpacity={0.92} />
@@ -442,14 +656,14 @@ function PeriodComparison({ trends, t }) {
         </div>
 
         {a.period === b.period ? (
-          <p className="text-sm" style={{ color: '#b0bdd0' }}>
+          <p className="text-sm" style={{ color: 'var(--text-faint)' }}>
             Pick two different periods to see a comparison.
           </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm min-w-[520px]">
               <thead>
-                <tr style={{ borderBottom: '1.5px solid rgba(0,0,0,0.07)' }}>
+                <tr style={{ borderBottom: '1.5px solid var(--hairline-strong)' }}>
                   <th className="text-left text-xs font-bold uppercase tracking-wider py-2" style={{ color: 'var(--text-muted)' }}>Measure</th>
                   <th className="text-right text-xs font-bold uppercase tracking-wider py-2" style={{ color: 'var(--text-muted)' }}>{a.period}</th>
                   <th className="text-right text-xs font-bold uppercase tracking-wider py-2" style={{ color: 'var(--text-muted)' }}>{b.period}</th>
@@ -496,7 +710,7 @@ function ChartLegend({ items }) {
 
 function SingletonNote({ label }) {
   return (
-    <p className="text-sm py-8 text-center" style={{ color: '#b0bdd0' }}>
+    <p className="text-sm py-8 text-center" style={{ color: 'var(--text-faint)' }}>
       Only one period has {label} data so far — a trend needs at least two. The table view shows
       the figures.
     </p>
@@ -530,7 +744,7 @@ function DeltaRow({ label, from, to, suffix = '', decimals = 0, goodWhenDown = f
   const Icon = flat ? Minus : (diff > 0 ? TrendingUp : TrendingDown);
 
   return (
-    <tr style={{ borderTop: '1px solid rgba(0,0,0,0.05)' }}>
+    <tr style={{ borderTop: '1px solid var(--hairline)' }}>
       <td className="py-2" style={{ color: 'var(--text)' }}>{label}</td>
       <td className="py-2 text-right tabular-nums font-semibold" style={{ color: 'var(--text-strong)' }}>{fmt(from)}</td>
       <td className="py-2 text-right tabular-nums font-semibold" style={{ color: 'var(--text-strong)' }}>{fmt(to)}</td>
@@ -571,7 +785,7 @@ function MeterList({ title, subtitle, rows, total, color, track }) {
       {subtitle && <p className="text-xs mt-0.5 mb-4" style={{ color: 'var(--text-muted)' }}>{subtitle}</p>}
 
       {rows.length === 0 ? (
-        <p className="text-sm" style={{ color: '#b0bdd0' }}>No data available yet.</p>
+        <p className="text-sm" style={{ color: 'var(--text-faint)' }}>No data available yet.</p>
       ) : (
         <ul className="space-y-3">
           {rows.map(r => {
@@ -642,7 +856,7 @@ function ViewToggle({ active, onClick, Icon, label }) {
       aria-pressed={active}
       className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors"
       style={active
-        ? { background: 'rgba(0,48,135,0.12)', color: '#003087' }
+        ? { background: 'rgba(0,48,135,0.12)', color: 'var(--accent)' }
         : { background: 'transparent', color: 'var(--text-muted)' }}
     >
       <Icon size={13} strokeWidth={2.4} />
@@ -655,7 +869,7 @@ function DataTable({ columns, rows }) {
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr style={{ borderBottom: '1.5px solid rgba(0,0,0,0.07)' }}>
+          <tr style={{ borderBottom: '1.5px solid var(--hairline-strong)' }}>
             {columns.map((c, i) => (
               <th key={c} className="text-xs font-bold uppercase tracking-wider py-2"
                 style={{ color: 'var(--text-muted)', textAlign: i === 0 ? 'left' : 'right' }}>
@@ -666,7 +880,7 @@ function DataTable({ columns, rows }) {
         </thead>
         <tbody>
           {rows.map((r, ri) => (
-            <tr key={ri} style={{ borderTop: ri > 0 ? '1px solid rgba(0,0,0,0.05)' : undefined }}>
+            <tr key={ri} style={{ borderTop: ri > 0 ? '1px solid var(--hairline)' : undefined }}>
               {r.map((cell, ci) => (
                 <td key={ci} className={`py-2 ${ci === 0 ? '' : 'text-right tabular-nums font-semibold'}`}
                   style={{ color: ci === 0 ? 'var(--text)' : 'var(--text-strong)' }}>
@@ -686,13 +900,13 @@ function RateCard({ Icon, title, rate, caption, fill, stats, info }) {
   return (
     <div className="clay-card p-6">
       <div className="flex items-center gap-2 mb-5">
-        <Icon size={16} strokeWidth={2} style={{ color: '#003087' }} />
+        <Icon size={16} strokeWidth={2} style={{ color: 'var(--accent)' }} />
         <h2 className="text-sm font-black" style={{ color: 'var(--text-strong)' }}>{title}</h2>
         {info && <InfoTip text={info} />}
       </div>
 
       <div className="flex items-end gap-3 mb-4">
-        <span className="text-5xl font-black leading-none" style={{ color: '#003087' }}>{rate}%</span>
+        <span className="text-5xl font-black leading-none" style={{ color: 'var(--accent)' }}>{rate}%</span>
         <span className="text-sm" style={{ color: 'var(--text)' }}>{caption}</span>
       </div>
 
@@ -708,12 +922,13 @@ function RateCard({ Icon, title, rate, caption, fill, stats, info }) {
 }
 
 function LiveBadge({ lastUpdated }) {
-  const [, force] = useState(0);
-  useEffect(() => { const i = setInterval(() => force(n => n + 1), 15000); return () => clearInterval(i); }, []);
-  const secs = lastUpdated ? Math.floor((Date.now() - lastUpdated.getTime()) / 1000) : null;
+  // Was a counter forcing a re-render so that a Date.now() in the render body would be
+  // re-read. Ticking the timestamp itself does the same job and keeps render pure.
+  const now = useNow(15000);
+  const secs = lastUpdated ? Math.floor((now - lastUpdated.getTime()) / 1000) : null;
   const label = secs == null ? '' : secs < 60 ? 'just now' : `${Math.floor(secs / 60)}m ago`;
   return (
-    <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-bold" style={{ background: '#d4f5e2', color: '#0a5a3a' }}>
+    <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-bold live-badge">
       <span className="animate-pulse" style={{ width: 7, height: 7, borderRadius: '50%', background: '#10a060', display: 'inline-block' }} />
       Live{label && ` · ${label}`}
     </span>
@@ -747,7 +962,7 @@ function MiniStat({ label, value, color, text }) {
 function EmptyChart() {
   return (
     <div className="flex items-center justify-center h-[190px]">
-      <p className="text-sm" style={{ color: '#b0bdd0' }}>No data available yet.</p>
+      <p className="text-sm" style={{ color: 'var(--text-faint)' }}>No data available yet.</p>
     </div>
   );
 }

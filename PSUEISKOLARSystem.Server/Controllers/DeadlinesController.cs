@@ -41,6 +41,11 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     d.AcademicYear,
                     d.Semester,
                     d.DueDate,
+
+                    // How far the notice sequence has got, so staff can see whether scholars
+                    // were actually chased rather than inferring it from the date.
+                    ReminderStage = d.ReminderStage.ToString(),
+                    d.RemindersSentAt,
                 })
                 .ToListAsync();
 
@@ -70,9 +75,14 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
             if (existing is not null)
             {
-                // Reset the reminder flag if the due date moved so reminders re-fire.
+                // Rewind the notice sequence if the due date moved, so it re-fires against the
+                // new date — extending a deadline that was already marked Missed is the case
+                // this matters most for.
                 if (existing.DueDate != dto.DueDate)
+                {
                     existing.RemindersSentAt = null;
+                    existing.ReminderStage = DeadlineReminderStage.None;
+                }
                 existing.DueDate = dto.DueDate;
                 db.Audit(this, "UpdateDeadline", $"Updated deadline for requirement #{dto.RequirementId} ({dto.AcademicYear} Sem {dto.Semester}) → {dto.DueDate:yyyy-MM-dd}");
                 await db.SaveChangesAsync();
@@ -102,7 +112,10 @@ namespace PSUEISKOLARSystem.Server.Controllers
             if (deadline is null) return NotFound();
 
             if (deadline.DueDate != dto.DueDate)
+            {
                 deadline.RemindersSentAt = null;
+                deadline.ReminderStage = DeadlineReminderStage.None;
+            }
             deadline.DueDate = dto.DueDate;
             await db.SaveChangesAsync();
             return NoContent();

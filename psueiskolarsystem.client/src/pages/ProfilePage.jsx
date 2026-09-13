@@ -13,6 +13,9 @@ import Modal from '../components/Modal';
 import Avatar from '../components/Avatar';
 import { MUTABLE_IN_APP_CATEGORIES } from '../constants/notifications';
 
+/** "Confirm New Password" → "confirm-new-password", for deriving an input id from its label. */
+const slug = s => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
 const ROLE_BADGE = {
   Administrator:           { cls: 'badge-admin',   label: 'Administrator' },
   ScholarshipCoordinator:  { cls: 'badge-coord',   label: 'Coordinator' },
@@ -67,8 +70,12 @@ export default function ProfilePage() {
       await updateNotificationPreferences(prefs, token);
       await refreshUser();
       setPrefsMsg({ ok: true, text: 'Preferences saved.' });
+      // The panel sits far down a long page, so the inline note alone is easy to miss —
+      // the toast is the part you actually see after pressing Save.
+      toast('Notification preferences saved.', 'success');
     } catch (err) {
       setPrefsMsg({ ok: false, text: err.message });
+      toast(err.message, 'error');
     } finally { setSavingPrefs(false); }
   }
 
@@ -261,7 +268,7 @@ export default function ProfilePage() {
               </p>
 
               <div className="flex items-center gap-1.5 mt-1.5">
-                <Mail size={12} strokeWidth={2} color="#7a8aaa" />
+                <Mail size={12} strokeWidth={2} style={{ color: 'var(--text-muted)' }} />
                 <p style={{ fontSize: '0.82rem', color: 'var(--text)' }}>{user?.email}</p>
               </div>
               <div className="flex items-center gap-2 mt-3 flex-wrap">
@@ -274,7 +281,7 @@ export default function ProfilePage() {
                   Active
                 </span>
                 {twoFaEnabled && (
-                  <span className="clay-badge" style={{ background: 'rgba(0,48,135,0.08)', color: '#003087', border: '1px solid rgba(0,48,135,0.15)' }}>
+                  <span className="clay-badge" style={{ background: 'var(--accent-wash)', color: 'var(--accent)', border: '1px solid rgba(0,48,135,0.15)' }}>
                     <ShieldCheck size={9} strokeWidth={2.5} />
                     2FA On
                   </span>
@@ -286,17 +293,17 @@ export default function ProfilePage() {
                 these carry things you can't see anywhere else on the page. */}
             <div className="flex gap-3 flex-wrap">
               <InfoBlock
-                icon={<User size={13} color="#003087" strokeWidth={2} />}
+                icon={<User size={13} style={{ color: 'var(--accent)' }} strokeWidth={2} />}
                 label="Role"
                 value={roleBadge.label}
               />
               <InfoBlock
-                icon={<ShieldCheck size={13} color="#003087" strokeWidth={2} />}
+                icon={<ShieldCheck size={13} style={{ color: 'var(--accent)' }} strokeWidth={2} />}
                 label="Two-factor"
                 value={twoFaEnabled ? 'Enabled' : 'Off'}
               />
               <InfoBlock
-                icon={<Shield size={13} color="#003087" strokeWidth={2} />}
+                icon={<Shield size={13} style={{ color: 'var(--accent)' }} strokeWidth={2} />}
                 label="Privacy notice"
                 value={user?.consentAcceptedAt
                   ? `v${user.consentVersion} · ${new Date(user.consentAcceptedAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}`
@@ -317,8 +324,8 @@ export default function ProfilePage() {
           {/* Display name */}
           <div className="clay-card p-6">
             <div className="flex items-center gap-2 mb-5">
-              <div style={{ width: 32, height: 32, borderRadius: 10, background: 'rgba(0,48,135,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <User size={15} color="#003087" strokeWidth={2} />
+              <div style={{ width: 32, height: 32, borderRadius: 10, background: 'var(--accent-wash)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <User size={15} style={{ color: 'var(--accent)' }} strokeWidth={2} />
               </div>
               <h2 style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-strong)' }}>Personal Information</h2>
             </div>
@@ -326,19 +333,22 @@ export default function ProfilePage() {
             <form onSubmit={handleSaveName} className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>First Name</label>
-                  <input type="text" required value={firstName} onChange={e => setFirstName(e.target.value)} className="clay-input" placeholder="First name" />
+                  <label htmlFor="profile-first-name" className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>First Name</label>
+                  <input
+                    id="profile-first-name" type="text" required value={firstName} onChange={e => setFirstName(e.target.value)} className="clay-input" placeholder="First name" />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>Last Name</label>
-                  <input type="text" required value={lastName} onChange={e => setLastName(e.target.value)} className="clay-input" placeholder="Last name" />
+                  <label htmlFor="profile-last-name" className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>Last Name</label>
+                  <input
+                    id="profile-last-name" type="text" required value={lastName} onChange={e => setLastName(e.target.value)} className="clay-input" placeholder="Last name" />
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
-                  Middle Name <span style={{ color: '#9aaabb', fontWeight: 400, textTransform: 'none' }}>(optional)</span>
+                <label htmlFor="profile-middle-name-optional" className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
+                  Middle Name <span style={{ color: 'var(--text-faint)', fontWeight: 400, textTransform: 'none' }}>(optional)</span>
                 </label>
-                <input type="text" value={middleName} onChange={e => setMiddleName(e.target.value)} className="clay-input" placeholder="Middle name" />
+                <input
+                  id="profile-middle-name-optional" type="text" value={middleName} onChange={e => setMiddleName(e.target.value)} className="clay-input" placeholder="Middle name" />
               </div>
               <button type="submit" disabled={savingName} className="clay-btn clay-btn-primary w-full">
                 {savingName ? 'Saving…' : 'Save Name'}
@@ -351,8 +361,8 @@ export default function ProfilePage() {
           {/* Change password */}
           <div className="clay-card p-6">
             <div className="flex items-center gap-2 mb-5">
-              <div style={{ width: 32, height: 32, borderRadius: 10, background: 'rgba(0,48,135,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <KeyRound size={15} color="#003087" strokeWidth={2} />
+              <div style={{ width: 32, height: 32, borderRadius: 10, background: 'var(--accent-wash)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <KeyRound size={15} style={{ color: 'var(--accent)' }} strokeWidth={2} />
               </div>
               <h2 style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-strong)' }}>Change Password</h2>
             </div>
@@ -364,12 +374,16 @@ export default function ProfilePage() {
                 { label: 'Confirm New Password', val: confirmPw, set: setConfirmPw, ac: 'new-password' },
               ].map(({ label, val, set, ac }) => (
                 <div key={label}>
-                  <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>{label}</label>
+                  {/* Three fields rendered from one template, so the id has to come from the
+                      row rather than being written in — a literal would repeat three times
+                      and every label would point at the first input. */}
+                  <label htmlFor={`pw-${slug(label)}`} className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>{label}</label>
                   <div className="relative">
                     <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
-                      <Lock size={13} color="#7a8aaa" strokeWidth={2} />
+                      <Lock size={13} style={{ color: 'var(--text-muted)' }} strokeWidth={2} />
                     </span>
                     <input
+                      id={`pw-${slug(label)}`}
                       type="password"
                       required
                       value={val}
@@ -395,13 +409,13 @@ export default function ProfilePage() {
         {/* Notifications & Privacy (FR-19 / FR-20) */}
         <div className="clay-card p-6">
           <div className="flex items-center gap-2 mb-5">
-            <div style={{ width: 32, height: 32, borderRadius: 10, background: 'rgba(0,48,135,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Bell size={15} color="#003087" strokeWidth={2} />
+            <div style={{ width: 32, height: 32, borderRadius: 10, background: 'var(--accent-wash)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Bell size={15} style={{ color: 'var(--accent)' }} strokeWidth={2} />
             </div>
             <h2 style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-strong)' }}>Notification Preferences</h2>
           </div>
 
-          <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: '#7a8aaa' }}>Email</p>
+          <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>Email</p>
           <p className="text-sm mb-3" style={{ color: 'var(--text)' }}>
             Choose which emails you receive. Account and security emails are always sent.
           </p>
@@ -411,6 +425,8 @@ export default function ProfilePage() {
               { key: 'emailAnnouncements',  label: 'Announcements' },
               { key: 'emailDocumentStatus', label: 'Document status updates' },
               { key: 'emailDeadlines',      label: 'Submission deadline reminders' },
+            // The label wraps its checkbox, which associates the two implicitly — an
+            // htmlFor here would need a per-row id and buy nothing.
             ].map(({ key, label }) => (
               <label key={key} className="flex items-center justify-between clay-card-inner px-4 py-3 cursor-pointer">
                 <span className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>{label}</span>
@@ -418,7 +434,7 @@ export default function ProfilePage() {
                   type="checkbox"
                   checked={prefs[key]}
                   onChange={e => setPrefs(p => ({ ...p, [key]: e.target.checked }))}
-                  style={{ width: 18, height: 18, accentColor: '#003087' }}
+                  style={{ width: 18, height: 18, accentColor: 'var(--accent)' }}
                 />
               </label>
             ))}
@@ -426,7 +442,7 @@ export default function ProfilePage() {
 
           {/* In-app muting — finer than the three email toggles: each category can be
               silenced in the bell independently of whether its email still arrives. */}
-          <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: '#7a8aaa' }}>In-app (notification bell)</p>
+          <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>In-app (notification bell)</p>
           <p className="text-sm mb-3" style={{ color: 'var(--text)' }}>
             Turn a category off to stop it appearing in your bell. Account and security
             notices always show, and muting here doesn't change your email choices above.
@@ -440,7 +456,7 @@ export default function ProfilePage() {
                   type="checkbox"
                   checked={isInAppOn(key)}
                   onChange={e => toggleInApp(key, e.target.checked)}
-                  style={{ width: 18, height: 18, accentColor: '#003087' }}
+                  style={{ width: 18, height: 18, accentColor: 'var(--accent)' }}
                 />
               </label>
             ))}
@@ -466,8 +482,8 @@ export default function ProfilePage() {
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}>
                   {twoFaEnabled
-                    ? <ShieldCheck size={18} color="#003087" strokeWidth={2} />
-                    : <ShieldOff size={18} color="#7a8aaa" strokeWidth={2} />}
+                    ? <ShieldCheck size={18} style={{ color: 'var(--accent)' }} strokeWidth={2} />
+                    : <ShieldOff size={18} style={{ color: 'var(--text-muted)' }} strokeWidth={2} />}
                 </div>
                 <div className="min-w-0">
                   <h2 style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-strong)' }}>
@@ -476,7 +492,7 @@ export default function ProfilePage() {
                   <span className="text-xs font-bold px-2 py-0.5 rounded-full inline-block mt-1"
                     style={twoFaEnabled
                       ? { background: '#d4f5e2', color: '#065f46', border: '1px solid #a7f3d0' }
-                      : { background: 'rgba(0,0,0,0.06)', color: '#7a8aaa', border: '1px solid rgba(0,0,0,0.1)' }}>
+                      : { background: 'rgba(0,0,0,0.06)', color: 'var(--text-muted)', border: '1px solid rgba(0,0,0,0.1)' }}>
                     {twoFaEnabled ? 'Enabled' : 'Disabled'}
                   </span>
                 </div>
@@ -592,7 +608,7 @@ function Disable2faModal({ token, onClose, onDisabled }) {
     >
         {error && (
           <div className="mb-4 flex items-start gap-2 p-3 rounded-2xl text-sm"
-            style={{ background: '#fff0f0', color: '#b03030', border: '1.5px solid #f5b0b0' }}>
+            style={{ background: 'var(--danger-bg)', color: 'var(--danger)', border: '1.5px solid var(--danger-border)' }}>
             <AlertCircle size={14} strokeWidth={2.5} className="shrink-0 mt-px" />
             <span>{error}</span>
           </div>
@@ -600,14 +616,15 @@ function Disable2faModal({ token, onClose, onDisabled }) {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
+            <label htmlFor="profile-current-password" className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
               Current Password
             </label>
             <div className="relative">
               <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
-                <Lock size={13} color="#7a8aaa" strokeWidth={2} />
+                <Lock size={13} style={{ color: 'var(--text-muted)' }} strokeWidth={2} />
               </span>
               <input
+                id="profile-current-password"
                 type="password"
                 required
                 value={password}
@@ -642,7 +659,7 @@ function InfoBlock({ icon, label, value }) {
     <div className="clay-card-inner px-4 py-3" style={{ minWidth: '140px' }}>
       <div className="flex items-center gap-1.5 mb-1">
         {icon}
-        <p style={{ fontSize: '9.5px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#7a8aaa' }}>
+        <p style={{ fontSize: '9.5px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)' }}>
           {label}
         </p>
       </div>

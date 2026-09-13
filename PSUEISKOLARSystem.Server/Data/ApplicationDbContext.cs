@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using PSUEISKOLARSystem.Server.Models;
+using PSUEISKOLARSystem.Server.Models.Enums;
 
 namespace PSUEISKOLARSystem.Server.Data
 {
@@ -23,8 +24,10 @@ namespace PSUEISKOLARSystem.Server.Data
         public DbSet<Message> Messages => Set<Message>();
         public DbSet<ScholarshipAssignment> ScholarshipAssignments => Set<ScholarshipAssignment>();
         public DbSet<OneTimeGrant> OneTimeGrants => Set<OneTimeGrant>();
+        public DbSet<ScholarshipRelease> ScholarshipReleases => Set<ScholarshipRelease>();
         public DbSet<AnnouncementRecipient> AnnouncementRecipients => Set<AnnouncementRecipient>();
         public DbSet<MessagingSettings> MessagingSettings => Set<MessagingSettings>();
+        public DbSet<SystemSettings> SystemSettings => Set<SystemSettings>();
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -48,11 +51,32 @@ namespace PSUEISKOLARSystem.Server.Data
                 .HasForeignKey(sp => sp.ProgramId)
                 .OnDelete(DeleteBehavior.SetNull);
 
+            /* A student number identifies exactly one scholar. This was checked in application
+               code only, which races: two concurrent PUTs with the same number both passed the
+               check and both committed. The Scholarship Check report exists partly to *detect*
+               that corruption — it has one less finding to make now.
+
+               Filtered, because a profile row is created before onboarding fills the number in
+               and several of those legitimately share the empty string. */
+            builder.Entity<ScholarProfile>()
+                .HasIndex(sp => sp.StudentId)
+                .HasFilter("[StudentId] <> ''")
+                .IsUnique();
+
             builder.Entity<AcademicGrade>()
                 .HasOne(g => g.ScholarProfile)
                 .WithMany(sp => sp.Grades)
                 .HasForeignKey(g => g.ScholarProfileId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            /* One GWA per scholar per period. Without this, a semester recorded twice left
+               every compliance figure resting on
+               `OrderByDescending(AcademicYear).ThenByDescending(Semester).First()`, which is
+               undefined between two rows in the same period — MeetsRequirement could flip
+               between page loads. Correcting a grade is now a PATCH, not a second insert. */
+            builder.Entity<AcademicGrade>()
+                .HasIndex(g => new { g.ScholarProfileId, g.AcademicYear, g.Semester })
+                .IsUnique();
 
             builder.Entity<AcademicGrade>()
                 .HasOne(g => g.RecordedBy)
@@ -110,6 +134,24 @@ namespace PSUEISKOLARSystem.Server.Data
                 .HasForeignKey(ds => ds.ReviewedById)
                 .OnDelete(DeleteBehavior.ClientSetNull);
 
+            /* One live submission per requirement per period — the invariant Upload has always
+               described in a comment and enforced with a chain of `if`s. Incomplete rows are
+               excluded because a rejected attempt is kept as history and the scholar is
+               expected to submit again alongside it, which is why the filter matches the
+               `Status != Incomplete` predicate Upload uses to find the existing row. */
+            builder.Entity<DocumentSubmission>()
+                .HasIndex(ds => new { ds.ScholarId, ds.RequirementId, ds.AcademicYear, ds.Semester })
+                .HasFilter($"[Status] <> {(int)DocumentStatus.Incomplete}")
+                .IsUnique();
+
+            // The largest table in the system, and analytics, the deadline report, and every
+            // per-scholar checklist all filter on these two.
+            builder.Entity<DocumentSubmission>()
+                .HasIndex(ds => new { ds.ScholarId, ds.Status });
+
+            builder.Entity<DocumentSubmission>()
+                .HasIndex(ds => new { ds.AcademicYear, ds.Semester, ds.Status });
+
             builder.Entity<ActiveSemester>()
                 .HasOne(a => a.UpdatedBy)
                 .WithMany()
@@ -151,6 +193,13 @@ namespace PSUEISKOLARSystem.Server.Data
 
             builder.Entity<Notification>()
                 .HasIndex(n => new { n.RecipientId, n.IsRead });
+
+            // ActivityLogPage pages over this newest-first, optionally filtered by actor.
+            builder.Entity<AuditLog>()
+                .HasIndex(a => new { a.UserId, a.TimestampUtc });
+
+            builder.Entity<AuditLog>()
+                .HasIndex(a => a.TimestampUtc);
 
             builder.Entity<SubmissionDeadline>()
                 .HasOne(d => d.Requirement)
@@ -243,6 +292,51 @@ namespace PSUEISKOLARSystem.Server.Data
             builder.Entity<OneTimeGrant>()
                 .HasIndex(g => new { g.ScholarId, g.AwardedOn });
 
+            // Restrict, not Cascade: a type that has paid out grants is part of the
+            // disbursement record and must not disappear with them.
+            builder.Entity<OneTimeGrant>()
+                .HasOne(g => g.ScholarshipType)
+                .WithMany()
+                .HasForeignKey(g => g.ScholarshipTypeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            builder.Entity<ScholarshipType>()
+                .Property(t => t.Amount)
+                .HasPrecision(12, 2);
+
+            /* ── Recurring scholarship releases (per semester / per year) ── */
+
+            builder.Entity<ScholarshipRelease>()
+                .HasOne(r => r.Scholar)
+                .WithMany()
+                .HasForeignKey(r => r.ScholarId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Entity<ScholarshipRelease>()
+                .HasOne(r => r.ScholarshipType)
+                .WithMany()
+                .HasForeignKey(r => r.ScholarshipTypeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            builder.Entity<ScholarshipRelease>()
+                .HasOne(r => r.RecordedBy)
+                .WithMany()
+                .HasForeignKey(r => r.RecordedById)
+                .OnDelete(DeleteBehavior.ClientSetNull);
+
+            builder.Entity<ScholarshipRelease>()
+                .Property(r => r.Amount)
+                .HasPrecision(12, 2);
+
+            // One payout per scholar, per scholarship, per period — the rule that keeps the
+            // monitor honest. A double release has to be a deliberate edit, not a stray insert.
+            builder.Entity<ScholarshipRelease>()
+                .HasIndex(r => new { r.ScholarId, r.ScholarshipTypeId, r.AcademicYear, r.Semester })
+                .IsUnique();
+
+            builder.Entity<ScholarshipRelease>()
+                .HasIndex(r => new { r.ScholarshipTypeId, r.AcademicYear, r.Semester });
+
             /* ── Per-scholar announcement recipients ── */
 
             builder.Entity<AnnouncementRecipient>()
@@ -259,6 +353,18 @@ namespace PSUEISKOLARSystem.Server.Data
                 .WithMany()
                 .HasForeignKey(r => r.ScholarId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            /* ── System settings (single row) ── */
+
+            builder.Entity<SystemSettings>()
+                .HasOne(s => s.UpdatedBy)
+                .WithMany()
+                .HasForeignKey(s => s.UpdatedById)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            builder.Entity<SystemSettings>()
+                .Property(s => s.DefaultMinimumGwa)
+                .HasPrecision(4, 2);
 
             /* ── Messaging settings (single row) ── */
 

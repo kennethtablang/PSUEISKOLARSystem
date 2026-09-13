@@ -56,6 +56,22 @@ public static class TestDb
     public static void AddGrade(this ApplicationDbContext db, int profileId, string year, int sem, decimal gwa, bool meets)
         => db.AcademicGrades.Add(new AcademicGrade { ScholarProfileId = profileId, AcademicYear = year, Semester = sem, Gwa = gwa, MeetsRequirement = meets });
 
+    public static void SetActiveSemester(this ApplicationDbContext db, string year, int sem)
+        => db.ActiveSemesters.Add(new ActiveSemester { AcademicYear = year, Semester = sem });
+
+    public static SubmissionDeadline AddDeadline(
+        this ApplicationDbContext db, int id, int requirementId, DateTime dueDate,
+        string year = "2025-2026", int sem = 1)
+    {
+        var d = new SubmissionDeadline
+        {
+            Id = id, RequirementId = requirementId, DueDate = dueDate,
+            AcademicYear = year, Semester = sem,
+        };
+        db.SubmissionDeadlines.Add(d);
+        return d;
+    }
+
     public static void AddSubmission(this ApplicationDbContext db, string scholarId, int requirementId, DocumentStatus status, string year = "2025-2026", int sem = 1)
         => db.DocumentSubmissions.Add(new DocumentSubmission
         {

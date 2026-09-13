@@ -188,7 +188,7 @@ export default function RegisterPage() {
           <Logo size={40} shadow="0 3px 0px rgba(0,37,112,0.35)" />
           <div>
             <p className="font-black text-base leading-tight" style={{ color: 'var(--text-strong)' }}>e-Iskolar</p>
-            <p className="text-xs" style={{ color: '#7a8aaa' }}>Lingayen Campus</p>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Lingayen Campus</p>
           </div>
         </div>
 
@@ -198,7 +198,7 @@ export default function RegisterPage() {
             <div className="flex items-center gap-2.5 mb-1">
               <div className="w-7 h-7 rounded-xl flex items-center justify-center"
                 style={{ background: 'rgba(0,37,112,0.08)', border: '1px solid rgba(0,37,112,0.12)' }}>
-                <GraduationCap size={14} color="#002570" strokeWidth={2} />
+                <GraduationCap size={14} style={{ color: 'var(--accent-strong)' }} strokeWidth={2} />
               </div>
               <h2 className="text-2xl font-black" style={{ color: 'var(--text-strong)' }}>Scholar Sign Up</h2>
             </div>
@@ -213,8 +213,8 @@ export default function RegisterPage() {
               /* ── Email Verification Sent State ── */
               <div className="text-center py-4">
                 <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
-                  style={{ background: 'rgba(0,48,135,0.08)', border: '2px solid rgba(0,48,135,0.15)' }}>
-                  <MailCheck size={30} color="#002570" strokeWidth={1.8} />
+                  style={{ background: 'var(--accent-wash)', border: '2px solid rgba(0,48,135,0.15)' }}>
+                  <MailCheck size={30} style={{ color: 'var(--accent-strong)' }} strokeWidth={1.8} />
                 </div>
                 <p className="font-black text-lg mb-2" style={{ color: 'var(--text-strong)' }}>Check Your Email!</p>
                 <p className="text-sm leading-relaxed mb-4" style={{ color: 'var(--text)' }}>
@@ -226,7 +226,7 @@ export default function RegisterPage() {
                     can submit documents — set that expectation up front. */}
                 <div className="rounded-2xl p-4 mb-4 text-left flex items-start gap-2.5"
                   style={{ background: 'rgba(0,48,135,0.05)', border: '1px solid rgba(0,48,135,0.15)' }}>
-                  <ShieldQuestion size={15} strokeWidth={2.2} className="mt-px shrink-0" style={{ color: '#002570' }} />
+                  <ShieldQuestion size={15} strokeWidth={2.2} className="mt-px shrink-0" style={{ color: 'var(--accent-strong)' }} />
                   <p className="text-xs leading-relaxed" style={{ color: 'var(--text)' }}>
                     <strong>What happens next:</strong> after verifying your email, sign in and set up
                     your scholar profile — student ID, program, and the <strong>one</strong> scholarship
@@ -264,7 +264,7 @@ export default function RegisterPage() {
               <>
                 {error && (
                   <div className="mb-5 flex items-start gap-2.5 p-3.5 rounded-2xl text-sm"
-                    style={{ background: '#fff0f0', color: '#b03030', border: '1.5px solid #f5b0b0' }}>
+                    style={{ background: 'var(--danger-bg)', color: 'var(--danger)', border: '1.5px solid var(--danger-border)' }}>
                     <AlertTriangle size={14} strokeWidth={2.5} className="mt-px shrink-0" />
                     <span>{error}</span>
                   </div>
@@ -275,14 +275,15 @@ export default function RegisterPage() {
                   {/* First Name + Last Name */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
+                      <label htmlFor="reg-first-name" className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
                         First Name
                       </label>
                       <div className="relative">
                         <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
-                          <User size={14} color="#7a8aaa" strokeWidth={2} />
+                          <User size={14} style={{ color: 'var(--text-muted)' }} strokeWidth={2} />
                         </span>
                         <input
+                          id="reg-first-name"
                           type="text"
                           required
                           value={form.firstName}
@@ -295,14 +296,15 @@ export default function RegisterPage() {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
+                      <label htmlFor="reg-last-name" className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
                         Last Name
                       </label>
                       <div className="relative">
                         <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
-                          <User size={14} color="#7a8aaa" strokeWidth={2} />
+                          <User size={14} style={{ color: 'var(--text-muted)' }} strokeWidth={2} />
                         </span>
                         <input
+                          id="reg-last-name"
                           type="text"
                           required
                           value={form.lastName}
@@ -317,14 +319,15 @@ export default function RegisterPage() {
 
                   {/* Middle Name */}
                   <div>
-                    <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
-                      Middle Name <span style={{ color: '#9aaabb', fontWeight: 400, textTransform: 'none' }}>(optional)</span>
+                    <label htmlFor="reg-middle-name-optional" className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
+                      Middle Name <span style={{ color: 'var(--text-faint)', fontWeight: 400, textTransform: 'none' }}>(optional)</span>
                     </label>
                     <div className="relative">
                       <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
-                        <User size={14} color="#7a8aaa" strokeWidth={2} />
+                        <User size={14} style={{ color: 'var(--text-muted)' }} strokeWidth={2} />
                       </span>
                       <input
+                        id="reg-middle-name-optional"
                         type="text"
                         value={form.middleName}
                         onChange={e => set('middleName', e.target.value)}
@@ -337,14 +340,15 @@ export default function RegisterPage() {
 
                   {/* Email */}
                   <div>
-                    <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
+                    <label htmlFor="reg-email-address" className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
                       Email Address
                     </label>
                     <div className="relative">
                       <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
-                        <Mail size={14} color="#7a8aaa" strokeWidth={2} />
+                        <Mail size={14} style={{ color: 'var(--text-muted)' }} strokeWidth={2} />
                       </span>
                       <input
+                        id="reg-email-address"
                         type="email"
                         required
                         value={form.email}
@@ -356,13 +360,13 @@ export default function RegisterPage() {
                       />
                     </div>
                     {emailStatus === 'checking' && (
-                      <p className="text-xs mt-1" style={{ color: '#7a8aaa' }}>Checking availability…</p>
+                      <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Checking availability…</p>
                     )}
                     {emailStatus === 'available' && (
                       <p className="text-xs mt-1" style={{ color: '#16a34a' }}>✓ This email is available.</p>
                     )}
                     {emailStatus === 'taken' && (
-                      <p className="text-xs mt-1 font-medium" style={{ color: '#dc2626' }}>
+                      <p className="text-xs mt-1 font-medium" style={{ color: 'var(--danger)' }}>
                         An account with this email already exists.
                       </p>
                     )}
@@ -370,14 +374,15 @@ export default function RegisterPage() {
 
                   {/* Password */}
                   <div>
-                    <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
+                    <label htmlFor="reg-password" className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
                       Password
                     </label>
                     <div className="relative">
                       <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
-                        <Lock size={14} color="#7a8aaa" strokeWidth={2} />
+                        <Lock size={14} style={{ color: 'var(--text-muted)' }} strokeWidth={2} />
                       </span>
                       <input
+                        id="reg-password"
                         type="password"
                         required
                         value={form.password}
@@ -393,14 +398,15 @@ export default function RegisterPage() {
 
                   {/* Confirm Password */}
                   <div>
-                    <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
+                    <label htmlFor="reg-confirm-password" className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
                       Confirm Password
                     </label>
                     <div className="relative">
                       <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
-                        <Lock size={14} color="#7a8aaa" strokeWidth={2} />
+                        <Lock size={14} style={{ color: 'var(--text-muted)' }} strokeWidth={2} />
                       </span>
                       <input
+                        id="reg-confirm-password"
                         type="password"
                         required
                         value={form.confirmPassword}
@@ -412,7 +418,7 @@ export default function RegisterPage() {
                       />
                     </div>
                     {form.confirmPassword && form.password !== form.confirmPassword && (
-                      <p className="mt-1.5 text-xs flex items-center gap-1" style={{ color: '#dc2626' }}>
+                      <p className="mt-1.5 text-xs flex items-center gap-1" style={{ color: 'var(--danger)' }}>
                         <XCircle size={12} strokeWidth={2.5} /> Passwords do not match
                       </p>
                     )}

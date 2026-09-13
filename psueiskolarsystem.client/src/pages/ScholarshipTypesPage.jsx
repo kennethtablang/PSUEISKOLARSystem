@@ -7,11 +7,14 @@ import {
   toggleScholarshipTypeActive, deleteScholarshipType,
 } from '../api/scholarshipTypes';
 import { getRequirements } from '../api/documents';
+import { getSystemSettings } from '../api/systemSettings';
 import { useTitle } from '../hooks/useTitle';
-import { ErrorBox, Field, ModalButtons } from './UsersPage';
+import { ErrorBox, ModalButtons } from './UsersPage';
+import Field from '../components/Field';
 import Modal from '../components/Modal';
 import { TableSkeleton, EmptyState } from '../components/ListState';
-import { Plus, Trash2, FileText, GraduationCap, Eye, CheckCircle2, Sparkles } from 'lucide-react';
+import { Plus, Trash2, FileText, GraduationCap, Eye, CheckCircle2, Sparkles, RefreshCw } from 'lucide-react';
+import { SCHOLARSHIP_FREQUENCIES, FREQUENCY_LABELS, peso } from '../constants/grants';
 
 const CATEGORIES = ['Government', 'Private', 'Institutional', 'Local (LGU)', 'International', 'Other'];
 
@@ -27,6 +30,15 @@ export default function ScholarshipTypesPage() {
   const [editing, setEditing] = useState(null);
   const [viewingId, setViewingId] = useState(null);
   const [search, setSearch] = useState('');
+  // The house standard, so a new type starts at the institution's own figure rather than a
+  // number baked into the form. Falls back to 2.50 if settings can't be read.
+  const [defaultGwa, setDefaultGwa] = useState('2.50');
+
+  useEffect(() => {
+    getSystemSettings(token)
+      .then(s => { if (s?.defaultMinimumGwa != null) setDefaultGwa(String(s.defaultMinimumGwa)); })
+      .catch(() => {});
+  }, [token]);
 
   const displayed = search
     ? types.filter(t =>
@@ -111,8 +123,8 @@ export default function ScholarshipTypesPage() {
             <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-sm">
               <thead className="clay-table-head">
                 <tr>
-                  {['Scholarship Type', 'Min GWA', 'Slots', 'Required Documents', 'Status', ''].map(h => (
-                    <th key={h} className="text-left px-5 py-3 text-xs font-bold uppercase tracking-wider" style={{ color: '#7a8aaa' }}>{h}</th>
+                  {['Scholarship Type', 'Payout', 'Min GWA', 'Slots', 'Required Documents', 'Status', ''].map(h => (
+                    <th key={h} className="text-left px-5 py-3 text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -133,8 +145,14 @@ export default function ScholarshipTypesPage() {
                           {st.category && <CategoryBadge category={st.category} />}
                         </div>
                         {st.description && (
-                          <p className="text-xs mt-0.5" style={{ color: '#7a8aaa' }}>{st.description}</p>
+                          <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{st.description}</p>
                         )}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <FrequencyBadge frequency={st.frequency} />
+                        <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                          {st.amount != null ? peso(st.amount) : 'Amount varies'}
+                        </p>
                       </td>
                       <td className="px-5 py-3.5 font-mono text-sm" style={{ color: 'var(--text-strong)' }}>
                         {st.minimumGwa.toFixed(2)}
@@ -144,20 +162,20 @@ export default function ScholarshipTypesPage() {
                       </td>
                       <td className="px-5 py-3.5">
                         {st.requirements.length === 0 ? (
-                          <span className="text-xs italic" style={{ color: '#b0bdd0' }}>All requirements (none configured)</span>
+                          <span className="text-xs italic" style={{ color: 'var(--text-faint)' }}>All requirements (none configured)</span>
                         ) : (
                           <div className="flex flex-wrap gap-1.5 items-center">
                             {st.requirements.slice(0, 2).map(r => (
                               <span key={r.requirementId} className="clay-badge text-xs"
                                 style={r.isTypeSpecific
                                   ? { background: '#f3e8ff', color: '#6b21a8', border: '1px solid #d8b4fe' }
-                                  : { background: '#dce8ff', color: '#003087', border: '1px solid #80aaee' }}>
+                                  : { background: 'var(--accent-soft-bg)', color: 'var(--accent)', border: '1px solid var(--accent-soft-border)' }}>
                                 {r.name}
                               </span>
                             ))}
                             {st.requirements.length > 2 && (
                               <span className="clay-badge text-xs"
-                                style={{ background: 'var(--bg)', color: '#7a8aaa', border: '1px solid rgba(0,0,0,0.08)' }}>
+                                style={{ background: 'var(--bg)', color: 'var(--text-muted)', border: '1px solid rgba(0,0,0,0.08)' }}>
                                 +{st.requirements.length - 2} more
                               </span>
                             )}
@@ -192,7 +210,7 @@ export default function ScholarshipTypesPage() {
                           <button
                             onClick={() => openEdit(st)}
                             className="text-xs font-medium hover:underline"
-                            style={{ color: '#003087' }}
+                            style={{ color: 'var(--accent)' }}
                           >
                             Edit
                           </button>
@@ -206,7 +224,7 @@ export default function ScholarshipTypesPage() {
                           <button
                             onClick={() => handleDelete(st.id)}
                             className="text-xs font-medium hover:underline"
-                            style={{ color: '#e03030' }}
+                            style={{ color: 'var(--danger)' }}
                           >
                             Delete
                           </button>
@@ -224,6 +242,7 @@ export default function ScholarshipTypesPage() {
       {showModal && (
         <ScholarshipTypeModal
           initial={editing}
+          defaultGwa={defaultGwa}
           allRequirements={requirements}
           token={token}
           onClose={() => setShowModal(false)}
@@ -240,6 +259,24 @@ export default function ScholarshipTypesPage() {
         />
       )}
     </Layout>
+  );
+}
+
+/**
+ * How often the scholarship pays. Recurring types are the ones that show up on the
+ * Scholarship Releases monitor, so the badge earns its place: it tells you at a glance
+ * whether a type is tracked period-by-period or paid once and done.
+ */
+function FrequencyBadge({ frequency }) {
+  const recurring = frequency === 'PerSemester' || frequency === 'PerYear';
+  return (
+    <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-xl font-semibold"
+      style={recurring
+        ? { background: 'var(--accent-soft-bg)', color: 'var(--accent)', border: '1px solid var(--accent-soft-border)' }
+        : { background: 'var(--surface-inset)', color: 'var(--text-muted)', border: '1px solid var(--hairline-strong)' }}>
+      {recurring && <RefreshCw size={10} strokeWidth={2.8} />}
+      {FREQUENCY_LABELS[frequency] ?? 'Per semester'}
+    </span>
   );
 }
 
@@ -273,12 +310,13 @@ function ScholarshipTypeViewModal({ id, token, onClose, onEdit }) {
       width={620}
     >
       {error && <ErrorBox>{error}</ErrorBox>}
-      {!data && !error && <p className="text-sm" style={{ color: '#7a8aaa' }}>Loading…</p>}
+      {!data && !error && <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Loading…</p>}
 
       {data && (
         <div className="space-y-5">
           <div className="flex flex-wrap gap-2">
             {data.category && <CategoryBadge category={data.category} />}
+            <FrequencyBadge frequency={data.frequency} />
             <span className="clay-badge text-xs"
               style={data.isActive
                 ? { background: '#d4f4e2', color: '#166534', border: '1px solid #86efac' }
@@ -287,7 +325,8 @@ function ScholarshipTypeViewModal({ id, token, onClose, onEdit }) {
             </span>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <Stat label="Amount per payout" value={data.amount != null ? peso(data.amount) : 'Varies'} />
             <Stat label="Minimum GWA" value={data.minimumGwa.toFixed(2)} mono />
             <Stat
               label="Slots filled"
@@ -350,9 +389,9 @@ function SlotMeter({ filled, limit, isFull, wide = false }) {
   if (limit == null) {
     return (
       <span className="inline-flex items-center gap-1.5 text-sm font-semibold" style={{ color: 'var(--text)' }}>
-        <GraduationCap size={13} strokeWidth={2.2} style={{ color: '#7a8aaa' }} />
+        <GraduationCap size={13} strokeWidth={2.2} style={{ color: 'var(--text-muted)' }} />
         {filled}
-        <span className="text-xs font-medium" style={{ color: '#b0bdd0' }}>· no cap</span>
+        <span className="text-xs font-medium" style={{ color: 'var(--text-faint)' }}>· no cap</span>
       </span>
     );
   }
@@ -364,9 +403,9 @@ function SlotMeter({ filled, limit, isFull, wide = false }) {
   return (
     <div style={{ minWidth: wide ? undefined : 108 }}>
       <div className="flex items-center gap-1.5">
-        <GraduationCap size={13} strokeWidth={2.2} style={{ color: '#7a8aaa' }} />
+        <GraduationCap size={13} strokeWidth={2.2} style={{ color: 'var(--text-muted)' }} />
         <span className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>
-          {filled}<span style={{ color: '#7a8aaa', fontWeight: 600 }}> / {limit}</span>
+          {filled}<span style={{ color: 'var(--text-muted)', fontWeight: 600 }}> / {limit}</span>
         </span>
       </div>
       <div style={{
@@ -384,14 +423,14 @@ function SlotMeter({ filled, limit, isFull, wide = false }) {
 
 function SectionLabel({ children }) {
   return (
-    <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: '#7a8aaa' }}>{children}</p>
+    <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>{children}</p>
   );
 }
 
 function Stat({ label, value, mono }) {
   return (
     <div className="clay-card-inner px-3.5 py-3">
-      <p className="text-xs" style={{ color: '#7a8aaa' }}>{label}</p>
+      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{label}</p>
       <p className={`text-lg font-black mt-0.5${mono ? ' font-mono' : ''}`} style={{ color: 'var(--text-strong)' }}>
         {value}
       </p>
@@ -401,19 +440,19 @@ function Stat({ label, value, mono }) {
 
 function DocList({ docs, emptyNote, accent }) {
   if (docs.length === 0) {
-    return <p className="text-xs italic" style={{ color: '#b0bdd0' }}>{emptyNote}</p>;
+    return <p className="text-xs italic" style={{ color: 'var(--text-faint)' }}>{emptyNote}</p>;
   }
   return (
     <ul className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(0,37,112,0.12)' }}>
       {docs.map((d, i) => (
         <li key={d.id} className="flex items-start gap-2.5 px-3.5 py-2.5"
           style={{ borderTop: i > 0 ? '1px solid rgba(0,37,112,0.07)' : undefined }}>
-          <FileText size={13} strokeWidth={2.2} className="mt-0.5 shrink-0" style={{ color: accent ? '#6b21a8' : '#003087' }} />
+          <FileText size={13} strokeWidth={2.2} className="mt-0.5 shrink-0" style={{ color: accent ? '#6b21a8' : 'var(--accent)' }} />
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium" style={{ color: 'var(--text-strong)' }}>{d.name}</p>
-            {d.description && <p className="text-xs mt-0.5" style={{ color: '#7a8aaa' }}>{d.description}</p>}
+            {d.description && <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{d.description}</p>}
           </div>
-          <span className="text-xs font-bold shrink-0" style={{ color: d.isRequired ? '#b45309' : '#7a8aaa' }}>
+          <span className="text-xs font-bold shrink-0" style={{ color: d.isRequired ? '#b45309' : 'var(--text-muted)' }}>
             {d.isRequired ? 'Required' : 'Optional'}
           </span>
         </li>
@@ -423,13 +462,15 @@ function DocList({ docs, emptyNote, accent }) {
 }
 
 /* ── Create / edit ─────────────────────────────────────── */
-function ScholarshipTypeModal({ initial, allRequirements, token, onClose, onSaved }) {
+function ScholarshipTypeModal({ initial, allRequirements, defaultGwa = '2.50', token, onClose, onSaved }) {
   const [form, setForm] = useState({
     name:           initial?.name ?? '',
     description:    initial?.description ?? '',
     category:       initial?.category ?? '',
-    minimumGwa:     initial?.minimumGwa?.toString() ?? '2.50',
+    minimumGwa:     initial?.minimumGwa?.toString() ?? defaultGwa,
     slotLimit:      initial?.slotLimit?.toString() ?? '',
+    frequency:      initial?.frequency ?? 'PerSemester',
+    amount:         initial?.amount != null ? String(initial.amount) : '',
     requirementIds: initial?.requirementIds ?? [],
   });
   const filledSlots = initial?.scholarCount ?? 0;
@@ -488,7 +529,18 @@ function ScholarshipTypeModal({ initial, allRequirements, token, onClose, onSave
         ? `${filledSlots} scholar${filledSlots === 1 ? ' already holds' : 's already hold'} this scholarship, so the limit can't be below ${filledSlots}.`
         : '';
 
-  const canSubmit = form.name.trim() && form.minimumGwa !== '' && !gwaError && !slotError && !docsError;
+  const amountVal = form.amount.trim() === '' ? null : parseFloat(form.amount);
+  const amountError = amountVal === null
+    ? ''
+    : isNaN(amountVal) || amountVal <= 0
+      ? 'The standard amount must be greater than zero, or blank if it varies per scholar.'
+      : amountVal > 10000000
+        ? 'That amount looks too large — please check the figure.'
+        : '';
+
+  const frequencyHint = SCHOLARSHIP_FREQUENCIES.find(f => f.value === form.frequency)?.hint ?? '';
+
+  const canSubmit = form.name.trim() && form.minimumGwa !== '' && !gwaError && !slotError && !docsError && !amountError;
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -502,6 +554,8 @@ function ScholarshipTypeModal({ initial, allRequirements, token, onClose, onSave
         category:       form.category || null,
         minimumGwa:     parseFloat(form.minimumGwa),
         slotLimit:      slotVal,
+        frequency:      form.frequency,
+        amount:         amountVal,
         requirementIds: form.requirementIds,
         otherDocuments: namedDocs.map(d => ({
           id:          d.id,
@@ -578,9 +632,37 @@ function ScholarshipTypeModal({ initial, allRequirements, token, onClose, onSave
           </Field>
         </div>
         {gwaError
-          ? <p className="text-xs font-medium" style={{ color: '#dc2626' }}>{gwaError}</p>
-          : <p className="text-xs" style={{ color: '#7a8aaa' }}>
+          ? <p className="text-xs font-medium" style={{ color: 'var(--danger)' }}>{gwaError}</p>
+          : <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
               Scholars above this GWA are flagged. (1.00 = highest, 5.00 = lowest)
+            </p>}
+
+        {/* ── How the money arrives ── */}
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Payout frequency">
+            <select value={form.frequency} onChange={e => set('frequency', e.target.value)} className="clay-input">
+              {SCHOLARSHIP_FREQUENCIES.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+            </select>
+          </Field>
+
+          <Field label="Standard amount (optional)">
+            <input
+              type="number"
+              step="0.01"
+              min="0.01"
+              value={form.amount}
+              onChange={e => set('amount', e.target.value)}
+              className="clay-input"
+              placeholder="Leave blank if it varies"
+            />
+          </Field>
+        </div>
+        {amountError
+          ? <p className="text-xs font-medium" style={{ color: 'var(--danger)' }}>{amountError}</p>
+          : <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+              {frequencyHint}
+              {form.frequency !== 'OneTime' &&
+                ' Each period’s payout is tracked per scholar on the Scholarship Releases page.'}
             </p>}
 
         <Field label="Slot limit (optional)">
@@ -595,8 +677,8 @@ function ScholarshipTypeModal({ initial, allRequirements, token, onClose, onSave
           />
         </Field>
         {slotError
-          ? <p className="text-xs font-medium" style={{ color: '#dc2626' }}>{slotError}</p>
-          : <p className="text-xs" style={{ color: '#7a8aaa' }}>
+          ? <p className="text-xs font-medium" style={{ color: 'var(--danger)' }}>{slotError}</p>
+          : <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
               The maximum number of scholars who may hold this scholarship at once. Assignments
               are refused once the slots are full.
               {initial && ` Currently filled: ${filledSlots}.`}
@@ -604,16 +686,18 @@ function ScholarshipTypeModal({ initial, allRequirements, token, onClose, onSave
 
         {/* ── Shared requirement checklist ── */}
         <div>
-          <label className="block text-sm font-semibold mb-2" style={{ color: 'var(--text-strong)' }}>
+          {/* Heads a checklist, not a single control — a <label> here would be announced as
+              labelling whatever came next, which is a paragraph. */}
+          <p className="block text-sm font-semibold mb-2" style={{ color: 'var(--text-strong)' }}>
             Shared requirements
-          </label>
-          <p className="text-xs mb-3" style={{ color: '#7a8aaa' }}>
+          </p>
+          <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>
             Documents from the shared catalog. Tick the ones scholars under this type must submit;
             leave all unticked to show them the full catalog.
           </p>
 
           {allRequirements.length === 0 ? (
-            <p className="text-xs italic" style={{ color: '#b0bdd0' }}>
+            <p className="text-xs italic" style={{ color: 'var(--text-faint)' }}>
               No shared requirements yet. Add some on the Requirements page first.
             </p>
           ) : (
@@ -651,10 +735,11 @@ function ScholarshipTypeModal({ initial, allRequirements, token, onClose, onSave
         {/* ── Type-specific documents ── */}
         <div>
           <div className="flex items-center justify-between gap-3 mb-1.5">
-            <label className="text-sm font-semibold flex items-center gap-1.5" style={{ color: 'var(--text-strong)' }}>
+            {/* Heading for a repeatable list, not a label for one field. */}
+            <p className="text-sm font-semibold flex items-center gap-1.5" style={{ color: 'var(--text-strong)' }}>
               <Sparkles size={14} strokeWidth={2.4} style={{ color: '#6b21a8' }} />
               Other documents for this scholarship
-            </label>
+            </p>
             <button
               type="button"
               onClick={addOtherDoc}
@@ -664,7 +749,7 @@ function ScholarshipTypeModal({ initial, allRequirements, token, onClose, onSave
               <Plus size={12} strokeWidth={2.8} /> Add document
             </button>
           </div>
-          <p className="text-xs mb-3" style={{ color: '#7a8aaa' }}>
+          <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>
             Documents only this scholarship asks for. They stay out of the shared catalog and are
             always required of its scholars.
           </p>
@@ -716,7 +801,7 @@ function ScholarshipTypeModal({ initial, allRequirements, token, onClose, onSave
                       onClick={() => removeOtherDoc(i)}
                       title={doc.id ? 'Remove — existing submissions are kept' : 'Remove'}
                       className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
-                      style={{ background: 'rgba(224,48,48,0.08)', color: '#e03030' }}
+                      style={{ background: 'rgba(224,48,48,0.08)', color: 'var(--danger)' }}
                     >
                       <Trash2 size={14} strokeWidth={2.4} />
                     </button>
@@ -726,10 +811,10 @@ function ScholarshipTypeModal({ initial, allRequirements, token, onClose, onSave
             </div>
           )}
           {docsError && (
-            <p className="text-xs mt-2 font-medium" style={{ color: '#dc2626' }}>{docsError}</p>
+            <p className="text-xs mt-2 font-medium" style={{ color: 'var(--danger)' }}>{docsError}</p>
           )}
           {otherDocs.some(d => d.id) && (
-            <p className="text-xs mt-2 flex items-start gap-1.5" style={{ color: '#7a8aaa' }}>
+            <p className="text-xs mt-2 flex items-start gap-1.5" style={{ color: 'var(--text-muted)' }}>
               <CheckCircle2 size={12} strokeWidth={2.4} className="mt-0.5 shrink-0" />
               Removing a document retires it — documents scholars already submitted are never deleted.
             </p>
@@ -752,7 +837,7 @@ function GroupHeader({ children, bordered }) {
     <p className="px-4 py-2 text-xs font-bold uppercase tracking-wider"
       style={{
         background: 'var(--surface-inset)',
-        color: '#7a8aaa',
+        color: 'var(--text-muted)',
         borderTop: bordered ? '1px solid rgba(0,37,112,0.08)' : undefined,
       }}>
       {children}
@@ -774,15 +859,15 @@ function RequirementCheckRow({ req, checked, onChange }) {
         checked={checked}
         onChange={onChange}
         className="mt-0.5 w-4 h-4 rounded"
-        style={{ accentColor: '#003087', flexShrink: 0 }}
+        style={{ accentColor: 'var(--accent)', flexShrink: 0 }}
       />
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium" style={{ color: 'var(--text-strong)' }}>{req.name}</p>
         {req.description && (
-          <p className="text-xs mt-0.5" style={{ color: '#7a8aaa' }}>{req.description}</p>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{req.description}</p>
         )}
       </div>
-      <span className="text-xs font-bold shrink-0" style={{ color: req.isRequired ? '#b45309' : '#7a8aaa' }}>
+      <span className="text-xs font-bold shrink-0" style={{ color: req.isRequired ? '#b45309' : 'var(--text-muted)' }}>
         {req.isRequired ? 'Required' : 'Optional'}
       </span>
     </label>

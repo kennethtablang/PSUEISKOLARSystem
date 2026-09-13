@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PSUEISKOLARSystem.Server.Data;
+using PSUEISKOLARSystem.Server.DTOs;
 using PSUEISKOLARSystem.Server.Models.Enums;
 
 namespace PSUEISKOLARSystem.Server.Controllers
@@ -103,7 +104,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 };
             });
 
-            return Ok(new { total, page, pageSize, items });
+            return Ok(PagedResult<object>.From(items.ToList(), total, page, pageSize));
         }
 
         // GET /api/audit-log/export.xlsx?search=&action=

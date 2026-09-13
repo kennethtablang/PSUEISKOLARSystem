@@ -329,7 +329,7 @@ export default function LandingPage() {
             <div>
               <p style={{
                 fontSize: 10, fontWeight: 800, letterSpacing: '0.22em',
-                textTransform: 'uppercase', color: '#7a8aaa', marginBottom: 20,
+                textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 20,
               }}>
                 About the Campus
               </p>
@@ -339,7 +339,7 @@ export default function LandingPage() {
                 lineHeight: 1.2,
               }}>
                 PSU Lingayen<br />
-                <span style={{ color: '#003087' }}>Main Campus</span>
+                <span style={{ color: 'var(--accent)' }}>Main Campus</span>
               </h2>
               <p style={{ fontSize: 14, color: 'var(--text)', lineHeight: 1.75, marginBottom: 24 }}>
                 Pangasinan State University Lingayen is the main campus of PSU, located in the
@@ -350,39 +350,39 @@ export default function LandingPage() {
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
                   <div style={{
                     width: 32, height: 32, borderRadius: 8, flexShrink: 0,
-                    background: 'rgba(0,48,135,0.08)', border: '1px solid rgba(0,48,135,0.12)',
+                    background: 'var(--accent-wash)', border: '1px solid rgba(0,48,135,0.12)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}>
-                    <MapPin size={14} color="#003087" strokeWidth={2} />
+                    <MapPin size={14} style={{ color: 'var(--accent)' }} strokeWidth={2} />
                   </div>
                   <div>
-                    <p style={{ fontSize: 11, fontWeight: 700, color: '#003087', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>Address</p>
+                    <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>Address</p>
                     <p style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 1.5 }}>Alvear St., Lingayen, Pangasinan 2401, Philippines</p>
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
                   <div style={{
                     width: 32, height: 32, borderRadius: 8, flexShrink: 0,
-                    background: 'rgba(0,48,135,0.08)', border: '1px solid rgba(0,48,135,0.12)',
+                    background: 'var(--accent-wash)', border: '1px solid rgba(0,48,135,0.12)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}>
-                    <Phone size={14} color="#003087" strokeWidth={2} />
+                    <Phone size={14} style={{ color: 'var(--accent)' }} strokeWidth={2} />
                   </div>
                   <div>
-                    <p style={{ fontSize: 11, fontWeight: 700, color: '#003087', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>Telephone</p>
+                    <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>Telephone</p>
                     <p style={{ fontSize: 13.5, color: 'var(--text)' }}>(075) 654-1211</p>
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
                   <div style={{
                     width: 32, height: 32, borderRadius: 8, flexShrink: 0,
-                    background: 'rgba(0,48,135,0.08)', border: '1px solid rgba(0,48,135,0.12)',
+                    background: 'var(--accent-wash)', border: '1px solid rgba(0,48,135,0.12)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}>
-                    <Mail size={14} color="#003087" strokeWidth={2} />
+                    <Mail size={14} style={{ color: 'var(--accent)' }} strokeWidth={2} />
                   </div>
                   <div>
-                    <p style={{ fontSize: 11, fontWeight: 700, color: '#003087', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>Email</p>
+                    <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>Email</p>
                     <p style={{ fontSize: 13.5, color: 'var(--text)' }}>cssa.lingayen@psu.edu.ph</p>
                   </div>
                 </div>
@@ -393,7 +393,7 @@ export default function LandingPage() {
             <div>
               <p style={{
                 fontSize: 10, fontWeight: 800, letterSpacing: '0.22em',
-                textTransform: 'uppercase', color: '#7a8aaa', marginBottom: 20,
+                textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 20,
               }}>
                 Administering Office
               </p>
@@ -403,7 +403,7 @@ export default function LandingPage() {
                 lineHeight: 1.2,
               }}>
                 Coordinator for<br />
-                <span style={{ color: '#003087' }}>School Student Affairs</span>
+                <span style={{ color: 'var(--accent)' }}>School Student Affairs</span>
               </h2>
               <p style={{ fontSize: 14, color: 'var(--text)', lineHeight: 1.75, marginBottom: 24 }}>
                 The CSSA Office is the designated unit responsible for all scholarship-related
@@ -420,13 +420,13 @@ export default function LandingPage() {
                   }}>
                     <div style={{
                       width: 30, height: 30, borderRadius: 8, marginBottom: 10,
-                      background: 'rgba(0,48,135,0.08)', border: '1px solid rgba(0,48,135,0.12)',
+                      background: 'var(--accent-wash)', border: '1px solid rgba(0,48,135,0.12)',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}>
-                      <Icon size={13} color="#003087" strokeWidth={2.5} />
+                      <Icon size={13} style={{ color: 'var(--accent)' }} strokeWidth={2.5} />
                     </div>
                     <p style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--text-strong)', marginBottom: 4, lineHeight: 1.3 }}>{label}</p>
-                    <p style={{ fontSize: 11, color: '#7a8aaa', lineHeight: 1.5 }}>{desc}</p>
+                    <p style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>{desc}</p>
                   </div>
                 ))}
               </div>
@@ -446,7 +446,7 @@ export default function LandingPage() {
 
           <p style={{
             fontSize: 10, fontWeight: 800, letterSpacing: '0.22em',
-            textTransform: 'uppercase', color: '#7a8aaa', marginBottom: 40,
+            textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 40,
           }}>
             What this system does
           </p>
@@ -460,7 +460,7 @@ export default function LandingPage() {
               }}>
                 <p style={{
                   fontSize: 11, fontWeight: 800, letterSpacing: '0.1em',
-                  textTransform: 'uppercase', color: '#003087',
+                  textTransform: 'uppercase', color: 'var(--accent)',
                   marginBottom: 18, paddingBottom: 12,
                   borderBottom: '3px solid #f5b800',
                   display: 'inline-block',

@@ -30,6 +30,7 @@ import ScholarshipTypesPage from './pages/ScholarshipTypesPage';
 import ScholarApprovalsPage from './pages/ScholarApprovalsPage';
 import ScholarshipVerificationPage from './pages/ScholarshipVerificationPage';
 import OneTimeGrantsPage from './pages/OneTimeGrantsPage';
+import ScholarshipReleasesPage from './pages/ScholarshipReleasesPage';
 import SettingsPage from './pages/SettingsPage';
 import ActivityLogPage from './pages/ActivityLogPage';
 import UnauthorizedPage from './pages/UnauthorizedPage';
@@ -65,7 +66,10 @@ export default function App() {
           <Route path="/scholar-approvals" element={<ProtectedRoute roles={adminCoord}><ScholarApprovalsPage /></ProtectedRoute>} />
           <Route path="/scholarship-verification" element={<ProtectedRoute roles={adminCoord}><ScholarshipVerificationPage /></ProtectedRoute>} />
           <Route path="/one-time-grants" element={<ProtectedRoute roles={adminCoord}><OneTimeGrantsPage /></ProtectedRoute>} />
-          <Route path="/my-profile" element={<ProtectedRoute><ScholarDetailPage /></ProtectedRoute>} />
+          <Route path="/scholarship-releases" element={<ProtectedRoute roles={adminCoord}><ScholarshipReleasesPage /></ProtectedRoute>} />
+          {/* Renders ScholarDetailPage against the signed-in user's own id, so only a
+              Scholar has a profile for it to find. */}
+          <Route path="/my-profile" element={<ProtectedRoute roles={['Scholar']}><ScholarDetailPage /></ProtectedRoute>} />
           <Route path="/my-documents" element={<ProtectedRoute roles={['Scholar']}><MyDocumentsPage /></ProtectedRoute>} />
           <Route path="/document-review" element={<ProtectedRoute roles={adminCoord}><DocumentReviewPage /></ProtectedRoute>} />
           <Route path="/deadlines" element={<ProtectedRoute roles={adminCoord}><DeadlinesPage /></ProtectedRoute>} />
@@ -80,7 +84,7 @@ export default function App() {
           <Route path="/profile"      element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
           <Route path="/help"         element={<ProtectedRoute><HelpPage /></ProtectedRoute>} />
 
-          <Route path="*" element={<Navigate to="/login" replace />} />
+          <Route path="*" element={<NotFoundRedirect />} />
         </Routes>
       </UIProvider>
       </TutorialProvider>
@@ -91,14 +95,29 @@ export default function App() {
   );
 }
 
+/* An unknown path used to send everyone to /login, which to a signed-in user who mistyped a
+   URL reads as though their session had dropped. Send them to the dashboard instead; only
+   anonymous visitors belong on the sign-in page. */
+function NotFoundRedirect() {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  return <Navigate to={user ? '/dashboard' : '/login'} replace />;
+}
+
 function SessionExpiredModal() {
-  const { sessionExpired, setSessionExpired } = useAuth();
+  const { sessionExpired, setSessionExpired, inactivityMin } = useAuth();
   const navigate = useNavigate();
 
   if (!sessionExpired) return null;
 
+  // The timeout is configurable per institution and per browser, so the reason has to be
+  // read rather than assumed — an admin who set it to 8 hours should not be told "30 minutes".
+  const reason = sessionExpired === 'inactivity'
+    ? `You have been signed out after ${inactivityMin} ${inactivityMin === 1 ? 'minute' : 'minutes'} of inactivity.`
+    : 'Your session has expired.';
+
   function handleDismiss() {
-    setSessionExpired(false);
+    setSessionExpired(null);
     navigate('/login', { replace: true });
   }
 
@@ -107,11 +126,11 @@ function SessionExpiredModal() {
       <div className="modal-panel clay-card-modal text-center" style={{ maxWidth: 380, padding: 32 }}>
         <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4"
           style={{ background: 'rgba(0,37,112,0.08)', border: '2px solid rgba(0,37,112,0.15)' }}>
-          <Clock size={26} color="#002570" strokeWidth={2} />
+          <Clock size={26} style={{ color: 'var(--accent-strong)' }} strokeWidth={2} />
         </div>
         <p className="font-black text-lg mb-2" style={{ color: 'var(--text-strong)' }}>Session Expired</p>
         <p className="text-sm mb-6 leading-relaxed" style={{ color: 'var(--text)' }}>
-          You have been signed out due to 30 minutes of inactivity. Please sign in again to continue.
+          {reason} Please sign in again to continue.
         </p>
         <button
           onClick={handleDismiss}

@@ -37,6 +37,8 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 st.MinimumGwa,
                 st.IsActive,
                 st.SlotLimit,
+                st.Frequency,
+                st.Amount,
                 ScholarCount = scholarCounts.GetValueOrDefault(st.Id),
                 // Null SlotLimit means uncapped, so there are no "available" slots to report.
                 AvailableSlots = st.SlotLimit is int cap
@@ -108,6 +110,8 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 st.MinimumGwa,
                 st.IsActive,
                 st.SlotLimit,
+                st.Frequency,
+                st.Amount,
                 ScholarCount = scholarCount,
                 AvailableSlots = st.SlotLimit is int cap ? Math.Max(0, cap - scholarCount) : (int?)null,
                 IsFull = st.SlotLimit is int limit && scholarCount >= limit,
@@ -166,6 +170,8 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 Category = Trim(dto.Category),
                 MinimumGwa = dto.MinimumGwa,
                 SlotLimit = dto.SlotLimit,
+                Frequency = dto.Frequency ?? ScholarshipFrequencies.PerSemester,
+                Amount = dto.Amount,
             };
             db.ScholarshipTypes.Add(st);
             db.Audit(this, "CreateScholarshipType", $"Created scholarship type '{st.Name}'");
@@ -210,6 +216,8 @@ namespace PSUEISKOLARSystem.Server.Controllers
             st.Category = Trim(dto.Category);
             st.MinimumGwa = dto.MinimumGwa;
             st.SlotLimit = dto.SlotLimit;
+            st.Frequency = dto.Frequency ?? ScholarshipFrequencies.PerSemester;
+            st.Amount = dto.Amount;
 
             db.Audit(this, "UpdateScholarshipType", $"Updated scholarship type #{id} '{st.Name}'");
             await db.SaveChangesAsync();
@@ -348,6 +356,10 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 return "Minimum GWA must be between 1.00 and 5.00.";
             if (dto.SlotLimit is int slots && slots < 1)
                 return "The slot limit must be at least 1. Leave it blank for an unlimited scholarship.";
+            if (dto.Frequency is not null && !ScholarshipFrequencies.All.Contains(dto.Frequency))
+                return "Payout frequency must be one-time, per semester, or per year.";
+            if (dto.Amount is decimal amount && (amount <= 0 || amount > 10_000_000m))
+                return "The standard amount must be greater than zero and under 10,000,000. Leave it blank if it varies.";
 
             var names = (dto.OtherDocuments ?? [])
                 .Select(d => d.Name?.Trim())
@@ -370,6 +382,10 @@ namespace PSUEISKOLARSystem.Server.Controllers
         decimal MinimumGwa,
         // Null = unlimited; otherwise the maximum number of scholars who may hold it at once.
         int? SlotLimit,
+        // How often it pays out (ScholarshipFrequencies). Null keeps the per-semester default.
+        string? Frequency,
+        // The standard amount for one payout; null when it varies per scholar.
+        decimal? Amount,
         List<int> RequirementIds,
         List<OtherDocumentRequest>? OtherDocuments);
 

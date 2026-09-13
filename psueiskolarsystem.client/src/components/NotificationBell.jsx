@@ -26,7 +26,7 @@ const CATEGORY_META = {
   [C.Message]:        { Icon: MessageSquare, color: '#4338ca', bg: 'rgba(67,56,202,0.1)' },
   [C.Account]:        { Icon: UserCog,   color: '#334155', bg: 'rgba(51,65,85,0.1)' },
 };
-const DEFAULT_META = { Icon: Bell, color: '#003087', bg: 'rgba(0,48,135,0.08)' };
+const DEFAULT_META = { Icon: Bell, color: 'var(--accent)', bg: 'var(--accent-wash)' };
 
 export default function NotificationBell({ variant = 'floating' }) {
   const { items, unreadCount, markOneRead, markEverythingRead } = useNotifications();
@@ -69,7 +69,7 @@ export default function NotificationBell({ variant = 'floating' }) {
           transition: 'box-shadow 0.15s',
         }}
       >
-        <Bell size={18} strokeWidth={2.3} color="#003087" />
+        <Bell size={18} strokeWidth={2.3} style={{ color: 'var(--accent)' }} />
         {unreadCount > 0 && (
           <span style={{
             position: 'absolute', top: -3, right: -3, minWidth: 18, height: 18, padding: '0 4px',
@@ -105,7 +105,7 @@ export default function NotificationBell({ variant = 'floating' }) {
                 onClick={markEverythingRead}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 4, border: 'none', cursor: 'pointer',
-                  background: 'transparent', color: '#003087', fontSize: 11.5, fontWeight: 700, padding: 4,
+                  background: 'transparent', color: 'var(--accent)', fontSize: 11.5, fontWeight: 700, padding: 4,
                 }}
               >
                 <CheckCheck size={13} strokeWidth={2.5} /> Mark all read
@@ -129,21 +129,18 @@ export default function NotificationBell({ variant = 'floating' }) {
                 <button
                   key={n.id}
                   onClick={() => handleItemClick(n)}
+                  className={`notif-row${n.isRead ? '' : ' is-unread'}`}
                   style={{
                     width: '100%', textAlign: 'left', display: 'flex', gap: 11, alignItems: 'flex-start',
                     padding: '12px 16px', border: 'none', cursor: 'pointer',
-                    borderBottom: '1px solid rgba(0,48,135,0.05)',
-                    background: n.isRead ? 'transparent' : 'rgba(0,48,135,0.035)',
-                    transition: 'background 0.12s',
+                    borderBottom: '1px solid var(--hairline)',
                   }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,48,135,0.07)'}
-                  onMouseLeave={e => e.currentTarget.style.background = n.isRead ? 'transparent' : 'rgba(0,48,135,0.035)'}
                 >
                   <div style={{
                     width: 34, height: 34, borderRadius: 10, flexShrink: 0, marginTop: 1,
                     display: 'flex', alignItems: 'center', justifyContent: 'center', background: meta.bg,
                   }}>
-                    <Icon size={16} strokeWidth={2.2} color={meta.color} />
+                    <Icon size={16} strokeWidth={2.2} style={{ color: meta.color }} />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
@@ -175,7 +172,7 @@ export default function NotificationBell({ variant = 'floating' }) {
             style={{
               width: '100%', padding: '11px 16px', border: 'none', cursor: 'pointer',
               borderTop: '1px solid rgba(0,48,135,0.07)', background: 'var(--surface-2)',
-              color: '#003087', fontSize: 12.5, fontWeight: 700,
+              color: 'var(--accent)', fontSize: 12.5, fontWeight: 700,
             }}
           >
             See all notifications

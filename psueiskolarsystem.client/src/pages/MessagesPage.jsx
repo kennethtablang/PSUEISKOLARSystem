@@ -190,7 +190,7 @@ export default function MessagesPage() {
                   style={{
                     borderBottom: '1px solid var(--surface-inset)',
                     background: sameThread(t, selected) ? 'rgba(0,48,135,0.08)' : 'transparent',
-                    borderLeft: sameThread(t, selected) ? '3px solid #003087' : '3px solid transparent',
+                    borderLeft: sameThread(t, selected) ? '3px solid var(--accent)' : '3px solid transparent',
                   }}
                 >
                   <div className="flex items-center justify-between gap-2">
@@ -237,7 +237,7 @@ export default function MessagesPage() {
                   style={{ background: 'var(--surface-2)', borderBottom: '1.5px solid var(--surface-inset)' }}>
                   <button onClick={() => setSelected(null)} className="lg:hidden w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
                     style={{ background: 'var(--surface-inset)' }}>
-                    <ArrowLeft size={16} color="#003087" />
+                    <ArrowLeft size={16} style={{ color: 'var(--accent)' }} />
                   </button>
                   <div className="min-w-0">
                     <p className="text-sm font-black truncate" style={{ color: 'var(--text-strong)' }}>
@@ -325,7 +325,7 @@ function Bubble({ m }) {
         borderBottomRightRadius: m.mine ? 4 : 16,
         borderBottomLeftRadius: m.mine ? 16 : 4,
       }}>
-        {!m.mine && <p className="text-xs font-bold mb-0.5" style={{ color: '#003087' }}>{m.senderName}</p>}
+        {!m.mine && <p className="text-xs font-bold mb-0.5" style={{ color: 'var(--accent)' }}>{m.senderName}</p>}
         <p className="text-sm" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{m.body}</p>
         <p className="text-xs mt-1 text-right" style={{ color: m.mine ? 'rgba(255,255,255,0.6)' : 'var(--text-faint)' }}>
           {shortTime(m.createdAt)}

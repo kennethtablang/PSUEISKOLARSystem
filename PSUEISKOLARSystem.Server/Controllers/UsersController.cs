@@ -4,9 +4,11 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PSUEISKOLARSystem.Server.Data;
+using PSUEISKOLARSystem.Server.DTOs;
 using PSUEISKOLARSystem.Server.DTOs.Auth;
 using PSUEISKOLARSystem.Server.DTOs.Users;
 using PSUEISKOLARSystem.Server.Exceptions;
+using PSUEISKOLARSystem.Server.Infrastructure;
 using PSUEISKOLARSystem.Server.Interfaces;
 using PSUEISKOLARSystem.Server.Models;
 using PSUEISKOLARSystem.Server.Models.Enums;
@@ -21,6 +23,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
         UserManager<ApplicationUser> userManager,
         IAuthService authService,
         IFileStorageService storage,
+        SessionValidator sessions,
         ApplicationDbContext db) : ControllerBase
     {
         [HttpGet]
@@ -93,7 +96,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 });
             }
 
-            return Ok(new { total, page, pageSize, items });
+            return Ok(PagedResult<UserDto>.From(items, total, page, pageSize));
         }
 
         [HttpGet("{id}")]
@@ -183,6 +186,10 @@ namespace PSUEISKOLARSystem.Server.Controllers
             });
             await db.SaveChangesAsync();
 
+            // Their token stays cryptographically valid until it expires, so tell the
+            // per-request check to re-read this account rather than trust its snapshot.
+            sessions.Invalidate(user.Id);
+
             return NoContent();
         }
 
@@ -218,6 +225,15 @@ namespace PSUEISKOLARSystem.Server.Controllers
             var deletedEmail = user.Email;
             var avatarPath = user.AvatarPath;
 
+            /* Deleting the user cascades their DocumentSubmissions rows away, which would
+               otherwise leave every file they ever uploaded on disk with nothing referring to
+               it — over a few graduating cohorts, the bulk of the upload directory,
+               unreferenced and un-purgeable. Collected before the delete, removed after it. */
+            var uploadedFiles = await db.DocumentSubmissions
+                .Where(ds => ds.ScholarId == id)
+                .Select(ds => ds.StoredFileName)
+                .ToListAsync();
+
             // Null out audit FK fields before deleting to avoid FK constraint violations
             // (ClientSetNull on these columns means EF won't cascade automatically)
             await db.AcademicGrades
@@ -240,8 +256,13 @@ namespace PSUEISKOLARSystem.Server.Controllers
             if (!result.Succeeded)
                 return BadRequest(new { message = string.Join("; ", result.Errors.Select(e => e.Description)) });
 
-            // The row is gone, so nothing points at the photo any more — remove the file too.
-            if (avatarPath is not null) await storage.DeleteAsync(avatarPath);
+            sessions.Invalidate(id);
+
+            // The rows are gone, so nothing points at these files any more. A failure here is
+            // not worth failing the request over — it leaves a recoverable orphan, not a broken
+            // record — so each is attempted independently.
+            if (avatarPath is not null) await DeleteQuietlyAsync(avatarPath);
+            foreach (var stored in uploadedFiles) await DeleteQuietlyAsync(stored);
 
             var actorId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
             db.AuditLogs.Add(new AuditLog
@@ -253,6 +274,13 @@ namespace PSUEISKOLARSystem.Server.Controllers
             await db.SaveChangesAsync();
 
             return NoContent();
+        }
+
+        private async Task DeleteQuietlyAsync(string storedFileName)
+        {
+            try { await storage.DeleteAsync(storedFileName); }
+            catch (IOException) { /* the row is already gone; a stuck file is not worth a 500 */ }
+            catch (UnauthorizedAccessException) { }
         }
 
         // POST /api/users/archive-inactive
@@ -298,6 +326,9 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     Details = $"Archived {toArchive.Count} scholar(s) inactive for >{daysInactive} days: {string.Join(", ", toArchive.Select(u => u.Email))}",
                 });
                 await db.SaveChangesAsync();
+
+                foreach (var u in toArchive)
+                    sessions.Invalidate(u.Id);
             }
 
             return Ok(new { archived = toArchive.Count, emails = toArchive.Select(u => u.Email) });

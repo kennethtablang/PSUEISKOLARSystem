@@ -1,47 +1,29 @@
+import { apiGet, apiSend, apiDelete } from './_client';
+
 const API = '/api/notifications';
 
 export async function getNotifications(token, { unreadOnly = false, category = '', page = 1, pageSize = 20 } = {}) {
   const params = new URLSearchParams({ unreadOnly, page, pageSize });
   if (category) params.set('category', category);
-  const res = await fetch(`${API}?${params}`, { headers: { Authorization: `Bearer ${token}` } });
-  if (!res.ok) throw new Error('Failed to load notifications.');
-  return res.json();
+  return apiGet(`${API}?${params}`, token, 'Failed to load notifications.');
 }
 
 export async function getUnreadCount(token) {
-  const res = await fetch(`${API}/unread-count`, { headers: { Authorization: `Bearer ${token}` } });
-  if (!res.ok) throw new Error('Failed to load unread count.');
-  return res.json();
+  return apiGet(`${API}/unread-count`, token, 'Failed to load unread count.');
 }
 
 export async function markRead(id, token) {
-  const res = await fetch(`${API}/${id}/read`, {
-    method: 'PATCH',
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error('Failed to mark notification read.');
+  return apiSend(`${API}/${id}/read`, 'PATCH', undefined, token, 'Failed to mark notification read.');
 }
 
 export async function markUnread(id, token) {
-  const res = await fetch(`${API}/${id}/unread`, {
-    method: 'PATCH',
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error('Failed to mark notification unread.');
+  return apiSend(`${API}/${id}/unread`, 'PATCH', undefined, token, 'Failed to mark notification unread.');
 }
 
 export async function markAllRead(token) {
-  const res = await fetch(`${API}/read-all`, {
-    method: 'PATCH',
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error('Failed to mark all read.');
+  return apiSend(`${API}/read-all`, 'PATCH', undefined, token, 'Failed to mark all read.');
 }
 
 export async function deleteNotification(id, token) {
-  const res = await fetch(`${API}/${id}`, {
-    method: 'DELETE',
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error('Failed to delete notification.');
+  return apiDelete(`${API}/${id}`, token, 'Failed to delete notification.');
 }

@@ -74,7 +74,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
             try
             {
-                var (stored, _) = await storage.SaveAsync(file);
+                var (stored, _) = await storage.SaveAsync(file, FileUploadPolicy.Images);
                 if (req.SampleImagePath is not null)
                     await storage.DeleteAsync(req.SampleImagePath);
                 req.SampleImagePath = stored;

@@ -4,11 +4,14 @@ import { useAuth } from '../context/AuthContext';
 import { useConfirm, useToast } from '../context/UIContext';
 import { getActiveSemester, setActiveSemester, getMessagingSettings, setMessagingSettings } from '../api/settings';
 import { downloadBackup } from '../api/reports';
+import { apiSend } from '../api/_client';
 import { useTitle } from '../hooks/useTitle';
 import { useTheme } from '../context/ThemeContext';
-import { CalendarDays, CheckCircle, Archive, AlertTriangle, Database, Sun, Moon, Monitor, Clock, MessageSquare, Bot, HardDriveDownload } from 'lucide-react';
+import { CalendarDays, CheckCircle, Archive, AlertTriangle, Database, Sun, Moon, Monitor, Clock, MessageSquare, Bot, HardDriveDownload, Upload, ShieldCheck, BellRing, Award } from 'lucide-react';
 import Modal from '../components/Modal';
 import InfoTip from '../components/InfoTip';
+import SystemPolicyPanel from '../components/SystemPolicyPanel';
+import Field from '../components/Field';
 
 function yearOptions() {
   const y = new Date().getFullYear();
@@ -50,10 +53,14 @@ export default function SettingsPage() {
   }
 
   const TABS = [
-    { key: 'period',      label: 'Academic Period', Icon: CalendarDays },
-    { key: 'messaging',   label: 'Messaging',       Icon: MessageSquare },
-    { key: 'maintenance', label: 'Maintenance',     Icon: Archive },
-    { key: 'appearance',  label: 'Preferences',     Icon: Monitor },
+    { key: 'period',        label: 'Academic Period', Icon: CalendarDays },
+    { key: 'submissions',   label: 'Submissions',     Icon: Upload },
+    { key: 'access',        label: 'Access & Security', Icon: ShieldCheck },
+    { key: 'notifications', label: 'Notifications',   Icon: BellRing },
+    { key: 'scholarships',  label: 'Scholarships',    Icon: Award },
+    { key: 'messaging',     label: 'Messaging',       Icon: MessageSquare },
+    { key: 'maintenance',   label: 'Maintenance',     Icon: Archive },
+    { key: 'appearance',    label: 'Preferences',     Icon: Monitor },
   ];
 
   async function handleSeed() {
@@ -61,13 +68,7 @@ export default function SettingsPage() {
     setSeeding(true);
     setSeedResult(null);
     try {
-      const res = await fetch('/api/admin/seed-sample-data', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Seeding failed.');
-      setSeedResult(data);
+      setSeedResult(await apiSend('/api/admin/seed-sample-data', 'POST', undefined, token, 'Seeding failed.'));
     } catch (e) {
       setSeedResult({ error: e.message });
     } finally {
@@ -109,13 +110,8 @@ export default function SettingsPage() {
     setArchiving(true);
     setArchiveResult(null);
     try {
-      const res = await fetch(`/api/users/archive-inactive?daysInactive=${archiveDays}`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Archive failed.');
-      setArchiveResult(data);
+      setArchiveResult(await apiSend(`/api/users/archive-inactive?daysInactive=${archiveDays}`,
+        'POST', undefined, token, 'Archive failed.'));
     } catch (e) {
       setArchiveResult({ error: e.message });
     } finally {
@@ -141,7 +137,7 @@ export default function SettingsPage() {
         </div>
 
         {loading ? (
-          <p className="text-sm text-center py-12" style={{ color: '#7a8aaa' }}>Loading…</p>
+          <p className="text-sm text-center py-12" style={{ color: 'var(--text-muted)' }}>Loading…</p>
         ) : (
           /* Settings-nav on the left, the selected panel on the right — the standard
              shape for a settings screen, and it puts the width to work instead of
@@ -160,7 +156,7 @@ export default function SettingsPage() {
                     onClick={() => setTab(key)}
                     className="settings-nav-item"
                     style={active
-                      ? { background: 'rgba(0,37,112,0.12)', color: '#003087', border: '1.5px solid rgba(0,37,112,0.3)' }
+                      ? { background: 'rgba(0,37,112,0.12)', color: 'var(--accent)', border: '1.5px solid rgba(0,37,112,0.3)' }
                       : { color: 'var(--text)', border: '1.5px solid transparent' }}>
                     <Icon size={15} strokeWidth={2.3} /> {label}
                   </button>
@@ -178,13 +174,13 @@ export default function SettingsPage() {
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
                 <div style={{
                   width: 44, height: 44, borderRadius: 13, flexShrink: 0,
-                  background: 'rgba(0,48,135,0.08)', border: '1px solid rgba(0,48,135,0.12)',
+                  background: 'var(--accent-wash)', border: '1px solid rgba(0,48,135,0.12)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}>
-                  <CalendarDays size={20} color="#003087" strokeWidth={2} />
+                  <CalendarDays size={20} style={{ color: 'var(--accent)' }} strokeWidth={2} />
                 </div>
                 <div>
-                  <p style={{ fontSize: 11, fontWeight: 700, color: '#7a8aaa', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>
+                  <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>
                     Currently Active Period
                   </p>
                   {current ? (
@@ -192,18 +188,18 @@ export default function SettingsPage() {
                       <p style={{ fontSize: 22, fontWeight: 900, color: 'var(--text-strong)', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
                         A.Y. {current.academicYear}
                       </p>
-                      <p style={{ fontSize: 14, fontWeight: 600, color: '#003087', marginTop: 2 }}>
+                      <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--accent)', marginTop: 2 }}>
                         {semOrdinal(current.semester)}
                       </p>
                       {current.updatedByName && (
-                        <p style={{ fontSize: 11.5, color: '#9aaabb', marginTop: 8 }}>
+                        <p style={{ fontSize: 11.5, color: 'var(--text-faint)', marginTop: 8 }}>
                           Last updated by {current.updatedByName} &middot;{' '}
                           {new Date(current.updatedAt).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}
                         </p>
                       )}
                     </>
                   ) : (
-                    <p style={{ fontSize: 14, color: '#9aaabb' }}>Not configured</p>
+                    <p style={{ fontSize: 14, color: 'var(--text-faint)' }}>Not configured</p>
                   )}
                 </div>
               </div>
@@ -217,7 +213,7 @@ export default function SettingsPage() {
 
               {error && (
                 <div className="mb-5 p-3.5 rounded-2xl text-sm"
-                  style={{ background: '#fff0f0', color: '#b03030', border: '1.5px solid #f5b0b0' }}>
+                  style={{ background: 'var(--danger-bg)', color: 'var(--danger)', border: '1.5px solid var(--danger-border)' }}>
                   {error}
                 </div>
               )}
@@ -233,10 +229,7 @@ export default function SettingsPage() {
               <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
 
                 {/* Academic Year */}
-                <div>
-                  <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
-                    Academic Year
-                  </label>
+                <Field label="Academic Year">
                   <select
                     className="clay-input"
                     value={form.academicYear}
@@ -246,13 +239,15 @@ export default function SettingsPage() {
                       <option key={y} value={y}>{y}</option>
                     ))}
                   </select>
-                </div>
+                </Field>
 
                 {/* Semester toggle */}
-                <div>
-                  <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
+                {/* Two buttons, not a control — a <label> here would point at nothing, so the
+                    group is named by a legend instead. */}
+                <fieldset style={{ border: 'none', padding: 0, margin: 0 }}>
+                  <legend className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
                     Semester
-                  </label>
+                  </legend>
                   <div style={{ display: 'flex', gap: 10 }}>
                     {[1, 2].map(s => {
                       const active = Number(form.semester) === s;
@@ -286,7 +281,7 @@ export default function SettingsPage() {
                       );
                     })}
                   </div>
-                </div>
+                </fieldset>
 
                 <div style={{ paddingTop: 4 }}>
                   <button
@@ -298,7 +293,7 @@ export default function SettingsPage() {
                     {saving ? 'Saving…' : 'Save Changes'}
                   </button>
                   {!changed && !saving && (
-                    <span style={{ marginLeft: 12, fontSize: 12, color: '#9aaabb' }}>
+                    <span style={{ marginLeft: 12, fontSize: 12, color: 'var(--text-faint)' }}>
                       No changes to save.
                     </span>
                   )}
@@ -310,6 +305,12 @@ export default function SettingsPage() {
             </>)}
 
             {/* ── Messaging tab ── */}
+            {/* The four policy tabs are one record behind the scenes, so they share a panel
+                and a single save. */}
+            {['submissions', 'access', 'notifications', 'scholarships'].includes(tab) && (
+              <SystemPolicyPanel section={tab} />
+            )}
+
             {tab === 'messaging' && <MessagingSettingsPanel token={token} />}
 
             {/* ── Maintenance tab ── */}
@@ -323,17 +324,14 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-strong)' }}>Archive Inactive Scholars</p>
-                  <p style={{ fontSize: 12, color: '#7a8aaa', marginTop: 2 }}>
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
                     Deactivate scholar accounts with no document submissions within the specified period.
                   </p>
                 </div>
               </div>
 
               <div className="flex items-end gap-3 flex-wrap">
-                <div>
-                  <label className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
-                    Inactive for more than
-                  </label>
+                <Field label="Inactive for more than">
                   <select
                     className="clay-input"
                     value={archiveDays}
@@ -344,7 +342,7 @@ export default function SettingsPage() {
                       <option key={d} value={d}>{d} days ({Math.round(d / 30)} months)</option>
                     ))}
                   </select>
-                </div>
+                </Field>
                 <button
                   onClick={() => { setArchiveResult(null); setShowArchiveConfirm(true); }}
                   disabled={archiving}
@@ -368,7 +366,7 @@ export default function SettingsPage() {
               )}
               {archiveResult?.error && (
                 <div className="mt-4 flex items-start gap-2 p-3.5 rounded-2xl text-sm"
-                  style={{ background: '#fff0f0', color: '#b03030', border: '1.5px solid #f5b0b0' }}>
+                  style={{ background: 'var(--danger-bg)', color: 'var(--danger)', border: '1.5px solid var(--danger-border)' }}>
                   <AlertTriangle size={15} strokeWidth={2.5} className="mt-px shrink-0" />
                   <span>{archiveResult.error}</span>
                 </div>
@@ -379,11 +377,11 @@ export default function SettingsPage() {
             <div className="clay-card p-6">
               <div className="flex items-center gap-3 mb-5">
                 <div style={{ width: 44, height: 44, borderRadius: 13, flexShrink: 0, background: 'rgba(0,48,135,0.07)', border: '1px solid rgba(0,48,135,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <HardDriveDownload size={20} color="#003087" strokeWidth={2} />
+                  <HardDriveDownload size={20} style={{ color: 'var(--accent)' }} strokeWidth={2} />
                 </div>
                 <div>
                   <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-strong)' }}>Database Backup</p>
-                  <p style={{ fontSize: 12, color: '#7a8aaa', marginTop: 2 }}>
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
                     Download a snapshot of every table as a ZIP of CSV files — one per table, openable in Excel.
                   </p>
                 </div>
@@ -416,7 +414,7 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-strong)' }}>Sample Data</p>
-                  <p style={{ fontSize: 12, color: '#7a8aaa', marginTop: 2 }}>
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
                     Populate the system with sample coordinators, scholars (with profiles &amp; grades), and announcements for demos and testing.
                   </p>
                 </div>
@@ -442,7 +440,7 @@ export default function SettingsPage() {
               )}
               {seedResult?.error && (
                 <div className="mt-4 flex items-start gap-2 p-3.5 rounded-2xl text-sm"
-                  style={{ background: '#fff0f0', color: '#b03030', border: '1.5px solid #f5b0b0' }}>
+                  style={{ background: 'var(--danger-bg)', color: 'var(--danger)', border: '1.5px solid var(--danger-border)' }}>
                   <AlertTriangle size={15} strokeWidth={2.5} className="mt-px shrink-0" />
                   <span>{seedResult.error}</span>
                 </div>
@@ -455,8 +453,8 @@ export default function SettingsPage() {
             {tab === 'appearance' && (<>
             <div className="clay-card p-6">
               <div className="flex items-center gap-3 mb-5">
-                <div style={{ width: 44, height: 44, borderRadius: 13, flexShrink: 0, background: 'rgba(0,48,135,0.08)', border: '1px solid rgba(0,48,135,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Monitor size={20} color="#003087" strokeWidth={2} />
+                <div style={{ width: 44, height: 44, borderRadius: 13, flexShrink: 0, background: 'var(--accent-wash)', border: '1px solid rgba(0,48,135,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Monitor size={20} style={{ color: 'var(--accent)' }} strokeWidth={2} />
                 </div>
                 <div>
                   <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-strong)' }}>Appearance</p>
@@ -465,10 +463,10 @@ export default function SettingsPage() {
               </div>
               <div className="flex gap-2 flex-wrap">
                 {[['light', Sun, 'Light'], ['dark', Moon, 'Dark'], ['system', Monitor, 'System']].map(([val, Icon, label]) => (
-                  <button key={val} onClick={() => setTheme(val)}
+                  <button key={val} onClick={() => { setTheme(val); toast(`Appearance saved — ${label.toLowerCase()}.`, 'success'); }}
                     className="clay-btn px-4 py-2.5 text-sm flex items-center gap-2"
                     style={theme === val
-                      ? { background: 'rgba(0,37,112,0.12)', color: '#003087', border: '1.5px solid rgba(0,37,112,0.3)' }
+                      ? { background: 'rgba(0,37,112,0.12)', color: 'var(--accent)', border: '1.5px solid rgba(0,37,112,0.3)' }
                       : { color: 'var(--text)' }}>
                     <Icon size={15} strokeWidth={2.3} /> {label}
                   </button>
@@ -478,8 +476,8 @@ export default function SettingsPage() {
 
             <div className="clay-card p-6">
               <div className="flex items-center gap-3 mb-5">
-                <div style={{ width: 44, height: 44, borderRadius: 13, flexShrink: 0, background: 'rgba(0,48,135,0.08)', border: '1px solid rgba(0,48,135,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Clock size={20} color="#003087" strokeWidth={2} />
+                <div style={{ width: 44, height: 44, borderRadius: 13, flexShrink: 0, background: 'var(--accent-wash)', border: '1px solid rgba(0,48,135,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Clock size={20} style={{ color: 'var(--accent)' }} strokeWidth={2} />
                 </div>
                 <div>
                   <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-strong)' }}>Session Timeout</p>
@@ -490,10 +488,13 @@ export default function SettingsPage() {
               </div>
               <div className="flex gap-2 flex-wrap">
                 {[15, 30, 60, 120].map(min => (
-                  <button key={min} onClick={() => setInactivityMin(min)}
+                  <button key={min} onClick={() => {
+                      setInactivityMin(min);
+                      toast(`Preference saved — you'll be signed out after ${min < 60 ? `${min} minutes` : `${min / 60} hour${min > 60 ? 's' : ''}`} of inactivity.`, 'success');
+                    }}
                     className="clay-btn px-4 py-2.5 text-sm flex items-center gap-2"
                     style={inactivityMin === min
-                      ? { background: 'rgba(0,37,112,0.12)', color: '#003087', border: '1.5px solid rgba(0,37,112,0.3)' }
+                      ? { background: 'rgba(0,37,112,0.12)', color: 'var(--accent)', border: '1.5px solid rgba(0,37,112,0.3)' }
                       : { color: 'var(--text)' }}>
                     {min < 60 ? `${min} min` : `${min / 60} hr${min > 60 ? 's' : ''}`}
                   </button>
@@ -589,7 +590,7 @@ function MessagingSettingsPanel({ token }) {
     <div className="clay-card p-6">
       <div className="flex items-center gap-3 mb-5">
         <div style={{ width: 44, height: 44, borderRadius: 13, flexShrink: 0, background: 'rgba(0,48,135,0.07)', border: '1px solid rgba(0,48,135,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Bot size={20} color="#003087" strokeWidth={2} />
+          <Bot size={20} style={{ color: 'var(--accent)' }} strokeWidth={2} />
         </div>
         <div className="flex-1 min-w-0">
           <p className="flex items-center gap-1.5" style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-strong)' }}>
@@ -604,7 +605,7 @@ function MessagingSettingsPanel({ token }) {
 
       {error && (
         <div className="mb-4 p-3 rounded-2xl text-sm font-medium"
-          style={{ background: '#fff0f0', color: '#b03030', border: '1.5px solid #f5b0b0' }}>
+          style={{ background: 'var(--danger-bg)', color: 'var(--danger)', border: '1.5px solid var(--danger-border)' }}>
           {error}
         </div>
       )}
@@ -618,7 +619,7 @@ function MessagingSettingsPanel({ token }) {
       <form onSubmit={handleSave} className="space-y-4">
         <label className="flex items-start gap-3 cursor-pointer select-none">
           <input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)}
-            className="mt-0.5 w-4 h-4 rounded" style={{ accentColor: '#003087' }} />
+            className="mt-0.5 w-4 h-4 rounded" style={{ accentColor: 'var(--accent)' }} />
           <span>
             <span className="block text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>
               Send an automatic acknowledgement
@@ -629,10 +630,7 @@ function MessagingSettingsPanel({ token }) {
           </span>
         </label>
 
-        <div>
-          <label className="block text-xs font-bold mb-1.5 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
-            Message
-          </label>
+        <Field label="Message">
           <textarea
             rows={4}
             value={message}
@@ -645,13 +643,13 @@ function MessagingSettingsPanel({ token }) {
           />
           <div className="flex items-center justify-between mt-1">
             {tooShort
-              ? <p className="text-xs font-medium" style={{ color: '#dc2626' }}>At least 10 characters.</p>
+              ? <p className="text-xs font-medium" style={{ color: 'var(--danger)' }}>At least 10 characters.</p>
               : <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
                   Include your reply time and office hours so scholars know what to expect.
                 </p>}
             <p className="text-xs tabular-nums" style={{ color: 'var(--text-faint)' }}>{message.length}/1000</p>
           </div>
-        </div>
+        </Field>
 
         {/* What the scholar will actually see. */}
         {enabled && message.trim() && (

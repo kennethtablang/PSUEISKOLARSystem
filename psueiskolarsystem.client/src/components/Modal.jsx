@@ -5,6 +5,17 @@ import { X } from 'lucide-react';
 // Nested modals each add a lock; only the last one to close releases the page scroll.
 let openCount = 0;
 
+// Everything the browser will let Tab reach, minus anything explicitly removed from the
+// order. Kept as one selector so the focus trap and the initial-focus search agree.
+const FOCUSABLE = [
+  'a[href]',
+  'button:not([disabled])',
+  'input:not([type="hidden"]):not([disabled])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(', ');
+
 /**
  * The single modal shell used across the app.
  *
@@ -44,6 +55,32 @@ export default function Modal({
       if (e.key === 'Escape' && dismissible) {
         e.stopPropagation();
         onClose?.();
+        return;
+      }
+
+      /* Keep Tab inside the dialog. Without this the focus ring walks straight out of the
+         panel and onto the page behind it, which a sighted mouse user never notices and a
+         keyboard user cannot recover from — the page is inert to the eye (backdrop, scroll
+         lock) but still fully tabbable. Wrapping at both ends is what makes `aria-modal`
+         true rather than merely asserted. */
+      if (e.key !== 'Tab') return;
+
+      const panel = panelRef.current;
+      if (!panel) return;
+
+      const focusable = [...panel.querySelectorAll(FOCUSABLE)]
+        .filter(el => el.offsetParent !== null || el === document.activeElement);
+      if (focusable.length === 0) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      } else if (e.shiftKey && (document.activeElement === first || document.activeElement === panel)) {
+        e.preventDefault();
+        last.focus();
       }
     }
     document.addEventListener('keydown', onKeyDown);
@@ -54,10 +91,21 @@ export default function Modal({
     // Focus the first field, falling back to the panel itself.
     const panel = panelRef.current;
     if (!panel) return;
+
+    // Whatever had focus when the dialog opened — almost always the button that opened it.
+    // Returning focus there on close is what keeps a keyboard user's place in the page;
+    // without it focus falls back to <body> and the next Tab starts from the top.
+    const opener = document.activeElement;
+
     const target = panel.querySelector(
       'input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled])'
     );
     (target ?? panel).focus({ preventScroll: true });
+
+    return () => {
+      if (opener instanceof HTMLElement && document.contains(opener))
+        opener.focus({ preventScroll: true });
+    };
   }, []);
 
   function handleBackdropClick(e) {

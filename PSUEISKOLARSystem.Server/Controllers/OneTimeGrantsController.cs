@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PSUEISKOLARSystem.Server.Data;
+using PSUEISKOLARSystem.Server.DTOs;
 using PSUEISKOLARSystem.Server.Interfaces;
 using PSUEISKOLARSystem.Server.Models;
 using PSUEISKOLARSystem.Server.Models.Enums;
@@ -25,6 +26,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
         [HttpGet]
         public async Task<IActionResult> GetAll(
             [FromQuery] string? scholarId,
+            [FromQuery] int? scholarshipTypeId,
             [FromQuery] string? status,
             [FromQuery] string? search,
             [FromQuery] int page = 1,
@@ -43,6 +45,9 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 query = query.Where(g => g.ScholarId == currentUserId);
             else if (!string.IsNullOrWhiteSpace(scholarId))
                 query = query.Where(g => g.ScholarId == scholarId);
+
+            if (scholarshipTypeId is int typeFilter)
+                query = query.Where(g => g.ScholarshipTypeId == typeFilter);
 
             if (!string.IsNullOrWhiteSpace(status))
             {
@@ -78,6 +83,8 @@ namespace PSUEISKOLARSystem.Server.Controllers
                         ? g.Scholar.FirstName + " " + g.Scholar.MiddleName + " " + g.Scholar.LastName
                         : g.Scholar.FirstName + " " + g.Scholar.LastName,
                     ScholarEmail = g.Scholar.Email,
+                    g.ScholarshipTypeId,
+                    ScholarshipTypeName = g.ScholarshipType != null ? g.ScholarshipType.Name : null,
                     g.Title,
                     g.Purpose,
                     g.Amount,
@@ -99,7 +106,9 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 total,
                 page,
                 pageSize,
-                totalPages = (int)Math.Ceiling(total / (double)pageSize),
+                // Envelope kept as-is because it carries money totals alongside the page;
+                // only the page-count arithmetic is shared (see PagedResult).
+                totalPages = PagedResult<object>.PageCount(total, pageSize),
                 totalAmount,
                 releasedAmount,
                 pendingAmount = totalAmount - releasedAmount,
@@ -134,6 +143,20 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     .Select(g => g.ScholarId)
                     .Distinct()
                     .CountAsync(),
+                // What each scholarship type has paid out in one-off awards, so a type's
+                // total spend is the sum of its releases and its grants rather than just one.
+                byScholarshipType = await db.OneTimeGrants
+                    .Where(g => g.ReleaseStatus != GrantReleaseStatuses.Cancelled)
+                    .GroupBy(g => new { g.ScholarshipTypeId, Name = g.ScholarshipType != null ? g.ScholarshipType.Name : null })
+                    .Select(g => new
+                    {
+                        scholarshipTypeId = g.Key.ScholarshipTypeId,
+                        name = g.Key.Name ?? "Unassigned",
+                        count = g.Count(),
+                        amount = g.Sum(x => x.Amount),
+                    })
+                    .OrderByDescending(g => g.amount)
+                    .ToListAsync(),
             });
         }
 
@@ -153,9 +176,14 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 db.Roles.Any(r => r.Id == ur.RoleId && r.Name == UserRoles.Scholar));
             if (!isScholar) return BadRequest(new { message = "One-time grants can only be awarded to scholar accounts." });
 
+            if (dto.ScholarshipTypeId is int newTypeId &&
+                !await db.ScholarshipTypes.AnyAsync(t => t.Id == newTypeId))
+                return BadRequest(new { message = "Scholarship type not found." });
+
             var grant = new OneTimeGrant
             {
                 ScholarId = dto.ScholarId,
+                ScholarshipTypeId = dto.ScholarshipTypeId,
                 Title = dto.Title.Trim(),
                 Purpose = Trim(dto.Purpose),
                 Amount = dto.Amount,
@@ -195,6 +223,11 @@ namespace PSUEISKOLARSystem.Server.Controllers
             var validationError = Validate(dto);
             if (validationError is not null) return BadRequest(new { message = validationError });
 
+            if (dto.ScholarshipTypeId is int editTypeId &&
+                !await db.ScholarshipTypes.AnyAsync(t => t.Id == editTypeId))
+                return BadRequest(new { message = "Scholarship type not found." });
+
+            grant.ScholarshipTypeId = dto.ScholarshipTypeId;
             grant.Title = dto.Title.Trim();
             grant.Purpose = Trim(dto.Purpose);
             grant.Amount = dto.Amount;
@@ -306,6 +339,8 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
     public record OneTimeGrantRequest(
         string ScholarId,
+        // The kind of scholarship the award is filed under; null when it belongs to none.
+        int? ScholarshipTypeId,
         string Title,
         string? Purpose,
         decimal Amount,

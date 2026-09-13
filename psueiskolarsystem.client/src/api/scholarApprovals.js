@@ -1,4 +1,4 @@
-import { errorMessage } from './_error';
+import { apiGet, apiSend } from './_client';
 
 const API = '/api/scholar-approvals';
 
@@ -6,19 +6,12 @@ export async function getScholarApprovals(token, { status, search, page = 1, pag
   const params = new URLSearchParams({ page, pageSize });
   if (status) params.set('status', status);
   if (search) params.set('search', search);
-  const res = await fetch(`${API}?${params}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error('Failed to load scholar registrations.');
-  return res.json(); // { total, page, pageSize, totalPages, items }
+  // { total, page, pageSize, totalPages, items }
+  return apiGet(`${API}?${params}`, token, 'Failed to load scholar registrations.');
 }
 
 export async function getPendingApprovalCount(token) {
-  const res = await fetch(`${API}/pending-count`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error('Failed to load pending count.');
-  const { count } = await res.json();
+  const { count } = await apiGet(`${API}/pending-count`, token, 'Failed to load pending count.');
   return count;
 }
 
@@ -31,12 +24,6 @@ export async function rejectScholar(userId, note, token) {
 }
 
 async function decide(userId, action, note, token) {
-  const res = await fetch(`${API}/${userId}/${action}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ note: note || null }),
-  });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(errorMessage(body, `Failed to ${action} the registration.`));
-  return body;
+  return apiSend(`${API}/${userId}/${action}`, 'POST', { note: note || null }, token,
+    `Failed to ${action} the registration.`);
 }

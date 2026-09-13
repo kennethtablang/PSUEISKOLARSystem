@@ -54,7 +54,7 @@ export default function ScholarshipVerificationPage() {
           </button>
         </div>
 
-        {error && <p className="text-sm mb-4" style={{ color: '#e03030' }}>{error}</p>}
+        {error && <p className="text-sm mb-4" style={{ color: 'var(--danger)' }}>{error}</p>}
 
         {data && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -84,7 +84,7 @@ export default function ScholarshipVerificationPage() {
               <thead className="clay-table-head">
                 <tr>
                   {['Scholar', 'Student ID', 'Current Scholarship', 'Records', 'Finding', ''].map(h => (
-                    <th key={h} className="text-left px-5 py-3 text-xs font-bold uppercase tracking-wider" style={{ color: '#7a8aaa' }}>{h}</th>
+                    <th key={h} className="text-left px-5 py-3 text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -95,7 +95,7 @@ export default function ScholarshipVerificationPage() {
                     <tr key={f.userId} className="clay-table-row">
                       <td className="px-5 py-3.5">
                         <p className="font-semibold" style={{ color: 'var(--text-strong)' }}>{f.fullName}</p>
-                        <p className="text-xs" style={{ color: '#7a8aaa' }}>{f.email}</p>
+                        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{f.email}</p>
                       </td>
                       <td className="px-5 py-3.5 font-mono" style={{ color: 'var(--text)' }}>{f.studentId || '—'}</td>
                       <td className="px-5 py-3.5" style={{ color: 'var(--text)' }}>{f.currentScholarship ?? '—'}</td>
@@ -122,7 +122,7 @@ export default function ScholarshipVerificationPage() {
                         <button
                           onClick={() => navigate(`/scholars/${f.userId}`)}
                           className="clay-btn clay-btn-ghost text-xs px-3"
-                          style={{ minHeight: 32, borderRadius: 10, color: '#003087', fontWeight: 700 }}
+                          style={{ minHeight: 32, borderRadius: 10, color: 'var(--accent)', fontWeight: 700 }}
                         >
                           Resolve
                         </button>
@@ -135,7 +135,7 @@ export default function ScholarshipVerificationPage() {
           )}
         </div>
 
-        <p className="text-xs mt-4 leading-relaxed" style={{ color: '#9aaabb' }}>
+        <p className="text-xs mt-4 leading-relaxed" style={{ color: 'var(--text-faint)' }}>
           <strong>Conflict</strong> — two scholarships are open at once, a profile disagrees with its
           assignment record, or a student ID is shared. <strong>Check</strong> — a scholarship is set
           without a matching record, or the reverse. <strong>History</strong> — the scholar transferred

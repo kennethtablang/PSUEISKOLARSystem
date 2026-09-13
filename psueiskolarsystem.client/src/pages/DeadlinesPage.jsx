@@ -118,10 +118,10 @@ export default function DeadlinesPage() {
           <TabBtn active={tab === 'report'} onClick={() => setTab('report')} icon={AlertTriangle} label="Compliance Report" />
         </div>
 
-        {error && <p className="text-sm mb-4" style={{ color: '#e03030' }}>{error}</p>}
+        {error && <p className="text-sm mb-4" style={{ color: 'var(--danger)' }}>{error}</p>}
 
         {loading ? (
-          <p className="text-sm" style={{ color: '#7a8aaa' }}>Loading…</p>
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Loading…</p>
         ) : tab === 'manage' ? (
           <ManageTab
             requirements={requirements}
@@ -143,7 +143,7 @@ function TabBtn({ active, onClick, icon: Icon, label }) {
       onClick={onClick}
       className="clay-btn px-4 py-2 text-sm flex items-center gap-2"
       style={active
-        ? { background: 'rgba(0,37,112,0.10)', color: '#002570', border: '1.5px solid rgba(0,37,112,0.25)' }
+        ? { background: 'rgba(0,37,112,0.10)', color: 'var(--accent-strong)', border: '1.5px solid rgba(0,37,112,0.25)' }
         : { color: 'var(--text)' }}
     >
       <Icon size={15} strokeWidth={2.2} /> {label}
@@ -151,17 +151,27 @@ function TabBtn({ active, onClick, icon: Icon, label }) {
   );
 }
 
+/* How far the reminder sweep has chased this deadline. Mirrors DeadlineReminderStage on the
+   server — worth showing because "did anyone actually warn them?" is a different question
+   from "has the date passed?", and until the sweep escalated it was the same question. */
+const NOTICE_LABEL = {
+  None: 'Not sent',
+  Approaching: 'Early reminder sent',
+  Final: 'Last call sent',
+  Missed: 'Missed notice sent',
+};
+
 function ManageTab({ requirements, deadlineByReq, onSet, onClear }) {
   if (requirements.length === 0)
-    return <p className="text-sm" style={{ color: '#7a8aaa' }}>No active requirements.</p>;
+    return <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No active requirements.</p>;
 
   return (
     <div className="clay-card overflow-hidden">
       <div className="overflow-x-auto"><table className="w-full min-w-[640px] text-sm">
         <thead className="clay-table-head">
           <tr>
-            {['Requirement', 'Due Date', 'Status', ''].map(h => (
-              <th key={h} className="text-left px-5 py-3 text-xs font-bold uppercase tracking-wider" style={{ color: '#7a8aaa' }}>{h}</th>
+            {['Requirement', 'Due Date', 'Status', 'Notices', ''].map(h => (
+              <th key={h} className="text-left px-5 py-3 text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{h}</th>
             ))}
           </tr>
         </thead>
@@ -175,7 +185,7 @@ function ManageTab({ requirements, deadlineByReq, onSet, onClear }) {
                   {req.name}
                   {req.isRequired && (
                     <span className="ml-2 text-xs px-1.5 py-0.5 rounded-xl font-medium"
-                      style={{ background: '#dce8ff', color: '#003087', border: '1px solid #80aaee' }}>Required</span>
+                      style={{ background: 'var(--accent-soft-bg)', color: 'var(--accent)', border: '1px solid var(--accent-soft-border)' }}>Required</span>
                   )}
                 </td>
                 <td className="px-5 py-3.5">
@@ -189,16 +199,19 @@ function ManageTab({ requirements, deadlineByReq, onSet, onClear }) {
                 </td>
                 <td className="px-5 py-3.5">
                   {!dl ? (
-                    <span className="text-xs" style={{ color: '#9aaabb' }}>No deadline set</span>
+                    <span className="text-xs" style={{ color: 'var(--text-faint)' }}>No deadline set</span>
                   ) : past ? (
                     <span className="clay-badge badge-inactive">Past due</span>
                   ) : (
                     <span className="clay-badge badge-active">Open</span>
                   )}
                 </td>
+                <td className="px-5 py-3.5 text-xs whitespace-nowrap" style={{ color: 'var(--text-muted)' }}>
+                  {dl ? NOTICE_LABEL[dl.reminderStage] ?? '—' : '—'}
+                </td>
                 <td className="px-5 py-3.5 text-right">
                   {dl && (
-                    <button onClick={() => onClear(dl.id)} className="text-xs font-medium hover:underline" style={{ color: '#e03030' }}>
+                    <button onClick={() => onClear(dl.id)} className="text-xs font-medium hover:underline" style={{ color: 'var(--danger)' }}>
                       Clear
                     </button>
                   )}
@@ -214,7 +227,7 @@ function ManageTab({ requirements, deadlineByReq, onSet, onClear }) {
 
 function ReportTab({ report }) {
   if (!report || report.length === 0)
-    return <p className="text-sm" style={{ color: '#7a8aaa' }}>No deadlines set for this period. Set deadlines first to track compliance.</p>;
+    return <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No deadlines set for this period. Set deadlines first to track compliance.</p>;
 
   return (
     <div className="space-y-4">
@@ -232,7 +245,7 @@ function ReportCard({ row }) {
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <p className="font-bold" style={{ color: 'var(--text-strong)' }}>{row.requirementName}</p>
-          <p className="text-xs mt-0.5 flex items-center gap-1.5" style={{ color: row.isPastDue ? '#c0342c' : '#7a8aaa' }}>
+          <p className="text-xs mt-0.5 flex items-center gap-1.5" style={{ color: row.isPastDue ? '#c0342c' : 'var(--text-muted)' }}>
             <Clock size={12} /> Due {due.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
             {row.isPastDue && ' · Past due'}
           </p>
@@ -241,12 +254,12 @@ function ReportCard({ row }) {
           <Stat icon={CheckCircle2} color="#0a7d43" value={row.onTime} label="On time" />
           <Stat icon={Clock} color="#c2410c" value={row.late} label="Late" />
           <Stat icon={AlertTriangle} color="#c0342c" value={row.missing} label="Missing" />
-          <Stat icon={Users} color="#003087" value={row.applicable} label="Scholars" />
+          <Stat icon={Users} color="var(--accent)" value={row.applicable} label="Scholars" />
         </div>
       </div>
 
       {(row.missing > 0 || row.late > 0) && (
-        <button onClick={() => setOpen(o => !o)} className="mt-3 text-xs flex items-center gap-1 hover:underline" style={{ color: '#003087' }}>
+        <button onClick={() => setOpen(o => !o)} className="mt-3 text-xs flex items-center gap-1 hover:underline" style={{ color: 'var(--accent)' }}>
           {open ? <ChevronUp size={13} /> : <ChevronDown size={13} />} {open ? 'Hide' : 'Show'} details
         </button>
       )}
@@ -271,7 +284,7 @@ function ReportCard({ row }) {
               <ul className="space-y-1">
                 {row.lateSubmissions.map(s => (
                   <li key={s.scholarId} className="text-xs" style={{ color: 'var(--text)' }}>
-                    {s.scholarName}<span style={{ color: '#9aaabb' }}> · {new Date(s.submittedAt).toLocaleDateString()}</span>
+                    {s.scholarName}<span style={{ color: 'var(--text-faint)' }}> · {new Date(s.submittedAt).toLocaleDateString()}</span>
                   </li>
                 ))}
               </ul>
@@ -289,7 +302,7 @@ function Stat({ icon: Icon, color, value, label }) {
       <p className="text-xl font-black flex items-center justify-center gap-1" style={{ color }}>
         <Icon size={15} strokeWidth={2.4} /> {value}
       </p>
-      <p className="text-xs font-semibold uppercase tracking-wide mt-0.5" style={{ color: '#7a8aaa' }}>{label}</p>
+      <p className="text-xs font-semibold uppercase tracking-wide mt-0.5" style={{ color: 'var(--text-muted)' }}>{label}</p>
     </div>
   );
 }

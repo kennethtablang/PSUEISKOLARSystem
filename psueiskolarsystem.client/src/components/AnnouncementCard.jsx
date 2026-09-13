@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, Clock } from 'lucide-react';
 import AnnouncementImage from './AnnouncementImage';
 import { ANNOUNCEMENT_INTENTS } from '../api/announcements';
+import { useNow, daysUntil } from '../hooks/useNow';
 
 /**
  * Shared announcement card used across the app.
@@ -20,9 +21,10 @@ export default function AnnouncementCard({ a, variant = 'feed', onEdit, onDelete
     ? new Date(a.publishAt).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })
     : null;
 
-  const daysLeft = a.expiresAt
-    ? Math.ceil((new Date(a.expiresAt) - Date.now()) / (1000 * 60 * 60 * 24))
-    : null;
+  // Hourly is ample for a day countdown, and it means a dashboard left open overnight
+  // stops claiming an announcement expires "in 3 days" the morning after it expired.
+  const now = useNow(60 * 60 * 1000);
+  const daysLeft = a.expiresAt ? daysUntil(a.expiresAt, now) : null;
   const isUrgent = variant === 'feed' && daysLeft !== null && daysLeft <= 7;
 
   const targets = [a.targetRole, a.targetScholarshipType, a.targetProgram].filter(Boolean);
@@ -31,7 +33,7 @@ export default function AnnouncementCard({ a, variant = 'feed', onEdit, onDelete
     <div
       className={`clay-card p-5${variant === 'manage' ? ' group relative' : ''}`}
       style={
-        scheduledFor ? { border: '1.5px dashed #80aaee' }
+        scheduledFor ? { border: '1.5px dashed var(--accent-soft-border)' }
         : isUrgent ? { border: '1.5px solid #f0a860' }
         : undefined
       }
@@ -39,10 +41,10 @@ export default function AnnouncementCard({ a, variant = 'feed', onEdit, onDelete
       {scheduledFor && (
         <div className="flex items-center gap-2 mb-3 flex-wrap">
           <span className="clay-badge text-xs inline-flex items-center gap-1"
-            style={{ background: '#dce8ff', color: '#003087', border: '1px solid #80aaee' }}>
+            style={{ background: 'var(--accent-soft-bg)', color: 'var(--accent)', border: '1px solid var(--accent-soft-border)' }}>
             <Clock size={10} strokeWidth={2.6} /> Scheduled
           </span>
-          <span className="text-xs font-medium" style={{ color: '#003087' }}>
+          <span className="text-xs font-medium" style={{ color: 'var(--accent)' }}>
             Goes out {scheduledFor} — not yet visible to its audience.
           </span>
         </div>
@@ -84,13 +86,13 @@ export default function AnnouncementCard({ a, variant = 'feed', onEdit, onDelete
 
       {variant === 'feed' ? (
         <div className="flex items-center gap-2 mt-3 flex-wrap">
-          <span className="text-xs" style={{ color: '#7a8aaa' }}>{date} · {a.createdBy}</span>
+          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{date} · {a.createdBy}</span>
           {a.targetRole && <span className="clay-badge text-xs badge-coord">{a.targetRole}</span>}
         </div>
       ) : (
         <div className="flex items-center justify-between mt-3">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs" style={{ color: '#7a8aaa' }}>{date} · {a.createdBy}</span>
+            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{date} · {a.createdBy}</span>
             {/* Named scholars are the whole audience, so they replace the filter badges. */}
             {a.recipientCount > 0 ? (
               <span
@@ -102,12 +104,12 @@ export default function AnnouncementCard({ a, variant = 'feed', onEdit, onDelete
               </span>
             ) : targets.length > 0 ? (
               targets.map(t => (
-                <span key={t} className="clay-badge text-xs" style={{ background: '#dce8ff', color: '#003087', border: '1px solid #80aaee' }}>
+                <span key={t} className="clay-badge text-xs" style={{ background: 'var(--accent-soft-bg)', color: 'var(--accent)', border: '1px solid var(--accent-soft-border)' }}>
                   {t}
                 </span>
               ))
             ) : (
-              <span className="clay-badge text-xs" style={{ background: 'var(--bg)', color: '#7a8aaa', border: '1px solid rgba(0,0,0,0.08)' }}>
+              <span className="clay-badge text-xs" style={{ background: 'var(--bg)', color: 'var(--text-muted)', border: '1px solid rgba(0,0,0,0.08)' }}>
                 All users
               </span>
             )}
@@ -118,8 +120,8 @@ export default function AnnouncementCard({ a, variant = 'feed', onEdit, onDelete
                 Publish now
               </button>
             )}
-            <button onClick={onEdit} className="text-xs font-medium hover:underline" style={{ color: '#003087' }}>Edit</button>
-            <button onClick={onDelete} className="text-xs font-medium hover:underline" style={{ color: '#e03030' }}>Delete</button>
+            <button onClick={onEdit} className="text-xs font-medium hover:underline" style={{ color: 'var(--accent)' }}>Edit</button>
+            <button onClick={onDelete} className="text-xs font-medium hover:underline" style={{ color: 'var(--danger)' }}>Delete</button>
           </div>
         </div>
       )}

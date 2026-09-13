@@ -58,7 +58,7 @@ export default function GlobalSearch({ isDesktop }) {
     // field would stop helping — rather than sitting at a fixed 340px with a void beside it.
     <div ref={rootRef} style={{ position: 'relative', flex: isDesktop ? '1 1 340px' : 1, maxWidth: 460 }}>
       <form onSubmit={submit}>
-        <Search size={15} strokeWidth={2.2} color="#7a8aaa"
+        <Search size={15} strokeWidth={2.2} style={{ color: 'var(--text-muted)' }}
           style={{ position: 'absolute', left: 12, top: 19, transform: 'translateY(-50%)', pointerEvents: 'none' }} />
         <input
           value={q}
@@ -79,9 +79,9 @@ export default function GlobalSearch({ isDesktop }) {
           maxHeight: 420, overflowY: 'auto', padding: 6,
         }}>
           {loading && total === 0 ? (
-            <p className="text-xs px-3 py-3" style={{ color: '#7a8aaa' }}>Searching…</p>
+            <p className="text-xs px-3 py-3" style={{ color: 'var(--text-muted)' }}>Searching…</p>
           ) : total === 0 ? (
-            <p className="text-xs px-3 py-3" style={{ color: '#7a8aaa' }}>No matches for “{q.trim()}”.</p>
+            <p className="text-xs px-3 py-3" style={{ color: 'var(--text-muted)' }}>No matches for “{q.trim()}”.</p>
           ) : (
             <>
               <Group label="Scholars" icon={GraduationCap} items={results.scholars}
@@ -102,16 +102,16 @@ function Group({ label, icon: Icon, items, render, onGo }) {
   if (items.length === 0) return null;
   return (
     <div className="mb-1">
-      <p className="text-[10px] font-bold uppercase tracking-wider px-3 pt-2 pb-1" style={{ color: '#9aaabb' }}>{label}</p>
+      <p className="text-[10px] font-bold uppercase tracking-wider px-3 pt-2 pb-1" style={{ color: 'var(--text-faint)' }}>{label}</p>
       {items.map(item => {
         const { key, title, subtitle, url } = render(item);
         return (
           <button key={key} onClick={() => onGo(url)}
             className="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-black/5">
-            <Icon size={14} strokeWidth={2.2} style={{ color: '#003087', flexShrink: 0 }} />
+            <Icon size={14} strokeWidth={2.2} style={{ color: 'var(--accent)', flexShrink: 0 }} />
             <span className="min-w-0 flex-1">
               <span className="block text-sm truncate" style={{ color: 'var(--text-strong)' }}>{title}</span>
-              {subtitle && <span className="block text-xs truncate" style={{ color: '#7a8aaa' }}>{subtitle}</span>}
+              {subtitle && <span className="block text-xs truncate" style={{ color: 'var(--text-muted)' }}>{subtitle}</span>}
             </span>
           </button>
         );

@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { AlertTriangle, Printer, Award, ShieldCheck, ShieldX, Plus, BanknoteArrowUp, History, Camera } from 'lucide-react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { AlertTriangle, Printer, Award, ShieldCheck, ShieldX, Plus, BanknoteArrowUp, History, Camera, Wallet } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
-import { useToast } from '../context/UIContext';
-import { getScholarProfile, upsertScholarProfile, getGrades, addGrade, setLifecycleStatus, getScholarshipHistory } from '../api/scholars';
+import { useToast, useConfirm } from '../context/UIContext';
+import { getScholarProfile, upsertScholarProfile, getGrades, addGrade, updateGrade, deleteGrade, setLifecycleStatus, getScholarshipHistory } from '../api/scholars';
 import { getPrograms, getScholarshipTypes } from '../api/lookups';
 import { getOneTimeGrants, releaseOneTimeGrant } from '../api/oneTimeGrants';
+import { getScholarReleases } from '../api/scholarshipReleases';
 import { approveScholar, rejectScholar } from '../api/scholarApprovals';
 import { uploadAvatarFor, clearAvatarCache } from '../api/avatars';
 import { useTitle } from '../hooks/useTitle';
@@ -16,15 +17,17 @@ import { vizTokens, tooltipStyle } from '../constants/viz';
 import Modal from '../components/Modal';
 import Avatar from '../components/Avatar';
 import logoPsu from '../assets/logo-psu.png';
-import { StatusBadge } from './ScholarApprovalsPage';
-import { GrantModal, GrantStatusBadge } from './OneTimeGrantsPage';
+import StatusBadge from '../components/StatusBadge';
+import { GrantModal } from './OneTimeGrantsPage';
 import { peso } from '../constants/grants';
+import Field from '../components/Field';
 
 export default function ScholarDetailPage() {
   useTitle('Scholar Profile');
   const { userId } = useParams();
   const { token, user: currentUser } = useAuth();
   const toast = useToast();
+  const confirm = useConfirm();
   const navigate = useNavigate();
 
   const [profile, setProfile] = useState(null);
@@ -35,9 +38,11 @@ export default function ScholarDetailPage() {
   const [error, setError] = useState('');
   const [editing, setEditing] = useState(false);
   const [showAddGrade, setShowAddGrade] = useState(false);
+  const [editingGrade, setEditingGrade] = useState(null);
   const [savingStatus, setSavingStatus] = useState(false);
   const [scholarshipHistory, setScholarshipHistory] = useState([]);
   const [grants, setGrants] = useState(null);         // { items, totalAmount, … }
+  const [releases, setReleases] = useState([]);       // recurring per-period payouts
   const [showGrantModal, setShowGrantModal] = useState(false);
   const [decision, setDecision] = useState(null);      // 'approve' | 'reject'
 
@@ -129,13 +134,14 @@ export default function ScholarDetailPage() {
   async function load() {
     setLoading(true);
     try {
-      const [p, prog, st, g, hist, gr] = await Promise.all([
+      const [p, prog, st, g, hist, gr, rel] = await Promise.all([
         getScholarProfile(targetUserId, token),
         getPrograms(token),
         getScholarshipTypes(token),
         getGrades(targetUserId, token).catch(() => []),
         getScholarshipHistory(targetUserId, token).catch(() => []),
         getOneTimeGrants(token, { scholarId: targetUserId, pageSize: 50 }).catch(() => null),
+        getScholarReleases(targetUserId, token).catch(() => []),
       ]);
       setProfile(p);
       setPrograms(prog);
@@ -143,11 +149,31 @@ export default function ScholarDetailPage() {
       setGrades(g);
       setScholarshipHistory(hist);
       setGrants(gr);
+      setReleases(rel ?? []);
     } catch (e) {
       setError(e.message);
     } finally {
       setLoading(false);
     }
+  }
+
+  function closeGradeModal() {
+    setShowAddGrade(false);
+    setEditingGrade(null);
+  }
+
+  async function handleDeleteGrade(grade) {
+    const ok = await confirm({
+      title: 'Remove grade',
+      message: `Remove the GWA of ${grade.gwa.toFixed(2)} recorded for ${grade.academicYear} Semester ${grade.semester}? Compliance figures will be recalculated from the remaining grades.`,
+      confirmLabel: 'Remove',
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await deleteGrade(targetUserId, grade.id, token);
+      await load();
+    } catch (e) { toast(e.message, 'error'); }
   }
 
   async function handleReleaseGrant(grant) {
@@ -160,8 +186,8 @@ export default function ScholarDetailPage() {
 
   useEffect(() => { load(); }, [targetUserId]);
 
-  if (loading) return <Layout><div className="p-4 sm:p-8 text-sm" style={{ color: '#7a8aaa' }}>Loading…</div></Layout>;
-  if (error) return <Layout><div className="p-4 sm:p-8 text-sm" style={{ color: '#e03030' }}>{error}</div></Layout>;
+  if (loading) return <Layout><div className="p-4 sm:p-8 text-sm" style={{ color: 'var(--text-muted)' }}>Loading…</div></Layout>;
+  if (error) return <Layout><div className="p-4 sm:p-8 text-sm" style={{ color: 'var(--danger)' }}>{error}</div></Layout>;
 
   return (
     <Layout>
@@ -311,8 +337,8 @@ export default function ScholarDetailPage() {
             {/* Scholarship lifecycle status (FR-18) */}
             <div className="clay-card p-4 mb-5 flex items-center justify-between flex-wrap gap-3">
               <div className="flex items-center gap-2.5">
-                <span className="text-xs font-bold uppercase tracking-wider" style={{ color: '#7a8aaa' }}>Scholarship Status</span>
-                <LifecycleBadge status={profile.lifecycleStatus} />
+                <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Scholarship Status</span>
+                <StatusBadge status={profile.lifecycleStatus} />
                 {profile.approvalStatus === 'Approved' && <StatusBadge status="Approved" />}
               </div>
               {isAdminOrCoord && (
@@ -332,7 +358,7 @@ export default function ScholarDetailPage() {
                 is, and what they hold — instead of stacking down a narrow column. */}
             <div className="card-grid-wide mb-5">
               <div className="clay-card p-6">
-                <h2 className="text-xs font-bold uppercase tracking-wider mb-4" style={{ color: '#7a8aaa' }}>Scholar Information</h2>
+                <h2 className="text-xs font-bold uppercase tracking-wider mb-4" style={{ color: 'var(--text-muted)' }}>Scholar Information</h2>
                 <dl className="grid grid-cols-2 gap-x-8 gap-y-4">
                   <Detail label="Student ID" value={profile.studentId} />
                   <Detail label="Year Level" value={`Year ${profile.yearLevel}`} />
@@ -355,6 +381,10 @@ export default function ScholarDetailPage() {
               />
             </div>
 
+            {/* Recurring per-period payouts. A scholar is told "Your scholarship has been
+                released" and sent here, so this is where the release has to be visible. */}
+            <ScholarshipReleasesCard releases={releases} isAdminOrCoord={isAdminOrCoord} />
+
             {/* One-time grants — one-off awards on top of the scholarship */}
             <OneTimeGrantsCard
               grants={grants}
@@ -369,23 +399,24 @@ export default function ScholarDetailPage() {
 
             <div className="clay-card p-6">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xs font-bold uppercase tracking-wider" style={{ color: '#7a8aaa' }}>Academic Grades</h2>
+                <h2 className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Academic Grades</h2>
                 {isAdminOrCoord && (
-                  <button onClick={() => setShowAddGrade(true)} className="text-sm font-medium hover:underline" style={{ color: '#003087' }}>
+                  <button onClick={() => setShowAddGrade(true)} className="text-sm font-medium hover:underline" style={{ color: 'var(--accent)' }}>
                     + Add Grade
                   </button>
                 )}
               </div>
 
               {grades.length === 0 ? (
-                <p className="text-sm" style={{ color: '#7a8aaa' }}>No grades recorded yet.</p>
+                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No grades recorded yet.</p>
               ) : (
                 <div className="overflow-x-auto"><table className="w-full min-w-[560px] text-sm">
                   <thead style={{ borderBottom: '1.5px solid rgba(0,0,0,0.07)' }}>
                     <tr>
                       {['Academic Year', 'Sem', 'GWA', 'Status', 'Remarks'].map(h => (
-                        <th key={h} className="text-left py-2 text-xs font-bold uppercase tracking-wider" style={{ color: '#7a8aaa' }}>{h}</th>
+                        <th key={h} className="text-left py-2 text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{h}</th>
                       ))}
+                      {isAdminOrCoord && <th className="text-right py-2 text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Actions</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -411,6 +442,16 @@ export default function ScholarDetailPage() {
                           )}
                         </td>
                         <td className="py-2.5 text-xs" style={{ color: 'var(--text)' }}>{g.remarks ?? '—'}</td>
+                        {isAdminOrCoord && (
+                          <td className="py-2.5 text-right whitespace-nowrap">
+                            <button onClick={() => setEditingGrade(g)} className="text-xs font-medium hover:underline" style={{ color: 'var(--accent)' }}>
+                              Edit
+                            </button>
+                            <button onClick={() => handleDeleteGrade(g)} className="text-xs font-medium hover:underline ml-3" style={{ color: '#c03010' }}>
+                              Remove
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -434,20 +475,26 @@ export default function ScholarDetailPage() {
         />
       )}
 
-      {showAddGrade && (
-        <AddGradeModal
+      {(showAddGrade || editingGrade) && (
+        <GradeModal
           userId={targetUserId}
           token={token}
-          onClose={() => setShowAddGrade(false)}
-          onSaved={() => { setShowAddGrade(false); load(); }}
+          grade={editingGrade}
+          onClose={closeGradeModal}
+          onSaved={() => { closeGradeModal(); load(); }}
         />
       )}
 
       {showGrantModal && profile && (
         <GrantModal
           initial={null}
-          scholars={[]}
-          fixedScholar={{ userId: targetUserId, fullName: profile.fullName }}
+          scholarshipTypes={scholarshipTypes}
+          fixedScholar={{
+            userId: targetUserId,
+            fullName: profile.fullName,
+            // Pre-files the grant under the scholarship this scholar already holds.
+            scholarshipTypeId: profile.scholarshipTypeId,
+          }}
           token={token}
           onClose={() => setShowGrantModal(false)}
           onSaved={() => { setShowGrantModal(false); load(); }}
@@ -477,11 +524,11 @@ function ScholarshipCard({ profile, history, isAdminOrCoord, onChange }) {
     /* No bottom margin: this card is a grid item now, so the grid owns the spacing. */
     <div className="clay-card p-6">
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-        <h2 className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5" style={{ color: '#7a8aaa' }}>
+        <h2 className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
           <Award size={13} strokeWidth={2.4} /> Scholarship
         </h2>
         {isAdminOrCoord && (
-          <button onClick={onChange} className="text-xs font-medium hover:underline" style={{ color: '#003087' }}>
+          <button onClick={onChange} className="text-xs font-medium hover:underline" style={{ color: 'var(--accent)' }}>
             {profile.scholarshipTypeId ? 'Transfer scholarship' : 'Assign scholarship'}
           </button>
         )}
@@ -499,7 +546,7 @@ function ScholarshipCard({ profile, history, isAdminOrCoord, onChange }) {
       )}
 
       {!profile.scholarshipTypeId ? (
-        <p className="text-sm" style={{ color: '#7a8aaa' }}>
+        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
           No scholarship assigned yet. A student may hold exactly one scholarship at a time.
         </p>
       ) : (
@@ -525,18 +572,18 @@ function ScholarshipCard({ profile, history, isAdminOrCoord, onChange }) {
               </div>
             </div>
             <div className="text-right shrink-0">
-              <p className="text-xs" style={{ color: '#7a8aaa' }}>Registered</p>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Registered</p>
               <p className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>
                 {(active?.assignedAt ?? profile.scholarshipAssignedAt)
                   ? new Date(active?.assignedAt ?? profile.scholarshipAssignedAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
                   : '—'}
               </p>
               {active?.assignedBy && (
-                <p className="text-xs mt-0.5" style={{ color: '#9aaabb' }}>by {active.assignedBy}</p>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--text-faint)' }}>by {active.assignedBy}</p>
               )}
             </div>
           </div>
-          <p className="text-xs mt-3 pt-3" style={{ color: '#7a8aaa', borderTop: '1px solid rgba(96,48,176,0.14)' }}>
+          <p className="text-xs mt-3 pt-3" style={{ color: 'var(--text-muted)', borderTop: '1px solid rgba(96,48,176,0.14)' }}>
             This is the scholar's only active scholarship. Assigning another closes this one and is
             recorded below.
           </p>
@@ -545,7 +592,7 @@ function ScholarshipCard({ profile, history, isAdminOrCoord, onChange }) {
 
       {past.length > 0 && (
         <div className="mt-5">
-          <p className="text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5" style={{ color: '#7a8aaa' }}>
+          <p className="text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
             <History size={12} strokeWidth={2.4} /> Previous scholarships ({past.length})
           </p>
           <ol className="space-y-2">
@@ -553,7 +600,7 @@ function ScholarshipCard({ profile, history, isAdminOrCoord, onChange }) {
               <li key={h.id} className="clay-card-inner px-3.5 py-2.5">
                 <div className="flex items-baseline justify-between gap-3 flex-wrap">
                   <span className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>{h.scholarshipTypeName}</span>
-                  <span className="text-xs" style={{ color: '#7a8aaa' }}>
+                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
                     {new Date(h.assignedAt).toLocaleDateString('en-PH', { month: 'short', year: 'numeric' })}
                     {' → '}
                     {new Date(h.endedAt).toLocaleDateString('en-PH', { month: 'short', year: 'numeric' })}
@@ -571,6 +618,71 @@ function ScholarshipCard({ profile, history, isAdminOrCoord, onChange }) {
   );
 }
 
+/* ── Recurring scholarship payouts, one row per academic period ──
+   Read-only here: recording and releasing are done from the Releases page, which has the
+   period pickers and the batch generator. This card exists so the scholar can see the money
+   they were notified about, and so staff see it beside the one-time grants. */
+function ScholarshipReleasesCard({ releases, isAdminOrCoord }) {
+  const released = releases.filter(r => r.status === 'Released');
+  const totalReleased = released.reduce((sum, r) => sum + r.amount, 0);
+  const pending = releases.filter(r => r.status === 'Pending');
+  const pendingTotal = pending.reduce((sum, r) => sum + r.amount, 0);
+
+  return (
+    <div className="clay-card p-6 mb-5">
+      <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+        <h2 className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+          Scholarship Releases
+        </h2>
+        {isAdminOrCoord && (
+          <Link to="/scholarship-releases" className="text-xs font-medium hover:underline flex items-center gap-1" style={{ color: 'var(--accent)' }}>
+            <Wallet size={12} strokeWidth={2.8} /> Manage releases
+          </Link>
+        )}
+      </div>
+
+      {releases.length === 0 ? (
+        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+          No scholarship releases recorded yet. These are the per-semester or per-year payouts
+          for the scholarship above.
+        </p>
+      ) : (
+        <>
+          <div className="flex flex-wrap gap-3 mb-4">
+            <MiniStat label="Released" value={peso(totalReleased)} color="#0a5a3a" />
+            <MiniStat label="Pending" value={peso(pendingTotal)} color="#7d5a00" />
+            <MiniStat label="Periods" value={String(releases.length)} />
+          </div>
+          <ul className="space-y-2">
+            {releases.map(r => (
+              <li key={r.id} className="clay-card-inner px-3.5 py-3">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>
+                      {r.scholarshipTypeName}
+                    </p>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{r.periodLabel}</p>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-faint)' }}>
+                      {r.releasedAt
+                        ? `Released ${new Date(r.releasedAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}`
+                        : 'Not yet released'}
+                      {r.referenceNo ? ` · ref ${r.referenceNo}` : ''}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0 flex flex-col items-end gap-1.5">
+                    <span className="font-mono font-bold text-sm" style={{ color: 'var(--text-strong)' }}>{peso(r.amount)}</span>
+                    <StatusBadge status={r.status} />
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </div>
+  );
+}
+
 /* ── One-off financial awards on top of the scholarship ── */
 function OneTimeGrantsCard({ grants, isAdminOrCoord, onAdd, onRelease }) {
   const items = grants?.items ?? [];
@@ -578,18 +690,18 @@ function OneTimeGrantsCard({ grants, isAdminOrCoord, onAdd, onRelease }) {
   return (
     <div className="clay-card p-6 mb-5">
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-        <h2 className="text-xs font-bold uppercase tracking-wider" style={{ color: '#7a8aaa' }}>
+        <h2 className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
           One-Time Grants
         </h2>
         {isAdminOrCoord && (
-          <button onClick={onAdd} className="text-xs font-medium hover:underline flex items-center gap-1" style={{ color: '#003087' }}>
+          <button onClick={onAdd} className="text-xs font-medium hover:underline flex items-center gap-1" style={{ color: 'var(--accent)' }}>
             <Plus size={12} strokeWidth={2.8} /> Record grant
           </button>
         )}
       </div>
 
       {items.length === 0 ? (
-        <p className="text-sm" style={{ color: '#7a8aaa' }}>
+        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
           No one-time grants recorded. These are one-off awards separate from the scholarship above.
         </p>
       ) : (
@@ -605,17 +717,17 @@ function OneTimeGrantsCard({ grants, isAdminOrCoord, onAdd, onRelease }) {
                 <div className="flex items-start justify-between gap-3 flex-wrap">
                   <div className="min-w-0">
                     <p className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>{g.title}</p>
-                    <p className="text-xs mt-0.5" style={{ color: '#7a8aaa' }}>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
                       {[g.source, g.purpose].filter(Boolean).join(' · ') || '—'}
                     </p>
-                    <p className="text-xs mt-0.5" style={{ color: '#9aaabb' }}>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-faint)' }}>
                       Awarded {new Date(g.awardedOn).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
                       {g.referenceNo ? ` · ref ${g.referenceNo}` : ''}
                     </p>
                   </div>
                   <div className="text-right shrink-0 flex flex-col items-end gap-1.5">
                     <span className="font-mono font-bold text-sm" style={{ color: 'var(--text-strong)' }}>{peso(g.amount)}</span>
-                    <GrantStatusBadge status={g.releaseStatus} />
+                    <StatusBadge status={g.releaseStatus} />
                     {isAdminOrCoord && g.releaseStatus === 'Pending' && (
                       <button
                         onClick={() => onRelease(g)}
@@ -639,7 +751,7 @@ function OneTimeGrantsCard({ grants, isAdminOrCoord, onAdd, onRelease }) {
 function MiniStat({ label, value, color }) {
   return (
     <div className="flex-1 min-w-[110px]">
-      <p className="text-xs" style={{ color: '#7a8aaa' }}>{label}</p>
+      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{label}</p>
       <p className="text-sm font-black font-mono mt-0.5" style={{ color: color ?? 'var(--text-strong)' }}>{value}</p>
     </div>
   );
@@ -691,7 +803,7 @@ function ApprovalDecisionModal({ profile, approve, token, onClose, onDone }) {
             placeholder={approve ? 'Anything the scholar should know…' : 'Explain what needs fixing…'}
           />
         </Field>
-        <p className="text-xs" style={{ color: '#7a8aaa' }}>
+        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
           {approve
             ? 'The scholar is notified and can start submitting documents immediately.'
             : 'Document submission stays locked until the registration is approved.'}
@@ -718,7 +830,7 @@ function GradeTrendChart({ grades, minimumGwa }) {
 
   return (
     <div className="clay-card p-6 mb-5">
-      <h2 className="text-xs font-bold uppercase tracking-wider mb-4" style={{ color: '#7a8aaa' }}>GWA Trend</h2>
+      <h2 className="text-xs font-bold uppercase tracking-wider mb-4" style={{ color: 'var(--text-muted)' }}>GWA Trend</h2>
       <ResponsiveContainer width="100%" height={220}>
         <LineChart data={data} margin={{ top: 5, right: 12, left: -8, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke={t.grid} vertical={false} />
@@ -734,34 +846,17 @@ function GradeTrendChart({ grades, minimumGwa }) {
             dot={{ r: 4, fill: t.markColor, stroke: t.gap, strokeWidth: 2 }} activeDot={{ r: 6 }} />
         </LineChart>
       </ResponsiveContainer>
-      <p className="text-xs mt-2" style={{ color: '#9aaabb' }}>
+      <p className="text-xs mt-2" style={{ color: 'var(--text-faint)' }}>
         Higher on the chart is better (lower GWA). The dashed line is the scholarship's maximum allowed GWA.
       </p>
     </div>
   );
 }
 
-const LIFECYCLE_STYLE = {
-  Active:    { bg: '#d4f4e2', color: '#166534' },
-  Renewed:   { bg: '#dbeafe', color: '#1e40af' },
-  Lapsed:    { bg: '#fee2e2', color: '#991b1b' },
-  Suspended: { bg: '#ffedd5', color: '#9a3412' },
-  Graduated: { bg: '#e5e7eb', color: '#374151' },
-};
-
-function LifecycleBadge({ status }) {
-  const s = LIFECYCLE_STYLE[status] ?? LIFECYCLE_STYLE.Active;
-  return (
-    <span className="inline-flex px-2.5 py-0.5 rounded-full text-xs font-bold" style={{ background: s.bg, color: s.color }}>
-      {status}
-    </span>
-  );
-}
-
 function Detail({ label, value }) {
   return (
     <div>
-      <dt className="text-xs" style={{ color: '#7a8aaa' }}>{label}</dt>
+      <dt className="text-xs" style={{ color: 'var(--text-muted)' }}>{label}</dt>
       <dd className="text-sm font-semibold mt-0.5" style={{ color: 'var(--text-strong)' }}>{value}</dd>
     </div>
   );
@@ -789,6 +884,14 @@ function EditProfileModal({ profile, userId, programs, scholarshipTypes, token, 
   const isTransfer = !scholarMode
     && originalTypeId !== ''
     && String(form.scholarshipTypeId) !== String(originalTypeId);
+
+  /* Mirrors the rule in ScholarProfilesController.Upsert: once the office has approved a
+     scholar against a student number and programme, only staff may change them. Shown
+     read-only rather than hidden, so the scholar can still see what is on file and reads
+     the explanation here instead of meeting a 400 on save. */
+  const identityLocked = scholarMode
+    && profile?.approvalStatus === 'Approved'
+    && Boolean(profile?.studentId);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -834,7 +937,14 @@ function EditProfileModal({ profile, userId, programs, scholarshipTypes, token, 
       {error && <ErrorBox>{error}</ErrorBox>}
       <form onSubmit={handleSubmit} className="space-y-4">
         <Field label="Student ID">
-          <input required value={form.studentId} onChange={e => set('studentId', e.target.value)} className="clay-input" />
+          <input
+            required
+            disabled={identityLocked}
+            value={form.studentId}
+            onChange={e => set('studentId', e.target.value)}
+            className="clay-input"
+            style={{ opacity: identityLocked ? 0.6 : 1 }}
+          />
         </Field>
         <div className="grid grid-cols-2 gap-4">
           <Field label="Year Level">
@@ -847,10 +957,22 @@ function EditProfileModal({ profile, userId, programs, scholarshipTypes, token, 
           </Field>
         </div>
         <Field label="Program">
-          <select value={form.programId} onChange={e => set('programId', e.target.value)} className="clay-input">
+          <select
+            disabled={identityLocked}
+            value={form.programId}
+            onChange={e => set('programId', e.target.value)}
+            className="clay-input"
+            style={{ opacity: identityLocked ? 0.6 : 1 }}
+          >
             <option value="">— Select Program —</option>
             {programs.map(p => <option key={p.id} value={p.id}>{p.name} ({p.code})</option>)}
           </select>
+          {identityLocked && (
+            <p className="text-xs mt-1.5" style={{ color: 'var(--text-muted)' }}>
+              Your student number and program were verified when your scholarship was approved.
+              Ask your scholarship coordinator if either needs correcting.
+            </p>
+          )}
         </Field>
         <Field label="Scholarship Type">
           <select value={form.scholarshipTypeId} onChange={e => set('scholarshipTypeId', e.target.value)} className="clay-input">
@@ -858,13 +980,13 @@ function EditProfileModal({ profile, userId, programs, scholarshipTypes, token, 
             {scholarshipTypes.map(st => <option key={st.id} value={st.id}>{st.name}</option>)}
           </select>
           {scholarMode ? (
-            <p className="text-xs mt-1.5" style={{ color: '#7a8aaa' }}>
+            <p className="text-xs mt-1.5" style={{ color: 'var(--text-muted)' }}>
               Choose the scholarship you are enrolled in — this sets which documents you need to
               submit. You may hold only one scholarship, and only your coordinator can change it
               once it is set.
             </p>
           ) : (
-            <p className="text-xs mt-1.5" style={{ color: '#7a8aaa' }}>
+            <p className="text-xs mt-1.5" style={{ color: 'var(--text-muted)' }}>
               A student may hold only one scholarship at a time. Choosing a different one closes the
               current assignment and records the transfer.
             </p>
@@ -897,8 +1019,18 @@ function EditProfileModal({ profile, userId, programs, scholarshipTypes, token, 
   );
 }
 
-function AddGradeModal({ userId, token, onClose, onSaved }) {
-  const [form, setForm] = useState({ academicYear: '', semester: '1', gwa: '', remarks: '' });
+/* Records a GWA, or corrects one already recorded.
+   The period is fixed once a grade exists: only one GWA may be held per period, and a grade
+   filed against the wrong semester is a different record — delete it and add the right one,
+   which keeps the audit trail readable. */
+function GradeModal({ userId, token, grade, onClose, onSaved }) {
+  const editing = Boolean(grade);
+  const [form, setForm] = useState({
+    academicYear: grade?.academicYear ?? '',
+    semester: String(grade?.semester ?? '1'),
+    gwa: grade?.gwa?.toFixed(2) ?? '',
+    remarks: grade?.remarks ?? '',
+  });
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -908,7 +1040,7 @@ function AddGradeModal({ userId, token, onClose, onSaved }) {
     e.preventDefault();
     setError('');
 
-    if (!/^\d{4}-\d{4}$/.test(form.academicYear.trim())) {
+    if (!editing && !/^\d{4}-\d{4}$/.test(form.academicYear.trim())) {
       setError('Academic year must be in the format YYYY-YYYY (e.g. 2025-2026).');
       return;
     }
@@ -920,12 +1052,16 @@ function AddGradeModal({ userId, token, onClose, onSaved }) {
 
     setSubmitting(true);
     try {
-      await addGrade(userId, {
-        academicYear: form.academicYear,
-        semester: parseInt(form.semester),
-        gwa: parseFloat(form.gwa),
-        remarks: form.remarks || null,
-      }, token);
+      if (editing) {
+        await updateGrade(userId, grade.id, { gwa: gwaVal, remarks: form.remarks || null }, token);
+      } else {
+        await addGrade(userId, {
+          academicYear: form.academicYear,
+          semester: parseInt(form.semester),
+          gwa: gwaVal,
+          remarks: form.remarks || null,
+        }, token);
+      }
       onSaved();
     } catch (err) {
       setError(err.message);
@@ -935,27 +1071,32 @@ function AddGradeModal({ userId, token, onClose, onSaved }) {
   }
 
   return (
-    <ClayModal title="Record GWA" onClose={onClose}>
+    <ClayModal
+      title={editing ? 'Correct GWA' : 'Record GWA'}
+      subtitle={editing ? `${form.academicYear} · Semester ${form.semester}` : undefined}
+      onClose={onClose}>
       {error && <ErrorBox>{error}</ErrorBox>}
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Academic Year">
-            <input required value={form.academicYear} onChange={e => set('academicYear', e.target.value)} className="clay-input" placeholder="2025-2026" />
-          </Field>
-          <Field label="Semester">
-            <select value={form.semester} onChange={e => set('semester', e.target.value)} className="clay-input">
-              <option value="1">1st Semester</option>
-              <option value="2">2nd Semester</option>
-            </select>
-          </Field>
-        </div>
+        {!editing && (
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Academic Year">
+              <input required value={form.academicYear} onChange={e => set('academicYear', e.target.value)} className="clay-input" placeholder="2025-2026" />
+            </Field>
+            <Field label="Semester">
+              <select value={form.semester} onChange={e => set('semester', e.target.value)} className="clay-input">
+                <option value="1">1st Semester</option>
+                <option value="2">2nd Semester</option>
+              </select>
+            </Field>
+          </div>
+        )}
         <Field label="GWA (1.0 – 5.0)">
           <input required type="number" step="0.01" min="1" max="5" value={form.gwa} onChange={e => set('gwa', e.target.value)} className="clay-input" placeholder="e.g. 1.75" />
         </Field>
         <Field label="Remarks (optional)">
           <input value={form.remarks} onChange={e => set('remarks', e.target.value)} className="clay-input" />
         </Field>
-        <ModalButtons onClose={onClose} submitting={submitting} label="Save Grade" />
+        <ModalButtons onClose={onClose} submitting={submitting} label={editing ? 'Save Correction' : 'Save Grade'} />
       </form>
     </ClayModal>
   );
@@ -972,16 +1113,7 @@ function ClayModal({ title, subtitle, onClose, children, width = 460 }) {
 function ErrorBox({ children }) {
   return (
     <div className="mb-4 p-3 rounded-2xl text-sm font-medium"
-      style={{ background: '#dce8ff', color: '#003087', border: '1.5px solid #80aaee' }}>
-      {children}
-    </div>
-  );
-}
-
-function Field({ label, children }) {
-  return (
-    <div>
-      <label className="block text-xs font-bold mb-1.5 uppercase tracking-wider" style={{ color: 'var(--text)' }}>{label}</label>
+      style={{ background: 'var(--accent-soft-bg)', color: 'var(--accent)', border: '1.5px solid var(--accent-soft-border)' }}>
       {children}
     </div>
   );

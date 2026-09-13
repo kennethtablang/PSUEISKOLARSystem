@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using PSUEISKOLARSystem.Server.Models.Enums;
 
 namespace PSUEISKOLARSystem.Server.Models
 {
@@ -23,6 +24,20 @@ namespace PSUEISKOLARSystem.Server.Models
         public int? SlotLimit { get; set; }
 
         public bool IsActive { get; set; } = true;
+
+        /// <summary>
+        /// How often the scholarship pays out — see <see cref="ScholarshipFrequencies"/>.
+        /// A recurring type (per semester / per year) is monitored release-by-release in
+        /// <see cref="ScholarshipRelease"/>; a one-time type is not.
+        /// </summary>
+        [MaxLength(20)]
+        public string Frequency { get; set; } = ScholarshipFrequencies.PerSemester;
+
+        /// <summary>
+        /// The standard amount for one release, pre-filled when recording a release or a
+        /// grant. Null when the amount varies per scholar and is always keyed in by hand.
+        /// </summary>
+        public decimal? Amount { get; set; }
 
         public ICollection<ScholarProfile> Scholars { get; set; } = [];
         public ICollection<ScholarshipTypeRequirement> Requirements { get; set; } = [];

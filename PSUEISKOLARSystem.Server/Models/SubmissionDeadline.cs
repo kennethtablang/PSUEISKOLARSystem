@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using PSUEISKOLARSystem.Server.Models.Enums;
 
 namespace PSUEISKOLARSystem.Server.Models
 {
@@ -17,8 +18,12 @@ namespace PSUEISKOLARSystem.Server.Models
 
         public DateTime DueDate { get; set; }
 
-        // Set once the "due soon" reminder batch has been sent for this deadline (FR-16.4).
+        // When the most recent notice for this deadline went out (FR-16.4).
         public DateTime? RemindersSentAt { get; set; }
+
+        // Which notices have already been sent. See DeadlineReminderStage for why this is a
+        // sequence rather than the single "reminders have been sent" flag it started as.
+        public DeadlineReminderStage ReminderStage { get; set; } = DeadlineReminderStage.None;
 
         public string? CreatedById { get; set; }
         public ApplicationUser? CreatedBy { get; set; }

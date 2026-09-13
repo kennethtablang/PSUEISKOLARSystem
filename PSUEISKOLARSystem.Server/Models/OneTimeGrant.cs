@@ -16,6 +16,16 @@ namespace PSUEISKOLARSystem.Server.Models
         public string ScholarId { get; set; } = string.Empty;
         public ApplicationUser Scholar { get; set; } = null!;
 
+        /// <summary>
+        /// The kind of scholarship this award falls under. A one-time grant is still a
+        /// scholarship, so it is filed against a <see cref="ScholarshipType"/> the same way a
+        /// recurring release is — that is what lets a type report everything paid under it.
+        /// Nullable because grants recorded before types were linked have no answer, and an
+        /// ad-hoc award from an outside sponsor may genuinely belong to none.
+        /// </summary>
+        public int? ScholarshipTypeId { get; set; }
+        public ScholarshipType? ScholarshipType { get; set; }
+
         [Required, MaxLength(150)]
         public string Title { get; set; } = string.Empty;
 

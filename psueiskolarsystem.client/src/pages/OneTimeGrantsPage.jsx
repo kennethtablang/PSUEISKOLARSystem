@@ -6,29 +6,18 @@ import {
   getOneTimeGrants, createOneTimeGrant, updateOneTimeGrant,
   releaseOneTimeGrant, cancelOneTimeGrant, deleteOneTimeGrant,
 } from '../api/oneTimeGrants';
-import { getScholars } from '../api/scholars';
+import { getScholarshipTypes } from '../api/lookups';
+import ScholarSearchSelect from '../components/ScholarSearchSelect';
 import Pagination from '../components/Pagination';
 import { TableSkeleton, EmptyState } from '../components/ListState';
 import Modal from '../components/Modal';
-import { ErrorBox, Field, ModalButtons } from './UsersPage';
+import { ErrorBox, ModalButtons } from './UsersPage';
+import Field from '../components/Field';
 import { useTitle } from '../hooks/useTitle';
 import { ctlStyle } from '../constants/ui';
-import { GRANT_RELEASE_STATUSES, GRANT_STATUS_COLORS, peso } from '../constants/grants';
-import { Plus, BanknoteArrowUp, Wallet, CircleCheckBig, Clock, Ban } from 'lucide-react';
-
-const STATUS_ICON = { Pending: Clock, Released: CircleCheckBig, Cancelled: Ban };
-
-export function GrantStatusBadge({ status }) {
-  const s = GRANT_STATUS_COLORS[status] ?? GRANT_STATUS_COLORS.Pending;
-  const Icon = STATUS_ICON[status] ?? Clock;
-  return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold"
-      style={{ background: s.bg, color: s.color, border: `1px solid ${s.border}` }}>
-      <Icon size={11} strokeWidth={2.6} />
-      {status}
-    </span>
-  );
-}
+import { GRANT_RELEASE_STATUSES, peso } from '../constants/grants';
+import { Plus, BanknoteArrowUp, Wallet, CircleCheckBig, Clock } from 'lucide-react';
+import StatusBadge from '../components/StatusBadge';
 
 export default function OneTimeGrantsPage() {
   useTitle('One-Time Grants');
@@ -37,10 +26,11 @@ export default function OneTimeGrantsPage() {
   const confirm = useConfirm();
 
   const [data, setData] = useState(null);
-  const [scholars, setScholars] = useState([]);
+  const [scholarshipTypes, setScholarshipTypes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [pageSize, setPageSize] = useState(20);
@@ -54,10 +44,8 @@ export default function OneTimeGrantsPage() {
   }, [search]);
 
   useEffect(() => {
-    // Scholar picker options — capped, searchable inside the modal.
-    getScholars(token, { pageSize: 100 })
-      .then(r => setScholars(r.items ?? []))
-      .catch(() => {});
+    // The scholarship a grant is filed under — the scholar itself is searched on demand.
+    getScholarshipTypes(token).then(setScholarshipTypes).catch(() => {});
   }, [token]);
 
   const load = useCallback(async (page = 1) => {
@@ -66,6 +54,7 @@ export default function OneTimeGrantsPage() {
     try {
       setData(await getOneTimeGrants(token, {
         status: status || undefined,
+        scholarshipTypeId: typeFilter || undefined,
         search: debouncedSearch || undefined,
         page,
         pageSize,
@@ -75,7 +64,7 @@ export default function OneTimeGrantsPage() {
     } finally {
       setLoading(false);
     }
-  }, [token, status, debouncedSearch, pageSize]);
+  }, [token, status, typeFilter, debouncedSearch, pageSize]);
 
   useEffect(() => { load(1); }, [load]);
 
@@ -132,9 +121,13 @@ export default function OneTimeGrantsPage() {
             <option value="">All statuses</option>
             {GRANT_RELEASE_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
+          <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} className="clay-input" style={{ ...ctlStyle, width: 'auto' }}>
+            <option value="">All scholarships</option>
+            {scholarshipTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
         </div>
 
-        {error && <p className="text-sm mb-4" style={{ color: '#e03030' }}>{error}</p>}
+        {error && <p className="text-sm mb-4" style={{ color: 'var(--danger)' }}>{error}</p>}
 
         <div className="clay-card overflow-hidden">
           {loading ? (
@@ -142,11 +135,11 @@ export default function OneTimeGrantsPage() {
           ) : items.length === 0 ? (
             <EmptyState title="No one-time grants yet" message="Record a grant to start tracking one-off financial assistance." />
           ) : (
-            <div className="overflow-x-auto"><table className="w-full min-w-[900px] text-sm">
+            <div className="overflow-x-auto"><table className="w-full min-w-[1020px] text-sm">
               <thead className="clay-table-head">
                 <tr>
-                  {['Scholar', 'Grant', 'Amount', 'Awarded', 'Status', 'Reference', ''].map(h => (
-                    <th key={h} className="text-left px-5 py-3 text-xs font-bold uppercase tracking-wider" style={{ color: '#7a8aaa' }}>{h}</th>
+                  {['Scholar', 'Grant', 'Scholarship', 'Amount', 'Awarded', 'Status', 'Reference', ''].map(h => (
+                    <th key={h} className="text-left px-5 py-3 text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -155,22 +148,32 @@ export default function OneTimeGrantsPage() {
                   <tr key={g.id} className="clay-table-row">
                     <td className="px-5 py-3.5">
                       <p className="font-semibold" style={{ color: 'var(--text-strong)' }}>{g.scholarName}</p>
-                      <p className="text-xs" style={{ color: '#7a8aaa' }}>{g.scholarEmail}</p>
+                      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{g.scholarEmail}</p>
                     </td>
                     <td className="px-5 py-3.5">
                       <p className="font-medium" style={{ color: 'var(--text-strong)' }}>{g.title}</p>
-                      <p className="text-xs" style={{ color: '#7a8aaa' }}>
+                      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
                         {[g.source, g.purpose].filter(Boolean).join(' · ') || '—'}
                       </p>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      {g.scholarshipTypeName ? (
+                        <span className="clay-badge text-xs"
+                          style={{ background: 'var(--accent-soft-bg)', color: 'var(--accent)', border: '1px solid var(--accent-soft-border)' }}>
+                          {g.scholarshipTypeName}
+                        </span>
+                      ) : (
+                        <span className="text-xs italic" style={{ color: 'var(--text-faint)' }}>Unassigned</span>
+                      )}
                     </td>
                     <td className="px-5 py-3.5 font-mono font-bold" style={{ color: 'var(--text-strong)' }}>{peso(g.amount)}</td>
                     <td className="px-5 py-3.5 text-xs" style={{ color: 'var(--text)' }}>
                       {new Date(g.awardedOn).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
                     </td>
                     <td className="px-5 py-3.5">
-                      <GrantStatusBadge status={g.releaseStatus} />
+                      <StatusBadge status={g.releaseStatus} />
                       {g.releasedAt && (
-                        <p className="text-xs mt-1" style={{ color: '#9aaabb' }}>
+                        <p className="text-xs mt-1" style={{ color: 'var(--text-faint)' }}>
                           {new Date(g.releasedAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}
                         </p>
                       )}
@@ -183,7 +186,7 @@ export default function OneTimeGrantsPage() {
                             <button onClick={() => setReleasing(g)} className="text-xs font-bold hover:underline flex items-center gap-1" style={{ color: '#166534' }}>
                               <BanknoteArrowUp size={12} strokeWidth={2.6} /> Release
                             </button>
-                            <button onClick={() => setEditing(g)} className="text-xs font-medium hover:underline" style={{ color: '#003087' }}>
+                            <button onClick={() => setEditing(g)} className="text-xs font-medium hover:underline" style={{ color: 'var(--accent)' }}>
                               Edit
                             </button>
                             <button onClick={() => setCancelling(g)} className="text-xs font-medium hover:underline" style={{ color: '#b45309' }}>
@@ -192,7 +195,7 @@ export default function OneTimeGrantsPage() {
                           </>
                         )}
                         {g.releaseStatus !== 'Released' && (
-                          <button onClick={() => handleDelete(g)} className="text-xs font-medium hover:underline" style={{ color: '#e03030' }}>
+                          <button onClick={() => handleDelete(g)} className="text-xs font-medium hover:underline" style={{ color: 'var(--danger)' }}>
                             Delete
                           </button>
                         )}
@@ -221,7 +224,7 @@ export default function OneTimeGrantsPage() {
       {editing !== undefined && (
         <GrantModal
           initial={editing}
-          scholars={scholars}
+          scholarshipTypes={scholarshipTypes}
           token={token}
           onClose={() => setEditing(undefined)}
           onSaved={() => { setEditing(undefined); load(data?.page ?? 1); }}
@@ -291,12 +294,12 @@ function CancelModal({ grant, token, onClose, onSaved }) {
             placeholder="e.g. Scholar withdrew from the programme."
           />
           {reason.length > 0 && !canSubmit && (
-            <p className="text-xs mt-1 font-medium" style={{ color: '#dc2626' }}>
+            <p className="text-xs mt-1 font-medium" style={{ color: 'var(--danger)' }}>
               Please give a reason of at least 5 characters — it is kept on the record.
             </p>
           )}
         </Field>
-        <p className="text-xs" style={{ color: '#7a8aaa' }}>
+        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
           The grant is kept for auditing with your reason appended to its notes.
         </p>
         <ModalButtons onClose={onClose} submitting={submitting} disabled={!canSubmit} label="Cancel grant" />
@@ -318,9 +321,12 @@ function Tile({ label, value, sub, Icon, bg, iconColor }) {
   );
 }
 
-export function GrantModal({ initial, scholars, token, fixedScholar, onClose, onSaved }) {
+export function GrantModal({ initial, scholarshipTypes = [], token, fixedScholar, onClose, onSaved }) {
   const [form, setForm] = useState({
     scholarId: initial?.scholarId ?? fixedScholar?.userId ?? '',
+    scholarshipTypeId: initial?.scholarshipTypeId != null
+      ? String(initial.scholarshipTypeId)
+      : (fixedScholar?.scholarshipTypeId != null ? String(fixedScholar.scholarshipTypeId) : ''),
     title:     initial?.title ?? '',
     purpose:   initial?.purpose ?? '',
     amount:    initial?.amount != null ? String(initial.amount) : '',
@@ -332,6 +338,8 @@ export function GrantModal({ initial, scholars, token, fixedScholar, onClose, on
   const [submitting, setSubmitting] = useState(false);
 
   function set(k, v) { setForm(f => ({ ...f, [k]: v })); }
+
+  const chosenType = scholarshipTypes.find(t => String(t.id) === form.scholarshipTypeId);
 
   const amountVal = parseFloat(form.amount);
   const amountError = form.amount !== '' && (isNaN(amountVal) || amountVal <= 0)
@@ -348,6 +356,7 @@ export function GrantModal({ initial, scholars, token, fixedScholar, onClose, on
     try {
       const payload = {
         scholarId: form.scholarId,
+        scholarshipTypeId: form.scholarshipTypeId ? parseInt(form.scholarshipTypeId, 10) : null,
         title:     form.title.trim(),
         purpose:   form.purpose.trim() || null,
         amount:    amountVal,
@@ -379,27 +388,48 @@ export function GrantModal({ initial, scholars, token, fixedScholar, onClose, on
       <form onSubmit={handleSubmit} className="space-y-4">
         {!fixedScholar && (
           <Field label="Scholar">
-            <select
-              required
+            <ScholarSearchSelect
+              token={token}
               value={form.scholarId}
-              onChange={e => set('scholarId', e.target.value)}
-              className="clay-input"
+              initialLabel={initial?.scholarName ?? ''}
               disabled={!!initial}
-            >
-              <option value="">— Select a scholar —</option>
-              {scholars.map(s => (
-                <option key={s.userId} value={s.userId}>
-                  {s.fullName} · {s.studentId}
-                </option>
-              ))}
-            </select>
+              onChange={(id, scholar) => {
+                set('scholarId', id);
+                // Default the grant to the scholarship the scholar already holds — the right
+                // answer nearly every time, and still editable below.
+                if (scholar && !form.scholarshipTypeId) {
+                  const match = scholarshipTypes.find(t => t.name === scholar.scholarshipType);
+                  if (match) set('scholarshipTypeId', String(match.id));
+                }
+              }}
+            />
             {initial && (
-              <p className="text-xs mt-1" style={{ color: '#7a8aaa' }}>
+              <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
                 The recipient cannot be changed. Delete the grant and record a new one instead.
               </p>
             )}
           </Field>
         )}
+
+        <Field label="Kind of scholarship">
+          <select
+            value={form.scholarshipTypeId}
+            onChange={e => set('scholarshipTypeId', e.target.value)}
+            className="clay-input"
+          >
+            <option value="">— Not tied to a scholarship —</option>
+            {scholarshipTypes.map(t => (
+              <option key={t.id} value={t.id}>
+                {t.name}{t.category ? ` · ${t.category}` : ''}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+            {chosenType
+              ? `Filed under ${chosenType.name} — it counts toward that scholarship's totals.`
+              : 'A grant is still scholarship money, so file it under the scholarship it belongs to. Leave blank only for a one-off award from an outside sponsor.'}
+          </p>
+        </Field>
 
         <Field label="Grant title">
           <input
@@ -423,7 +453,7 @@ export function GrantModal({ initial, scholars, token, fixedScholar, onClose, on
               className="clay-input"
               placeholder="5000.00"
             />
-            {amountError && <p className="text-xs mt-1 font-medium" style={{ color: '#dc2626' }}>{amountError}</p>}
+            {amountError && <p className="text-xs mt-1 font-medium" style={{ color: 'var(--danger)' }}>{amountError}</p>}
           </Field>
           <Field label="Date awarded">
             <input
@@ -519,7 +549,7 @@ function ReleaseModal({ grant, token, onClose, onSaved }) {
             placeholder="Cheque / voucher / disbursement no."
           />
         </Field>
-        <p className="text-xs" style={{ color: '#7a8aaa' }}>
+        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
           Releasing is final — a released grant becomes part of the disbursement record and can no
           longer be edited or deleted. The scholar is notified.
         </p>

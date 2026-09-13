@@ -7,16 +7,13 @@ import { getScholarProfile, upsertScholarProfile } from '../api/scholars';
 import { getScholarshipTypes } from '../api/lookups';
 import { getActiveSemester } from '../api/settings';
 import { getDeadlines } from '../api/deadlines';
+import { getUploadPolicy, acceptAttribute, validateUpload, FALLBACK_UPLOAD_POLICY } from '../api/uploadPolicy';
 import { useTitle } from '../hooks/useTitle';
 import { Eye, X, Download, Image, FileX, Loader, BookOpen, ChevronDown, ChevronUp, CalendarClock, Lock } from 'lucide-react';
 import ImageLightbox from '../components/ImageLightbox';
 import InfoTip from '../components/InfoTip';
-
-const STATUS_STYLE = {
-  Pending:    'bg-amber-100 text-amber-700',
-  Verified:   'bg-emerald-100 text-emerald-700',
-  Incomplete: 'bg-red-100 text-red-700',
-};
+import StatusBadge from '../components/StatusBadge';
+import { statusDot } from '../constants/statusTones';
 
 export default function MyDocumentsPage() {
   useTitle('My Documents');
@@ -39,6 +36,10 @@ export default function MyDocumentsPage() {
   const [period,      setPeriod]      = useState({ academicYear: '', semester: 1 });
   const [periodReady, setPeriodReady] = useState(false);
   const [sampleUrl,   setSampleUrl]   = useState(null);
+
+  // Size cap and accepted extensions, from the server's System Settings rather than a copy
+  // kept here — the two used to disagree. Falls back to the shipped defaults until it loads.
+  const [uploadPolicy, setUploadPolicy] = useState(FALLBACK_UPLOAD_POLICY);
 
   // Registration verification state — uploads stay locked until the office approves.
   // Accounts that predate the approval flow have no status and are treated as approved.
@@ -137,6 +138,8 @@ export default function MyDocumentsPage() {
     }
   }
 
+  useEffect(() => { getUploadPolicy().then(setUploadPolicy); }, []);
+
   useEffect(() => {
     getActiveSemester(token)
       .then(data => setPeriod({ academicYear: data.academicYear, semester: data.semester }))
@@ -154,15 +157,10 @@ export default function MyDocumentsPage() {
   }
 
   async function handleUpload(requirementId, file) {
-    // Client-side type/size feedback before hitting the server (mirrors server limits)
-    const allowedExts = ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx'];
-    const ext = file.name.split('.').pop()?.toLowerCase();
-    if (!allowedExts.includes(ext)) {
-      toast(`Unsupported file type ".${ext}". Accepted: PDF, JPG, PNG, DOC, DOCX.`, 'error');
-      return;
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      toast(`This file is ${(file.size / 1024 / 1024).toFixed(1)} MB — the maximum is 10 MB.`, 'error');
+    // Immediate feedback before hitting the server; the server re-checks the same policy.
+    const problem = validateUpload(file, uploadPolicy);
+    if (problem) {
+      toast(problem, 'error');
       return;
     }
     setUploading(requirementId);
@@ -226,7 +224,7 @@ export default function MyDocumentsPage() {
                   {/* A student holds exactly one scholarship; once it's set only a
                       coordinator can change it, so we don't offer a "Change" action here. */}
                   {profile?.scholarshipTypeName && (
-                    <span className="text-xs" style={{ color: '#9aaabb', marginLeft: 4 }}>
+                    <span className="text-xs" style={{ color: 'var(--text-faint)', marginLeft: 4 }}>
                       · one scholarship per student — contact your coordinator to change it
                     </span>
                   )}
@@ -237,7 +235,7 @@ export default function MyDocumentsPage() {
                   scholar's to choose. It used to be a free-text box, which let submissions be
                   filed against arbitrary years that no deadline or report would ever match. */}
               <div className="clay-card-inner px-3.5 py-2 flex items-center gap-2 shrink-0">
-                <CalendarClock size={14} strokeWidth={2.2} style={{ color: '#7a8aaa' }} />
+                <CalendarClock size={14} strokeWidth={2.2} style={{ color: 'var(--text-muted)' }} />
                 <div>
                   <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Submission period</p>
                   <p className="text-sm font-bold" style={{ color: 'var(--text-strong)' }}>
@@ -285,14 +283,14 @@ export default function MyDocumentsPage() {
 
             {(!profile?.scholarshipTypeId || showTypePicker) && (
               <div className="clay-card p-5 mb-5"
-                style={{ background: '#f0f5ff', border: '1.5px solid #80aaee' }}>
+                style={{ background: 'var(--accent-soft-bg)', border: '1.5px solid var(--accent-soft-border)' }}>
                 <div className="flex items-start gap-3">
                   <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
                     style={{ background: 'rgba(0,37,112,0.10)', border: '1px solid rgba(0,37,112,0.15)' }}>
-                    <BookOpen size={16} color="#002570" strokeWidth={2} />
+                    <BookOpen size={16} style={{ color: 'var(--accent-strong)' }} strokeWidth={2} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold mb-0.5" style={{ color: '#002570' }}>
+                    <p className="text-sm font-bold mb-0.5" style={{ color: 'var(--accent-strong)' }}>
                       {showTypePicker && profile?.scholarshipTypeId
                         ? 'Change Scholarship Type'
                         : 'Select Your Scholarship Type'}
@@ -336,11 +334,11 @@ export default function MyDocumentsPage() {
               </div>
             )}
 
-            {error && <p className="text-sm mb-4" style={{ color: '#e03030' }}>{error}</p>}
+            {error && <p className="text-sm mb-4" style={{ color: 'var(--danger)' }}>{error}</p>}
 
             {previewError && (
               <div className="mb-4 flex items-start gap-2.5 p-3.5 rounded-2xl text-sm"
-                style={{ background: '#fff0f0', color: '#b03030', border: '1.5px solid #f5b0b0' }}>
+                style={{ background: 'var(--danger-bg)', color: 'var(--danger)', border: '1.5px solid var(--danger-border)' }}>
                 <span className="shrink-0 mt-px">⚠</span>
                 <span>{previewError}</span>
                 <button onClick={() => setPreviewError('')} className="ml-auto shrink-0 opacity-50 hover:opacity-100">✕</button>
@@ -348,16 +346,16 @@ export default function MyDocumentsPage() {
             )}
 
             {loading ? (
-              <p className="text-sm" style={{ color: '#7a8aaa' }}>Loading…</p>
+              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Loading…</p>
             ) : requirements.length === 0 ? (
-              <p className="text-sm" style={{ color: '#7a8aaa' }}>No document requirements found.</p>
+              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No document requirements found.</p>
             ) : (
               <div className="space-y-3">
                 {requirementGroups.map(group => (
                   <div key={group.name} className="space-y-3">
                     {/* Only worth a heading once the office has actually grouped things. */}
                     {requirementGroups.length > 1 && (
-                      <p className="text-xs font-bold uppercase tracking-wider pt-1" style={{ color: '#7a8aaa' }}>
+                      <p className="text-xs font-bold uppercase tracking-wider pt-1" style={{ color: 'var(--text-muted)' }}>
                         {group.name}
                       </p>
                     )}
@@ -377,6 +375,7 @@ export default function MyDocumentsPage() {
                           onPreview={() => handlePreview(sub)}
                           onViewSample={() => handleViewSample(req.id)}
                           uploadLocked={!isApproved}
+                          accept={acceptAttribute(uploadPolicy)}
                           token={token}
                         />
                       );
@@ -404,7 +403,7 @@ export default function MyDocumentsPage() {
               <div className="flex items-center gap-2.5 min-w-0">
                 <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0"
                   style={{ background: 'rgba(0,37,112,0.08)', border: '1px solid rgba(0,37,112,0.12)' }}>
-                  <Eye size={13} color="#002570" strokeWidth={2} />
+                  <Eye size={13} style={{ color: 'var(--accent-strong)' }} strokeWidth={2} />
                 </div>
                 <span className="text-sm font-bold truncate" style={{ color: 'var(--text-strong)' }}>
                   {preview.fileName}
@@ -414,14 +413,14 @@ export default function MyDocumentsPage() {
                 <button
                   onClick={() => downloadFile(preview.submissionId, preview.fileName, token).catch(e => toast(e.message, 'error'))}
                   className="clay-btn clay-btn-ghost text-xs px-3 py-1.5 flex items-center gap-1.5"
-                  style={{ color: '#003087' }}>
+                  style={{ color: 'var(--accent)' }}>
                   <Download size={12} strokeWidth={2.5} />
                   Download
                 </button>
                 <button
                   onClick={closePreview}
                   className="w-7 h-7 rounded-xl flex items-center justify-center hover:bg-black/5 transition-colors shrink-0">
-                  <X size={15} color="#7a8aaa" strokeWidth={2.5} />
+                  <X size={15} style={{ color: 'var(--text-muted)' }} strokeWidth={2.5} />
                 </button>
               </div>
             </div>
@@ -480,19 +479,17 @@ function PreviewContent({ preview }) {
     <div className="w-full h-full flex flex-col items-center justify-center gap-4 p-8">
       <div className="w-16 h-16 rounded-2xl flex items-center justify-center"
         style={{ background: 'rgba(0,37,112,0.07)', border: '1.5px solid rgba(0,37,112,0.12)' }}>
-        <FileX size={28} color="#7a8aaa" strokeWidth={1.5} />
+        <FileX size={28} style={{ color: 'var(--text-muted)' }} strokeWidth={1.5} />
       </div>
       <div className="text-center">
         <p className="font-bold text-sm mb-1" style={{ color: 'var(--text-strong)' }}>Preview Not Available</p>
-        <p className="text-xs leading-relaxed" style={{ color: '#7a8aaa', maxWidth: 240 }}>
+        <p className="text-xs leading-relaxed" style={{ color: 'var(--text-muted)', maxWidth: 240 }}>
           This file type cannot be previewed in the browser. Use the Download button to open it.
         </p>
       </div>
     </div>
   );
 }
-
-const STATUS_DOT = { Pending: '#c07800', Verified: '#0a7a50', Incomplete: '#c03010' };
 
 function DeadlineBadge({ deadline, submission }) {
   if (!deadline) return null;
@@ -524,7 +521,7 @@ function Badge({ color, bg, children }) {
   );
 }
 
-function RequirementRow({ requirement, submission, deadline, uploading, loadingPreview, isPreviewing, onUpload, onDelete, onPreview, onViewSample, uploadLocked, token }) {
+function RequirementRow({ requirement, submission, deadline, uploading, loadingPreview, isPreviewing, onUpload, onDelete, onPreview, onViewSample, uploadLocked, accept, token }) {
   const toast = useToast();
   const inputId  = `file-${requirement.id}`;
   const canUpload = !submission || submission.status === 'Incomplete';
@@ -548,18 +545,18 @@ function RequirementRow({ requirement, submission, deadline, uploading, loadingP
             <p className="font-semibold" style={{ color: 'var(--text-strong)' }}>{requirement.name}</p>
             {requirement.isRequired && (
               <span className="text-xs px-1.5 py-0.5 rounded-xl font-medium"
-                style={{ background: '#dce8ff', color: '#003087', border: '1px solid #80aaee' }}>
+                style={{ background: 'var(--accent-soft-bg)', color: 'var(--accent)', border: '1px solid var(--accent-soft-border)' }}>
                 Required
               </span>
             )}
           </div>
           {requirement.description && (
-            <p className="text-xs mt-0.5" style={{ color: '#7a8aaa' }}>{requirement.description}</p>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{requirement.description}</p>
           )}
           <div className="mt-1.5 flex items-center gap-2 flex-wrap">
             <DeadlineBadge deadline={deadline} submission={submission} />
             {requirement.hasSample && (
-              <button onClick={onViewSample} className="inline-flex items-center gap-1 text-xs font-medium hover:underline" style={{ color: '#003087' }}>
+              <button onClick={onViewSample} className="inline-flex items-center gap-1 text-xs font-medium hover:underline" style={{ color: 'var(--accent)' }}>
                 <Image size={11} strokeWidth={2.4} /> View sample
               </button>
             )}
@@ -567,11 +564,9 @@ function RequirementRow({ requirement, submission, deadline, uploading, loadingP
         </div>
 
         {submission ? (
-          <span className={`shrink-0 inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_STYLE[submission.status]}`}>
-            {submission.status}
-          </span>
+          <StatusBadge status={submission.status} className="shrink-0" />
         ) : (
-          <span className="shrink-0 text-xs" style={{ color: '#7a8aaa' }}>Not submitted</span>
+          <span className="shrink-0 text-xs" style={{ color: 'var(--text-muted)' }}>Not submitted</span>
         )}
       </div>
 
@@ -580,16 +575,16 @@ function RequirementRow({ requirement, submission, deadline, uploading, loadingP
           <button
             onClick={() => downloadFile(submission.id, submission.fileName, token).catch(e => toast(e.message, 'error'))}
             className="hover:underline truncate max-w-xs text-left"
-            style={{ color: '#003087' }}>
+            style={{ color: 'var(--accent)' }}>
             {submission.fileName}
           </button>
-          <span className="text-xs shrink-0" style={{ color: '#7a8aaa' }}>{formatBytes(submission.fileSizeBytes)}</span>
+          <span className="text-xs shrink-0" style={{ color: 'var(--text-muted)' }}>{formatBytes(submission.fileSizeBytes)}</span>
         </div>
       )}
 
       {submission?.feedbackNote && (
         <div className="mt-2 p-2 rounded-xl text-xs"
-          style={{ background: '#fff0f0', border: '1px solid #fcc', color: '#c03030' }}>
+          style={{ background: 'var(--danger-bg)', border: '1px solid #fcc', color: '#c03030' }}>
           <span className="font-medium">Feedback:</span> {submission.feedbackNote}
         </div>
       )}
@@ -602,7 +597,7 @@ function RequirementRow({ requirement, submission, deadline, uploading, loadingP
             disabled={!!loadingPreview}
             className="clay-btn text-sm px-3 py-1.5 flex items-center gap-1.5"
             style={{
-              color: isPreviewing ? '#002570' : '#003087',
+              color: isPreviewing ? 'var(--accent-strong)' : 'var(--accent)',
               background: isPreviewing ? 'rgba(0,37,112,0.10)' : undefined,
               border: isPreviewing ? '1.5px solid rgba(0,37,112,0.25)' : undefined,
               opacity: loadingPreview ? 0.6 : 1,
@@ -618,7 +613,7 @@ function RequirementRow({ requirement, submission, deadline, uploading, loadingP
           <span
             className="clay-btn text-sm px-3 py-1.5 inline-flex items-center gap-1.5"
             title="Uploading unlocks once the scholarship office approves your registration."
-            style={{ opacity: 0.55, cursor: 'not-allowed', color: '#7a8aaa' }}>
+            style={{ opacity: 0.55, cursor: 'not-allowed', color: 'var(--text-muted)' }}>
             <Lock size={12} strokeWidth={2.5} />
             Upload locked
           </span>
@@ -628,14 +623,14 @@ function RequirementRow({ requirement, submission, deadline, uploading, loadingP
               htmlFor={inputId}
               className={`clay-btn text-sm px-3 py-1.5 ${uploading ? '' : 'clay-btn-ghost'}`}
               style={uploading
-                ? { opacity: 0.5, cursor: 'not-allowed', color: '#7a8aaa' }
-                : { color: '#003087' }}>
+                ? { opacity: 0.5, cursor: 'not-allowed', color: 'var(--text-muted)' }
+                : { color: 'var(--accent)' }}>
               {uploading ? 'Uploading…' : submission ? 'Resubmit' : 'Upload'}
             </label>
             <input
               id={inputId}
               type="file"
-              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+              accept={accept}
               className="hidden"
               disabled={uploading}
               onChange={e => { if (e.target.files?.[0]) onUpload(e.target.files[0]); e.target.value = ''; }}
@@ -644,7 +639,7 @@ function RequirementRow({ requirement, submission, deadline, uploading, loadingP
         ))}
 
         {submission && submission.status !== 'Verified' && (
-          <button onClick={onDelete} className="text-xs hover:underline ml-auto" style={{ color: '#e03030' }}>
+          <button onClick={onDelete} className="text-xs hover:underline ml-auto" style={{ color: 'var(--danger)' }}>
             Remove
           </button>
         )}
@@ -653,7 +648,7 @@ function RequirementRow({ requirement, submission, deadline, uploading, loadingP
           <button
             onClick={toggleHistory}
             className="text-xs flex items-center gap-1 ml-auto hover:underline"
-            style={{ color: '#7a8aaa' }}>
+            style={{ color: 'var(--text-muted)' }}>
             {showHistory ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
             History
           </button>
@@ -663,19 +658,19 @@ function RequirementRow({ requirement, submission, deadline, uploading, loadingP
       {showHistory && history !== null && (
         <div className="mt-3 pt-3" style={{ borderTop: '1px solid rgba(0,0,0,0.07)' }}>
           {history.length === 0 ? (
-            <p className="text-xs" style={{ color: '#9aaabb' }}>No history yet.</p>
+            <p className="text-xs" style={{ color: 'var(--text-faint)' }}>No history yet.</p>
           ) : (
             <ol className="space-y-2.5">
               {history.map((h, i) => (
                 <li key={h.id} className="flex items-start gap-2.5">
                   <div className="flex flex-col items-center shrink-0">
-                    <div className="w-2 h-2 rounded-full mt-0.5" style={{ background: STATUS_DOT[h.status] ?? '#7a8aaa' }} />
+                    <div className="w-2 h-2 rounded-full mt-0.5" style={{ background: statusDot(h.status) }} />
                     {i < history.length - 1 && <div className="w-px flex-1 mt-1" style={{ background: 'rgba(0,0,0,0.1)', minHeight: 12 }} />}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold" style={{ color: 'var(--text-strong)' }}>{h.status}</p>
                     {h.note && <p className="text-xs" style={{ color: 'var(--text)' }}>{h.note}</p>}
-                    <p className="text-xs mt-0.5" style={{ color: '#9aaabb' }}>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-faint)' }}>
                       {new Date(h.changedAt).toLocaleString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>

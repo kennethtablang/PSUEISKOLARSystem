@@ -2,12 +2,54 @@
 // (PSUEISKOLARSystem.Server/Models/Enums/GrantReleaseStatuses.cs).
 export const GRANT_RELEASE_STATUSES = ['Pending', 'Released', 'Cancelled'];
 
-export const GRANT_STATUS_COLORS = {
-  Pending:   { bg: '#fff3cd', color: '#7d5a00', border: '#f5d060' },
-  Released:  { bg: '#d4f4e2', color: '#166534', border: '#86efac' },
-  Cancelled: { bg: '#e5e7eb', color: '#4b5563', border: '#d1d5db' },
-};
+/* Release-state colours used to live here as hex triples. They are now tones on
+   components/StatusBadge.jsx, which resolves them through CSS custom properties so dark
+   mode reaches them. `NotRecorded` is produced only by the release monitor: the scholar
+   holds the scholarship but nobody has scheduled their payout for the period at all. */
 
 /** Formats an amount as Philippine pesos with two decimals. */
 export const peso = n =>
   `₱${Number(n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+/* ── Payout frequency ─────────────────────────────────────
+   Mirrors PSUEISKOLARSystem.Server/Models/Enums/ScholarshipFrequencies.cs. A recurring
+   scholarship is the one tracked release-by-release on the Scholarship Releases page;
+   a one-time type has nothing per-period to monitor. */
+
+export const SCHOLARSHIP_FREQUENCIES = [
+  { value: 'PerSemester', label: 'Per semester', hint: 'Paid twice an academic year — one release per semester.' },
+  { value: 'PerYear',     label: 'Per year',     hint: 'Paid once an academic year, covering both semesters.' },
+  { value: 'OneTime',     label: 'One-time',     hint: 'Paid once for the whole scholarship — nothing recurring to track.' },
+];
+
+export const FREQUENCY_LABELS = Object.fromEntries(
+  SCHOLARSHIP_FREQUENCIES.map(f => [f.value, f.label])
+);
+
+/** Semester 0 marks a whole-academic-year release; per-semester types use 1 and 2. */
+export const WHOLE_YEAR_SEMESTER = 0;
+
+export const isRecurring = frequency => frequency === 'PerSemester' || frequency === 'PerYear';
+
+/** The semesters a scholarship on this frequency is expected to pay out in. */
+export const semestersFor = frequency =>
+  frequency === 'PerSemester' ? [1, 2]
+  : frequency === 'PerYear' ? [WHOLE_YEAR_SEMESTER]
+  : [];
+
+export const semesterLabel = semester =>
+  semester === WHOLE_YEAR_SEMESTER ? 'Whole year' : `Semester ${semester}`;
+
+export const periodLabel = (academicYear, semester) =>
+  semester === WHOLE_YEAR_SEMESTER
+    ? `${academicYear} (whole year)`
+    : `${academicYear} · Sem ${semester}`;
+
+/**
+ * The academic year an unset picker should start on — the one that began in the current
+ * calendar year if we are past June, otherwise the one that began last year.
+ */
+export function currentAcademicYear(now = new Date()) {
+  const start = now.getMonth() >= 5 ? now.getFullYear() : now.getFullYear() - 1;
+  return `${start}-${start + 1}`;
+}

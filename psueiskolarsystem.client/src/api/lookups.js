@@ -1,17 +1,11 @@
+import { apiGet } from './_client';
+
 export async function getPrograms(token) {
-  const res = await fetch('/api/lookups/programs', {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error('Failed to load programs.');
-  return res.json();
+  return apiGet('/api/lookups/programs', token, 'Failed to load programs.');
 }
 
 export async function getScholarshipTypes(token) {
-  const res = await fetch('/api/lookups/scholarship-types', {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error('Failed to load scholarship types.');
-  return res.json();
+  return apiGet('/api/lookups/scholarship-types', token, 'Failed to load scholarship types.');
 }
 
 // Scholar picker feed for the announcement recipient selector and the staff-side
@@ -19,9 +13,5 @@ export async function getScholarshipTypes(token) {
 export async function searchScholars(token, { search, limit = 50 } = {}) {
   const params = new URLSearchParams({ limit });
   if (search) params.set('search', search);
-  const res = await fetch(`/api/lookups/scholars?${params}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error('Failed to load scholars.');
-  return res.json();
+  return apiGet(`/api/lookups/scholars?${params}`, token, 'Failed to load scholars.');
 }

@@ -12,7 +12,7 @@ import {
   LayoutDashboard, GraduationCap, FileCheck, Users, Bell,
   FolderOpen, User, LogOut, BarChart2,
   ChevronLeft, Settings, Menu, X, ClipboardList, Activity, Award, CalendarClock, MessageSquare,
-  Sun, Moon, Monitor, HelpCircle, UserCheck, Banknote, ShieldCheck,
+  Sun, Moon, Monitor, HelpCircle, UserCheck, Banknote, ShieldCheck, Wallet,
 } from 'lucide-react';
 import { getPendingApprovalCount } from '../api/scholarApprovals';
 
@@ -38,6 +38,7 @@ const navByRole = {
     { to: '/document-review', label: 'Document Review',  Icon: FileCheck },
     { to: '/deadlines',       label: 'Deadlines',        Icon: CalendarClock },
     { to: '/scholarship-types', label: 'Scholarship Types', Icon: Award },
+    { to: '/scholarship-releases', label: 'Releases',    Icon: Wallet },
     { to: '/one-time-grants', label: 'One-Time Grants',  Icon: Banknote },
     { to: '/scholarship-verification', label: 'Scholarship Check', Icon: ShieldCheck },
     { to: '/requirements',    label: 'Requirements',     Icon: ClipboardList },
@@ -58,6 +59,7 @@ const navByRole = {
     { to: '/scholar-approvals', label: 'Scholar Approvals', Icon: UserCheck, badge: 'approvals' },
     { to: '/document-review', label: 'Document Review',  Icon: FileCheck },
     { to: '/deadlines',       label: 'Deadlines',        Icon: CalendarClock },
+    { to: '/scholarship-releases', label: 'Releases',    Icon: Wallet },
     { to: '/one-time-grants', label: 'One-Time Grants',  Icon: Banknote },
     { to: '/scholarship-verification', label: 'Scholarship Check', Icon: ShieldCheck },
     { section: 'Engage' },
@@ -91,22 +93,13 @@ function IconBtn({ onClick, title, children, danger }) {
   return (
     <button
       title={title}
+      aria-label={title}
       onClick={onClick}
+      className={`sidebar-btn sidebar-icon-btn${danger ? ' is-danger' : ''}`}
       style={{
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         width: 34, height: 34, borderRadius: 10, border: 'none', cursor: 'pointer',
-        background: 'rgba(255,255,255,0.07)',
-        color: danger ? 'rgba(255,160,160,0.7)' : 'rgba(255,255,255,0.5)',
-        transition: 'all 0.15s ease',
         flexShrink: 0,
-      }}
-      onMouseEnter={e => {
-        e.currentTarget.style.background = danger ? 'rgba(255,60,60,0.15)' : 'rgba(255,255,255,0.14)';
-        e.currentTarget.style.color = danger ? '#ff8888' : '#fff';
-      }}
-      onMouseLeave={e => {
-        e.currentTarget.style.background = 'rgba(255,255,255,0.07)';
-        e.currentTarget.style.color = danger ? 'rgba(255,160,160,0.7)' : 'rgba(255,255,255,0.5)';
       }}
     >
       {children}
@@ -242,14 +235,14 @@ export default function Layout({ children }) {
           <button
             onClick={() => setCollapsed(true)}
             title="Collapse sidebar"
+            aria-label="Collapse sidebar"
+            className="sidebar-chip"
             style={{
               width: 26, height: 26, borderRadius: 8, border: 'none', cursor: 'pointer',
-              background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center',
-              justifyContent: 'center', flexShrink: 0, transition: 'background 0.15s',
+              display: 'flex', alignItems: 'center',
+              justifyContent: 'center', flexShrink: 0,
               marginLeft: 8,
             }}
-            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.18)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
           >
             <ChevronLeft size={13} strokeWidth={2.5} color="rgba(255,255,255,0.75)" />
           </button>
@@ -319,6 +312,7 @@ export default function Layout({ children }) {
             <NavLink key={to} to={to} data-tour={to} style={{ display: 'block', marginBottom: 2 }} title={isCollapsed ? label : undefined}>
               {({ isActive }) => (
                 <div
+                  className={`sidebar-nav-item${isActive ? ' is-active' : ''}`}
                   style={{
                     position: 'relative',
                     display: 'flex',
@@ -338,8 +332,6 @@ export default function Layout({ children }) {
                       boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
                     } : {}),
                   }}
-                  onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'rgba(255,255,255,0.055)'; }}
-                  onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
                 >
                   {/* Rail marker — sits flush against the sidebar's left edge (nav has 10px
                       of horizontal padding), so the eye can track the selection down the rail. */}
@@ -455,27 +447,23 @@ export default function Layout({ children }) {
             <div style={{ display: 'flex', gap: 5 }}>
               <button
                 onClick={() => navigate('/profile')}
+                className="sidebar-btn"
                 style={{
                   flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
                   padding: '6px 8px', borderRadius: 9, border: 'none', cursor: 'pointer',
-                  background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.55)',
-                  fontSize: 11, fontWeight: 600, transition: 'all 0.15s', whiteSpace: 'nowrap',
+                  fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap',
                 }}
-                onMouseEnter={e => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.background = 'rgba(255,255,255,0.13)'; }}
-                onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.55)'; e.currentTarget.style.background = 'rgba(255,255,255,0.07)'; }}
               >
                 <Settings size={11} strokeWidth={2.5} /> Profile
               </button>
               <button
                 onClick={handleSignOut}
+                className="sidebar-btn-danger"
                 style={{
                   flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
                   padding: '6px 8px', borderRadius: 9, border: 'none', cursor: 'pointer',
-                  background: 'transparent', color: 'rgba(255,255,255,0.38)',
-                  fontSize: 11, fontWeight: 600, transition: 'all 0.15s', whiteSpace: 'nowrap',
+                  fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap',
                 }}
-                onMouseEnter={e => { e.currentTarget.style.color = '#ff8888'; e.currentTarget.style.background = 'rgba(255,60,60,0.1)'; }}
-                onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.38)'; e.currentTarget.style.background = 'transparent'; }}
               >
                 <LogOut size={11} strokeWidth={2.5} /> Sign out
               </button>

@@ -7,26 +7,126 @@ using PSUEISKOLARSystem.Server.Settings;
 
 namespace PSUEISKOLARSystem.Server.Services
 {
-    public class EmailService(IOptions<EmailSettings> options, ILogger<EmailService> logger) : IEmailService
+    public class EmailService(
+        IOptions<EmailSettings> options,
+        ILogger<EmailService> logger,
+        IServiceScopeFactory scopeFactory) : IEmailService
     {
         private readonly EmailSettings _s = options.Value;
+
+        /* Batch state. An announcement to 400 scholars used to be 400 TLS handshakes, 400
+           SMTP authentications and 400 identical System Settings reads, against a Gmail relay
+           that rate-limits on exactly that. Inside a batch the connection and the policy read
+           are made once and reused.
+
+           Instance fields are safe because EmailService is scoped and a batch is driven by a
+           sequential foreach — the batch belongs to one caller for its duration. */
+        private SmtpClient? _batchClient;
+        private bool _inBatch;
+        private bool _batchEmailEnabled;
+
+        /// <summary>
+        /// Opens one SMTP connection for a run of sends. Dispose the returned handle when the
+        /// run finishes — <c>await using</c> is the intended shape. Sends made outside a batch
+        /// are unaffected and still connect per message.
+        /// </summary>
+        public async Task<IAsyncDisposable> BeginBatchAsync()
+        {
+            _batchEmailEnabled = await EmailEnabledAsync();
+            _inBatch = true;
+            // The connection itself is opened on the first send, so a batch whose recipients
+            // all turn out to have opted out costs nothing.
+            return new BatchHandle(this);
+        }
+
+        private sealed class BatchHandle(EmailService owner) : IAsyncDisposable
+        {
+            public ValueTask DisposeAsync() => owner.EndBatchAsync();
+        }
+
+        private async ValueTask EndBatchAsync()
+        {
+            _inBatch = false;
+            await DropBatchClientAsync(graceful: true);
+        }
+
+        private async ValueTask DropBatchClientAsync(bool graceful)
+        {
+            if (_batchClient is null) return;
+            try
+            {
+                if (graceful && _batchClient.IsConnected)
+                    await _batchClient.DisconnectAsync(true);
+            }
+            catch
+            {
+                // The batch is over either way; a failed goodbye changes nothing.
+            }
+            _batchClient.Dispose();
+            _batchClient = null;
+        }
+
+        /// <summary>
+        /// One switch for all outbound mail. Read here rather than at each of the ten call
+        /// sites, so turning email off genuinely means nothing leaves the server — in-app
+        /// notifications carry on unaffected.
+        /// </summary>
+        private async Task<bool> EmailEnabledAsync()
+        {
+            using var scope = scopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<Data.ApplicationDbContext>();
+            var policy = await Data.SystemSettingsStore.GetAsync(db);
+            return policy.EmailEnabled;
+        }
+
+        private async Task<SmtpClient> ConnectedBatchClientAsync()
+        {
+            if (_batchClient is { IsConnected: true, IsAuthenticated: true })
+                return _batchClient;
+
+            await DropBatchClientAsync(graceful: false);
+
+            var client = new SmtpClient();
+            await client.ConnectAsync(_s.SmtpHost, _s.SmtpPort, SecureSocketOptions.StartTls);
+            await client.AuthenticateAsync(_s.Username, _s.Password);
+            _batchClient = client;
+            return client;
+        }
 
         // Central SMTP send with a short retry and logging so failures are visible
         // (previously call sites swallowed exceptions with no trace).
         private async Task SendMessageAsync(MimeMessage message)
         {
             const int maxAttempts = 3;
+
+            var enabled = _inBatch ? _batchEmailEnabled : await EmailEnabledAsync();
+            if (!enabled)
+            {
+                logger.LogInformation(
+                    "Email '{Subject}' suppressed — outbound email is switched off in System Settings.",
+                    message.Subject);
+                return;
+            }
+
             var recipients = string.Join(", ", message.To.Mailboxes.Select(m => m.Address));
 
             for (var attempt = 1; ; attempt++)
             {
                 try
                 {
-                    using var client = new SmtpClient();
-                    await client.ConnectAsync(_s.SmtpHost, _s.SmtpPort, SecureSocketOptions.StartTls);
-                    await client.AuthenticateAsync(_s.Username, _s.Password);
-                    await client.SendAsync(message);
-                    await client.DisconnectAsync(true);
+                    if (_inBatch)
+                    {
+                        var client = await ConnectedBatchClientAsync();
+                        await client.SendAsync(message);
+                    }
+                    else
+                    {
+                        using var client = new SmtpClient();
+                        await client.ConnectAsync(_s.SmtpHost, _s.SmtpPort, SecureSocketOptions.StartTls);
+                        await client.AuthenticateAsync(_s.Username, _s.Password);
+                        await client.SendAsync(message);
+                        await client.DisconnectAsync(true);
+                    }
 
                     if (attempt > 1)
                         logger.LogInformation("Email '{Subject}' to {Recipients} sent on attempt {Attempt}.", message.Subject, recipients, attempt);
@@ -35,11 +135,17 @@ namespace PSUEISKOLARSystem.Server.Services
                 catch (Exception ex) when (attempt < maxAttempts)
                 {
                     logger.LogWarning(ex, "Email '{Subject}' to {Recipients} failed on attempt {Attempt}/{Max}; retrying.", message.Subject, recipients, attempt, maxAttempts);
+
+                    // The shared connection is the likeliest casualty — the relay may have
+                    // dropped it or hit a per-connection limit. Throw it away so the retry
+                    // opens a fresh one rather than replaying into a dead socket.
+                    await DropBatchClientAsync(graceful: false);
                     await Task.Delay(TimeSpan.FromSeconds(2 * attempt));
                 }
                 catch (Exception ex)
                 {
                     logger.LogError(ex, "Email '{Subject}' to {Recipients} failed after {Max} attempts.", message.Subject, recipients, maxAttempts);
+                    await DropBatchClientAsync(graceful: false);
                     throw;
                 }
             }
@@ -363,6 +469,100 @@ namespace PSUEISKOLARSystem.Server.Services
                                 </div>
                                 <p style="margin:0;font-size:12px;color:#9aaabb;line-height:1.6;">
                                   You will be notified once your coordinator reviews this document. Log in to PSU e-Iskolar to track your submission status.
+                                </p>
+                              </td>
+                            </tr>
+                            <tr>
+                              <td style="background:#001040;border-radius:0 0 16px 16px;padding:18px 32px;text-align:center;">
+                                <p style="margin:0;font-size:11px;color:rgba(255,255,255,0.28);">
+                                  PSU e-Iskolar &middot; Scholar Profiling and Records Management System<br/>
+                                  Pangasinan State University &ndash; Lingayen Campus
+                                </p>
+                              </td>
+                            </tr>
+                          </table>
+                        </td></tr>
+                      </table>
+                    </body>
+                    </html>
+                    """
+            }.ToMessageBody();
+
+            await SendMessageAsync(message);
+        }
+
+        /// <summary>
+        /// The email behind the "Email me about deadlines" preference. That toggle existed on
+        /// My Profile, was stored, was migrated — and no code read it, because the reminder
+        /// service only ever raised an in-app notification. Its two siblings
+        /// (EmailDocumentStatus, EmailAnnouncements) were honoured; this one was not.
+        /// </summary>
+        public async Task SendDeadlineReminderAsync(string toEmail, string toName, string requirementName, DateTime dueDate, string academicYear, int semester, bool overdue = false)
+        {
+            var semLabel = semester == 1 ? "1st Semester" : "2nd Semester";
+            var daysLeft = (int)Math.Ceiling((dueDate - DateTime.UtcNow).TotalDays);
+
+            // The same template covers the notice sent after the date has passed. Telling
+            // someone a requirement is "due in -2 days" is worse than not writing at all.
+            var heading = overdue ? "Deadline Missed" : "Deadline Approaching";
+            var urgency = overdue
+                ? "is past its deadline"
+                : daysLeft <= 1 ? "is due tomorrow" : $"is due in {daysLeft} days";
+            var closing = overdue
+                ? "Message your scholarship coordinator to arrange a late submission."
+                : "Log in to PSU e-Iskolar to upload it.";
+            var dueLabel = overdue ? "Was due" : "Due";
+
+            toName = Enc(toName);
+            requirementName = Enc(requirementName);
+            academicYear = Enc(academicYear);
+
+            var message = new MimeMessage();
+            message.From.Add(new MailboxAddress(_s.FromName, _s.From));
+            message.To.Add(new MailboxAddress(toName, toEmail));
+            message.Subject = $"{heading}: {requirementName}";
+
+            message.Body = new BodyBuilder
+            {
+                HtmlBody = $"""
+                    <!DOCTYPE html>
+                    <html>
+                    <body style="margin:0;padding:0;background:#e8edf5;font-family:Arial,sans-serif;">
+                      <table width="100%" cellpadding="0" cellspacing="0">
+                        <tr><td align="center" style="padding:32px 16px;">
+                          <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+                            <tr>
+                              <td style="background:#002570;border-radius:16px 16px 0 0;padding:28px 32px;text-align:center;">
+                                <div style="display:inline-flex;align-items:center;gap:12px;">
+                                  <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(145deg,#ffd030,#e0a000);
+                                              display:inline-flex;align-items:center;justify-content:center;
+                                              font-weight:900;font-size:11px;color:#1a0e00;">PSU</div>
+                                  <div style="text-align:left;">
+                                    <div style="font-weight:900;font-size:18px;color:#fff;letter-spacing:-0.3px;">e-Iskolar</div>
+                                    <div style="font-size:11px;color:rgba(255,255,255,0.45);margin-top:2px;">Lingayen Campus</div>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                            <tr>
+                              <td style="background:#fff;padding:36px 32px;">
+                                <h2 style="margin:0 0 8px;font-size:22px;font-weight:900;color:#0d1a33;letter-spacing:-0.5px;">
+                                  {heading}
+                                </h2>
+                                <p style="margin:0 0 20px;font-size:14px;color:#4a5a7a;line-height:1.6;">
+                                  Hello <strong>{toName}</strong>,
+                                </p>
+                                <p style="margin:0 0 16px;font-size:14px;color:#4a5a7a;line-height:1.6;">
+                                  One of your scholarship requirements {urgency} and has not been submitted yet.
+                                </p>
+                                <div style="padding:16px 20px;background:#fff8e6;border-radius:12px;border-left:4px solid #e0a000;margin-bottom:20px;">
+                                  <p style="margin:0 0 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#7a8aaa;">Requirement</p>
+                                  <p style="margin:0;font-size:16px;font-weight:900;color:#0d1a33;">{requirementName}</p>
+                                  <p style="margin:4px 0 0;font-size:13px;color:#4a5a7a;">{academicYear} &middot; {semLabel}</p>
+                                  <p style="margin:8px 0 0;font-size:13px;font-weight:700;color:#8a5a00;">{dueLabel} {dueDate:MMMM d, yyyy}</p>
+                                </div>
+                                <p style="margin:0;font-size:12px;color:#9aaabb;line-height:1.6;">
+                                  {closing} You can turn these emails off under My Profile &rsaquo; Notification preferences.
                                 </p>
                               </td>
                             </tr>

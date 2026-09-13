@@ -79,7 +79,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
             try
             {
-                var (stored, _) = await storage.SaveAsync(file);
+                var (stored, _) = await storage.SaveAsync(file, FileUploadPolicy.Images);
                 var previous = user.AvatarPath;
                 user.AvatarPath = stored;
                 await db.SaveChangesAsync();

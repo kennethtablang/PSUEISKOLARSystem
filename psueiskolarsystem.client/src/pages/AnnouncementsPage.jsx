@@ -9,6 +9,7 @@ import Modal from '../components/Modal';
 import { Users, UserSearch, X, Clock } from 'lucide-react';
 import { getPrograms, getScholarshipTypes, searchScholars } from '../api/lookups';
 import { useTitle } from '../hooks/useTitle';
+import Field from '../components/Field';
 
 const ROLES = ['', 'Scholar', 'ScholarshipCoordinator'];
 const ROLE_LABELS = { '': 'All Users', Scholar: 'Scholars', ScholarshipCoordinator: 'Coordinators' };
@@ -122,11 +123,11 @@ export default function AnnouncementsPage() {
         <div className="page-split">
           <div>
             {loading ? (
-              <p className="text-sm" style={{ color: '#7a8aaa' }}>Loading…</p>
+              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Loading…</p>
             ) : displayed.length === 0 ? (
-              <p className="text-sm" style={{ color: '#7a8aaa' }}>No announcements found.</p>
+              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No announcements found.</p>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-5">
                 {displayed.map(a => (
                   <AnnouncementCard
                     key={a.id}
@@ -141,7 +142,7 @@ export default function AnnouncementsPage() {
             )}
           </div>
 
-          <aside className="page-rail space-y-5">
+          <aside className="page-rail space-y-6">
             {/* What's queued to go out — the one thing you can't see by scrolling the
                 feed, since a scheduled post looks like any other card until it lands. */}
             <div className="clay-card p-5">
@@ -161,8 +162,8 @@ export default function AnnouncementsPage() {
                     >
                       <p className="text-sm font-bold truncate" style={{ color: 'var(--text-strong)' }}>{a.title}</p>
                       <div className="flex items-center gap-1.5 mt-1">
-                        <Clock size={11} strokeWidth={2.5} style={{ color: '#003087' }} />
-                        <span className="text-xs font-semibold" style={{ color: '#003087' }}>
+                        <Clock size={11} strokeWidth={2.5} style={{ color: 'var(--accent)' }} />
+                        <span className="text-xs font-semibold" style={{ color: 'var(--accent)' }}>
                           {new Date(a.publishAt).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })}
                         </span>
                       </div>
@@ -301,7 +302,7 @@ function AnnouncementModal({ initial, lookups, token, onClose, onSaved }) {
     >
         {error && (
           <div className="mb-4 p-3 rounded-2xl text-sm font-medium"
-            style={{ background: '#dce8ff', color: '#003087', border: '1.5px solid #80aaee' }}>
+            style={{ background: 'var(--accent-soft-bg)', color: 'var(--accent)', border: '1.5px solid var(--accent-soft-border)' }}>
             {error}
           </div>
         )}
@@ -354,14 +355,14 @@ function AnnouncementModal({ initial, lookups, token, onClose, onSaved }) {
                     </select>
                   </Field>
                 </div>
-                <p className="text-xs mt-2" style={{ color: '#7a8aaa' }}>
+                <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
                   Leave a filter blank to include everyone. Filters combine — a scholarship type
                   <em> and</em> a program means scholars in both.
                 </p>
               </>
             )}
             {audienceError && (
-              <p className="text-xs mt-2 font-medium" style={{ color: '#dc2626' }}>{audienceError}</p>
+              <p className="text-xs mt-2 font-medium" style={{ color: 'var(--danger)' }}>{audienceError}</p>
             )}
           </div>
 
@@ -381,7 +382,7 @@ function AnnouncementModal({ initial, lookups, token, onClose, onSaved }) {
                   })}. Notifications and emails go out then, not now.
                 </p>
               ) : (
-                <p className="text-xs mt-1" style={{ color: '#7a8aaa' }}>
+                <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
                   Leave blank to publish immediately. A future time hides it from its audience
                   until then.
                 </p>
@@ -392,7 +393,7 @@ function AnnouncementModal({ initial, lookups, token, onClose, onSaved }) {
           <Field label="Expires At (optional)">
             <input type="datetime-local" value={form.expiresAt} onChange={e => set('expiresAt', e.target.value)} className="clay-input" />
             {scheduleError ? (
-              <p className="text-xs mt-1 font-medium" style={{ color: '#dc2626' }}>{scheduleError}</p>
+              <p className="text-xs mt-1 font-medium" style={{ color: 'var(--danger)' }}>{scheduleError}</p>
             ) : expiresInPast && (
               <p className="text-xs mt-1 font-medium" style={{ color: '#c05000' }}>
                 ⚠ This date is in the past — the announcement will be hidden immediately after saving.
@@ -407,19 +408,19 @@ function AnnouncementModal({ initial, lookups, token, onClose, onSaved }) {
                 <option key={key} value={key}>{v.label}</option>
               ))}
             </select>
-            <p className="text-xs mt-1" style={{ color: '#7a8aaa' }}>
+            <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
               Adds a button to the announcement that takes scholars to the relevant page.
             </p>
           </Field>
 
           <Field label="Image (optional)">
             <input type="file" accept=".png,.jpg,.jpeg,.webp" onChange={handleImageChange} className="clay-input" />
-            <p className="text-xs mt-1" style={{ color: '#7a8aaa' }}>
+            <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
               PNG, JPG, or WEBP · max 10 MB. Recommended <strong>1200 × 400 px</strong> (3:1 landscape banner) —
               it’s displayed full-width and cropped to a 260 px-tall banner, so keep key content centered.
             </p>
             {imageError && (
-              <p className="text-xs mt-1 font-medium" style={{ color: '#e03030' }}>{imageError}</p>
+              <p className="text-xs mt-1 font-medium" style={{ color: 'var(--danger)' }}>{imageError}</p>
             )}
             {imageFile && !imageError && (
               <p className="text-xs mt-1" style={{ color: '#2a8a3a' }}>
@@ -427,7 +428,7 @@ function AnnouncementModal({ initial, lookups, token, onClose, onSaved }) {
               </p>
             )}
             {initial?.hasImage && !imageFile && (
-              <p className="text-xs mt-1" style={{ color: '#7a8aaa' }}>An image is already attached. Choosing a new file replaces it.</p>
+              <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>An image is already attached. Choosing a new file replaces it.</p>
             )}
           </Field>
 
@@ -442,15 +443,6 @@ function AnnouncementModal({ initial, lookups, token, onClose, onSaved }) {
   );
 }
 
-function Field({ label, children }) {
-  return (
-    <div>
-      <label className="block text-xs font-bold mb-1.5 uppercase tracking-wider" style={{ color: 'var(--text)' }}>{label}</label>
-      {children}
-    </div>
-  );
-}
-
 function AudienceTab({ active, onClick, Icon, label, hint }) {
   return (
     <button
@@ -462,7 +454,7 @@ function AudienceTab({ active, onClick, Icon, label, hint }) {
         ? { background: 'rgba(0,48,135,0.10)', border: '1.5px solid rgba(0,48,135,0.35)' }
         : { background: 'var(--surface-inset)', border: '1.5px solid transparent' }}
     >
-      <span className="flex items-center gap-1.5 text-sm font-bold" style={{ color: active ? '#003087' : 'var(--text)' }}>
+      <span className="flex items-center gap-1.5 text-sm font-bold" style={{ color: active ? 'var(--accent)' : 'var(--text)' }}>
         <Icon size={13} strokeWidth={2.4} /> {label}
       </span>
       <span className="block text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{hint}</span>
@@ -505,7 +497,7 @@ function RecipientPicker({ token, selected, onChange }) {
         <div className="flex flex-wrap gap-1.5 mb-2.5">
           {selected.map(s => (
             <span key={s.id} className="inline-flex items-center gap-1 pl-2.5 pr-1 py-1 rounded-xl text-xs font-semibold"
-              style={{ background: '#dce8ff', color: '#003087', border: '1px solid #80aaee' }}>
+              style={{ background: 'var(--accent-soft-bg)', color: 'var(--accent)', border: '1px solid var(--accent-soft-border)' }}>
               {s.fullName}
               <button type="button" onClick={() => onChange(selected.filter(x => x.id !== s.id))}
                 aria-label={`Remove ${s.fullName}`}
@@ -515,7 +507,7 @@ function RecipientPicker({ token, selected, onChange }) {
             </span>
           ))}
           <button type="button" onClick={() => onChange([])}
-            className="text-xs font-medium hover:underline px-1" style={{ color: '#7a8aaa' }}>
+            className="text-xs font-medium hover:underline px-1" style={{ color: 'var(--text-muted)' }}>
             Clear all
           </button>
         </div>
@@ -531,9 +523,9 @@ function RecipientPicker({ token, selected, onChange }) {
 
       <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(0,37,112,0.12)', maxHeight: 200, overflowY: 'auto' }}>
         {loading && results.length === 0 ? (
-          <p className="text-xs px-3.5 py-3" style={{ color: '#7a8aaa' }}>Searching…</p>
+          <p className="text-xs px-3.5 py-3" style={{ color: 'var(--text-muted)' }}>Searching…</p>
         ) : results.length === 0 ? (
-          <p className="text-xs px-3.5 py-3" style={{ color: '#7a8aaa' }}>No scholars match that search.</p>
+          <p className="text-xs px-3.5 py-3" style={{ color: 'var(--text-muted)' }}>No scholars match that search.</p>
         ) : results.map((s, i) => {
           const on = selectedIds.has(s.id);
           return (
@@ -543,10 +535,10 @@ function RecipientPicker({ token, selected, onChange }) {
                 background: on ? 'rgba(0,48,135,0.05)' : 'transparent',
               }}>
               <input type="checkbox" checked={on} onChange={() => toggle(s)}
-                className="mt-0.5 w-4 h-4 rounded" style={{ accentColor: '#003087', flexShrink: 0 }} />
+                className="mt-0.5 w-4 h-4 rounded" style={{ accentColor: 'var(--accent)', flexShrink: 0 }} />
               <span className="flex-1 min-w-0">
                 <span className="block text-sm font-medium truncate" style={{ color: 'var(--text-strong)' }}>{s.fullName}</span>
-                <span className="block text-xs truncate" style={{ color: '#7a8aaa' }}>
+                <span className="block text-xs truncate" style={{ color: 'var(--text-muted)' }}>
                   {[s.studentId, s.scholarshipType].filter(Boolean).join(' · ') || s.email}
                 </span>
               </span>
@@ -555,7 +547,7 @@ function RecipientPicker({ token, selected, onChange }) {
         })}
       </div>
 
-      <p className="text-xs mt-2" style={{ color: '#7a8aaa' }}>
+      <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
         {selected.length === 0
           ? 'Only the scholars you pick will see this announcement.'
           : `${selected.length} scholar${selected.length !== 1 ? 's' : ''} will receive this — and nobody else.`}

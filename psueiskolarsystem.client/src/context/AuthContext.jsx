@@ -1,5 +1,7 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { getMe } from '../api/auth';
+import { getPublicSettings } from '../api/systemSettings';
+import { setUnauthorizedHandler } from '../api/_client';
 
 const AuthContext = createContext(null);
 
@@ -16,7 +18,9 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(() => localStorage.getItem('token'));
   const [loading, setLoading] = useState(true);
-  const [sessionExpired, setSessionExpired] = useState(false);
+  // Null while the session is live; otherwise why it ended — 'inactivity' (this tab's timer
+  // fired) or 'expired' (the server rejected the token). The modal says different things.
+  const [sessionExpired, setSessionExpired] = useState(null);
   const [inactivityMin, setInactivityMinState] = useState(readInactivityMin);
   const inactivityTimer = useRef(null);
 
@@ -24,6 +28,21 @@ export function AuthProvider({ children }) {
     const val = Number.isFinite(min) && min > 0 ? min : DEFAULT_INACTIVITY_MIN;
     localStorage.setItem(INACTIVITY_KEY, String(val));
     setInactivityMinState(val);
+  }, []);
+
+  // The institution sets a default timeout in System Settings. It only applies to users who
+  // have not chosen their own on this browser — a personal choice, once made, wins.
+  useEffect(() => {
+    if (localStorage.getItem(INACTIVITY_KEY)) return;
+    let cancelled = false;
+    getPublicSettings()
+      .then(s => {
+        if (!cancelled && Number.isFinite(s?.sessionTimeoutMinutes) && s.sessionTimeoutMinutes > 0) {
+          setInactivityMinState(s.sessionTimeoutMinutes);
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
@@ -40,15 +59,26 @@ export function AuthProvider({ children }) {
       .finally(() => setLoading(false));
   }, [token]);
 
+  const endSession = useCallback((reason) => {
+    localStorage.removeItem('token');
+    setToken(null);
+    setUser(null);
+    setSessionExpired(reason);
+  }, []);
+
+  /* The JWT expires after JwtSettings:ExpiryMinutes, which is independent of — and usually
+     shorter than — the inactivity timeout above. Without this the token could die while the
+     tab still looked signed in, and every subsequent call would fail with a generic toast.
+     apiFetch calls us on any 401 that carried a token. */
+  useEffect(() => {
+    setUnauthorizedHandler(() => endSession('expired'));
+    return () => setUnauthorizedHandler(null);
+  }, [endSession]);
+
   const resetTimer = useCallback(() => {
     clearTimeout(inactivityTimer.current);
-    inactivityTimer.current = setTimeout(() => {
-      localStorage.removeItem('token');
-      setToken(null);
-      setUser(null);
-      setSessionExpired(true);
-    }, inactivityMin * 60 * 1000);
-  }, [inactivityMin]);
+    inactivityTimer.current = setTimeout(() => endSession('inactivity'), inactivityMin * 60 * 1000);
+  }, [inactivityMin, endSession]);
 
   // Start/clear the inactivity timer based on auth state
   useEffect(() => {
@@ -68,14 +98,11 @@ export function AuthProvider({ children }) {
     localStorage.setItem('token', authResponse.token);
     setToken(authResponse.token);
     setUser(authResponse.user);
-    setSessionExpired(false);
+    setSessionExpired(null);
   }
 
   function signOut() {
-    localStorage.removeItem('token');
-    setToken(null);
-    setUser(null);
-    setSessionExpired(false);
+    endSession(null);
   }
 
   async function refreshUser() {

@@ -7,7 +7,7 @@ export default function UnauthorizedPage() {
   return (
     <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg)' }}>
       <div className="clay-card p-12 text-center max-w-sm w-full mx-4">
-        <p className="text-6xl font-black mb-3" style={{ color: '#003087' }}>403</p>
+        <p className="text-6xl font-black mb-3" style={{ color: 'var(--accent)' }}>403</p>
         <p className="text-sm mb-6" style={{ color: 'var(--text)' }}>You don&apos;t have permission to access this page.</p>
         <button
           onClick={() => navigate(-1)}

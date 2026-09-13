@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PSUEISKOLARSystem.Server.Data;
+using PSUEISKOLARSystem.Server.DTOs;
 using PSUEISKOLARSystem.Server.DTOs.Scholars;
 using PSUEISKOLARSystem.Server.Interfaces;
 using PSUEISKOLARSystem.Server.Models;
@@ -73,14 +74,9 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
             var ledger = await LoadLedgerAsync(profiles.Select(p => p.UserId).ToList());
 
-            return Ok(new
-            {
-                total,
-                page,
-                pageSize,
-                totalPages = (int)Math.Ceiling(total / (double)pageSize),
-                items = profiles.Select(sp => Map(sp, ledger.GetValueOrDefault(sp.UserId))),
-            });
+            return Ok(PagedResult<ScholarProfileDto>.From(
+                profiles.Select(sp => Map(sp, ledger.GetValueOrDefault(sp.UserId))).ToList(),
+                total, page, pageSize));
         }
 
         // Batched scholarship-ledger lookup for a page of scholars: when the current
@@ -163,24 +159,45 @@ namespace PSUEISKOLARSystem.Server.Controllers
         [Authorize(Roles = $"{UserRoles.Administrator},{UserRoles.ScholarshipCoordinator}")]
         public async Task<IActionResult> GetScholarshipVerification()
         {
+            /* This report is a cross-check, so it does have to consider every scholar — but it
+               used to do so by materialising whole ScholarProfile and ScholarshipAssignment
+               entities with their User and ScholarshipType graphs attached and tracked. The
+               rows below carry only the seven and four columns the checks actually read, and
+               the counting is left to the database. */
+
+            var duplicateStudentIds = (await db.ScholarProfiles
+                .AsNoTracking()
+                .Where(p => p.StudentId != "")
+                .GroupBy(p => p.StudentId)
+                .Where(g => g.Count() > 1)
+                .Select(g => g.Key)
+                .ToListAsync())
+                // Kept case-insensitive on the client side too: SQL Server's default collation
+                // already folds case, but the membership tests below must not depend on that.
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
             var profiles = await db.ScholarProfiles
-                .Include(sp => sp.User)
-                .Include(sp => sp.ScholarshipType)
+                .AsNoTracking()
+                .Select(sp => new ProfileRow(
+                    sp.UserId,
+                    sp.User.FirstName,
+                    sp.User.MiddleName,
+                    sp.User.LastName,
+                    sp.User.Email,
+                    sp.StudentId,
+                    sp.ScholarshipTypeId,
+                    sp.ScholarshipType != null ? sp.ScholarshipType.Name : null,
+                    sp.User.ApprovalStatus))
                 .ToListAsync();
 
             var assignments = await db.ScholarshipAssignments
-                .Include(a => a.ScholarshipType)
+                .AsNoTracking()
+                .Select(a => new AssignmentRow(
+                    a.ScholarId, a.ScholarshipTypeId, a.ScholarshipType.Name, a.EndedAt))
                 .ToListAsync();
 
             var byScholar = assignments.GroupBy(a => a.ScholarId)
                 .ToDictionary(g => g.Key, g => g.ToList());
-
-            var duplicateStudentIds = profiles
-                .Where(p => !string.IsNullOrWhiteSpace(p.StudentId))
-                .GroupBy(p => p.StudentId, StringComparer.OrdinalIgnoreCase)
-                .Where(g => g.Count() > 1)
-                .Select(g => g.Key)
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             var findings = new List<VerificationFinding>();
 
@@ -194,25 +211,25 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 if (open.Count > 1)
                 {
                     issues.Add($"{open.Count} scholarships are open at the same time: " +
-                               string.Join(", ", open.Select(a => a.ScholarshipType.Name)));
+                               string.Join(", ", open.Select(a => a.ScholarshipTypeName)));
                     severity = "error";
                 }
 
                 if (p.ScholarshipTypeId is not null && open.Count == 0)
                 {
-                    issues.Add($"Profile shows {p.ScholarshipType?.Name} but there is no assignment record for it.");
+                    issues.Add($"Profile shows {p.ScholarshipTypeName} but there is no assignment record for it.");
                     if (severity != "error") severity = "warning";
                 }
 
                 if (p.ScholarshipTypeId is null && open.Count == 1)
                 {
-                    issues.Add($"An open assignment for {open[0].ScholarshipType.Name} exists but the profile has no scholarship set.");
+                    issues.Add($"An open assignment for {open[0].ScholarshipTypeName} exists but the profile has no scholarship set.");
                     if (severity != "error") severity = "warning";
                 }
 
                 if (open.Count == 1 && p.ScholarshipTypeId is not null && open[0].ScholarshipTypeId != p.ScholarshipTypeId)
                 {
-                    issues.Add($"Profile says {p.ScholarshipType?.Name} but the open assignment is {open[0].ScholarshipType.Name}.");
+                    issues.Add($"Profile says {p.ScholarshipTypeName} but the open assignment is {open[0].ScholarshipTypeName}.");
                     severity = "error";
                 }
 
@@ -229,11 +246,11 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
                 findings.Add(new VerificationFinding(
                     p.UserId,
-                    p.User.FullName,
-                    p.User.Email,
+                    p.FullName,
+                    p.Email,
                     p.StudentId,
-                    p.ScholarshipType?.Name,
-                    p.User.ApprovalStatus,
+                    p.ScholarshipTypeName,
+                    p.ApprovalStatus,
                     open.Count,
                     rows.Count,
                     severity,
@@ -265,28 +282,95 @@ namespace PSUEISKOLARSystem.Server.Controllers
             string Severity,
             List<string> Issues);
 
+        /* The two flat rows the verification report reads. Names are assembled here rather
+           than through ApplicationUser.FullName because that property is [NotMapped] — reading
+           it would force the whole User entity to be materialised, which is the cost this
+           projection exists to avoid. */
+        private record ProfileRow(
+            string UserId,
+            string FirstName,
+            string? MiddleName,
+            string LastName,
+            string? Email,
+            string StudentId,
+            int? ScholarshipTypeId,
+            string? ScholarshipTypeName,
+            string ApprovalStatus)
+        {
+            public string FullName => string.IsNullOrWhiteSpace(MiddleName)
+                ? $"{FirstName} {LastName}".Trim()
+                : $"{FirstName} {MiddleName} {LastName}".Trim();
+        }
+
+        private record AssignmentRow(
+            string ScholarId,
+            int ScholarshipTypeId,
+            string ScholarshipTypeName,
+            DateTime? EndedAt);
+
         // PATCH /api/scholars/{userId}/lifecycle  — set scholarship lifecycle status (FR-18)
         [HttpPatch("{userId}/lifecycle")]
         [Authorize(Roles = $"{UserRoles.Administrator},{UserRoles.ScholarshipCoordinator}")]
         public async Task<IActionResult> SetLifecycle(string userId, LifecycleRequest dto)
         {
-            var allowed = new[] { "Active", "Renewed", "Lapsed", "Suspended", "Graduated" };
-            if (!allowed.Contains(dto.Status))
+            if (!LifecycleStatuses.IsKnown(dto.Status))
                 return BadRequest(new { message = "Invalid lifecycle status." });
 
             var profile = await db.ScholarProfiles.Include(sp => sp.User)
                 .FirstOrDefaultAsync(sp => sp.UserId == userId);
             if (profile is null) return NotFound(new { message = "Scholar profile not found." });
 
+            var previous = profile.LifecycleStatus;
+            if (previous == dto.Status) return NoContent();
+
+            var actorId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            var wasHolding = LifecycleStatuses.IsHolding(previous);
+            var nowHolding = LifecycleStatuses.IsHolding(dto.Status);
 
             profile.LifecycleStatus = dto.Status;
+
+            /* The assignment ledger is the authority on who holds what, so it has to follow the
+               status rather than drift from it. Leaving Active/Renewed closes the open row —
+               that is what frees the slot in the history as well as in the count. */
+            var active = await ScholarshipRegistry.GetActiveAsync(db, userId);
+            if (wasHolding && !nowHolding && active is not null)
+            {
+                active.EndedAt = DateTime.UtcNow;
+                active.EndedById = actorId;
+                active.EndReason = $"Scholarship status set to {dto.Status}.";
+            }
+            else if (!wasHolding && nowHolding && active is null && profile.ScholarshipTypeId is int typeId)
+            {
+                // Coming back (a suspension lifted, a lapse reinstated) reopens the ledger,
+                // otherwise the scholar would hold a scholarship with no record of doing so.
+                db.ScholarshipAssignments.Add(new ScholarshipAssignment
+                {
+                    ScholarId = userId,
+                    ScholarshipTypeId = typeId,
+                    AssignedById = actorId,
+                    AssignedAt = DateTime.UtcNow,
+                });
+            }
+
             db.AuditLogs.Add(new AuditLog
             {
-                UserId = User.FindFirstValue(ClaimTypes.NameIdentifier)!,
+                UserId = actorId,
                 Action = "SetLifecycleStatus",
-                Details = $"Set {profile.User.FullName} scholarship status to {dto.Status}.",
+                Details = $"Set {profile.User.FullName} scholarship status: {previous} → {dto.Status}.",
             });
             await db.SaveChangesAsync();
+
+            // The scholar is the person most affected by this and used to be told nothing.
+            await notifications.CreateAsync(
+                userId,
+                "Scholarship status updated",
+                $"Your scholarship status is now {dto.Status}. " +
+                (nowHolding
+                    ? "Keep submitting your requirements as usual."
+                    : "Contact the scholarship office if you believe this is a mistake."),
+                NotificationCategories.Account,
+                "/my-profile");
+
             return NoContent();
         }
 
@@ -338,6 +422,16 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 Documents = documents,
             };
 
+            /* Under RA 10173 a subject-access disclosure is exactly the event that ought to
+               leave a trace — the more so because staff can invoke it for any scholar, not
+               only for themselves. Every neighbouring action here audits itself; this one
+               did not. */
+            db.Audit(this, "ExportScholarData",
+                currentUserId == userId
+                    ? "Downloaded own personal data export"
+                    : $"Downloaded the personal data export for {profile.User.FullName}");
+            await db.SaveChangesAsync();
+
             return Ok(export);
         }
 
@@ -354,6 +448,28 @@ namespace PSUEISKOLARSystem.Server.Controllers
             if (user is null) return NotFound(new { message = "User not found." });
 
 
+            var profile = await db.ScholarProfiles.FirstOrDefaultAsync(sp => sp.UserId == userId);
+
+            /* A scholar supplies their own student number and programme when they first
+               complete their profile, and the office approves them against those values.
+               After that the pair is identity rather than preference: leaving it editable
+               let an approved account quietly become a different student, against a number
+               nobody had verified. Staff can still correct a typo. Contact number, address,
+               birth date, and year level stay self-service — none of them identify anyone,
+               and year level legitimately changes every June. */
+            var identityLocked = !isAdminOrCoord
+                && user.ApprovalStatus == ApprovalStatuses.Approved
+                && profile is not null
+                && !string.IsNullOrWhiteSpace(profile.StudentId);
+
+            if (identityLocked && (dto.StudentId.Trim() != profile!.StudentId || dto.ProgramId != profile.ProgramId))
+                return BadRequest(new
+                {
+                    message = "Your student number and programme were verified when your scholarship " +
+                              "was approved and can no longer be changed here. Ask your scholarship " +
+                              "coordinator to correct them."
+                });
+
             // A student number must identify exactly one scholar — a duplicate is the usual
             // symptom of the same student registering twice.
             var studentId = dto.StudentId.Trim();
@@ -362,7 +478,6 @@ namespace PSUEISKOLARSystem.Server.Controllers
             if (studentIdTaken)
                 return BadRequest(new { message = $"Student ID {studentId} is already registered to another scholar." });
 
-            var profile = await db.ScholarProfiles.FirstOrDefaultAsync(sp => sp.UserId == userId);
             if (profile is null)
             {
                 profile = new ScholarProfile { UserId = userId };
@@ -440,46 +555,124 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
             if (profile is null) return NotFound(new { message = "Scholar profile not found." });
 
+            if (!AcademicPeriod.TryParse(dto.AcademicYear, dto.Semester, out var period, out var periodError))
+                return BadRequest(new { message = periodError });
+
             // A grade can't be recorded for a period later than the active academic semester.
-            var active = await db.ActiveSemesters.FirstOrDefaultAsync();
-            if (active is not null && IsLaterPeriod(dto.AcademicYear, dto.Semester, active.AcademicYear, active.Semester))
+            var laterError = await CheckNotLaterThanActiveAsync(period);
+            if (laterError is not null) return BadRequest(new { message = laterError });
+
+            // The unique index would refuse this anyway; catching it here says why, and points
+            // at the edit endpoint rather than leaving a correction as "record it again".
+            var clash = await db.AcademicGrades.AnyAsync(g =>
+                g.ScholarProfileId == profile.Id &&
+                g.AcademicYear == period.AcademicYear &&
+                g.Semester == period.Semester);
+
+            if (clash)
                 return BadRequest(new { message =
-                    $"Cannot record a grade for A.Y. {dto.AcademicYear} Semester {dto.Semester} — it is later than the active period (A.Y. {active.AcademicYear} Semester {active.Semester})." });
-
-
-            var meetsRequirement = profile.ScholarshipType is null || dto.Gwa <= profile.ScholarshipType.MinimumGwa;
+                    $"A GWA is already recorded for {period.Label}. Edit that entry instead of adding a second one." });
 
             var grade = new AcademicGrade
             {
                 ScholarProfileId = profile.Id,
-                AcademicYear = dto.AcademicYear,
-                Semester = dto.Semester,
+                AcademicYear = period.AcademicYear,
+                Semester = period.Semester,
                 Gwa = dto.Gwa,
-                MeetsRequirement = meetsRequirement,
+                MeetsRequirement = MeetsRequirement(dto.Gwa, profile),
                 Remarks = dto.Remarks,
                 RecordedById = User.FindFirstValue(ClaimTypes.NameIdentifier)
             };
 
             db.AcademicGrades.Add(grade);
-            db.Audit(this, "AddGrade", $"Recorded GWA {dto.Gwa} for {profile.User.FullName} ({dto.AcademicYear} Sem {dto.Semester})");
+            db.Audit(this, "AddGrade", $"Recorded GWA {dto.Gwa} for {profile.User.FullName} ({period.Label})");
             await db.SaveChangesAsync();
             _ = notifications.BroadcastAsync("AnalyticsChanged");
             return Ok(new { grade.Id, grade.MeetsRequirement });
         }
 
-        // True when (year, sem) is strictly later than the reference period.
-        // Academic year is the leading 4-digit year of a "YYYY-YYYY" string; if it
-        // can't be parsed we can't compare, so we don't block.
-        private static bool IsLaterPeriod(string year, int semester, string refYear, int refSemester)
+        /// <summary>
+        /// Corrects a recorded GWA. Without this a mistyped grade could only be "fixed" by
+        /// adding a second row for the same period, which is exactly what made the latest-grade
+        /// lookup ambiguous.
+        /// </summary>
+        [HttpPatch("{userId}/grades/{gradeId:int}")]
+        [Authorize(Roles = $"{UserRoles.Administrator},{UserRoles.ScholarshipCoordinator}")]
+        public async Task<IActionResult> UpdateGrade(string userId, int gradeId, UpdateGradeDto dto)
         {
-            static int? StartYear(string ay) =>
-                int.TryParse(ay?.Split('-')[0], out var y) ? y : null;
+            var (profile, grade, failure) = await FindGradeAsync(userId, gradeId);
+            if (failure is not null) return failure;
 
-            var y1 = StartYear(year);
-            var y2 = StartYear(refYear);
-            if (y1 is null || y2 is null) return false;
+            var was = $"GWA {grade!.Gwa}";
+            grade.Gwa = dto.Gwa;
+            grade.Remarks = dto.Remarks;
+            grade.MeetsRequirement = MeetsRequirement(dto.Gwa, profile!);
+            grade.RecordedById = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            grade.RecordedAt = DateTime.UtcNow;
 
-            return y1 > y2 || (y1 == y2 && semester > refSemester);
+            db.Audit(this, "UpdateGrade",
+                $"Corrected {was} → GWA {dto.Gwa} for {profile!.User.FullName} " +
+                $"({grade.AcademicYear} Sem {grade.Semester})");
+            await db.SaveChangesAsync();
+            _ = notifications.BroadcastAsync("AnalyticsChanged");
+            return Ok(new { grade.Id, grade.MeetsRequirement });
+        }
+
+        [HttpDelete("{userId}/grades/{gradeId:int}")]
+        [Authorize(Roles = $"{UserRoles.Administrator},{UserRoles.ScholarshipCoordinator}")]
+        public async Task<IActionResult> DeleteGrade(string userId, int gradeId)
+        {
+            var (profile, grade, failure) = await FindGradeAsync(userId, gradeId);
+            if (failure is not null) return failure;
+
+            db.AcademicGrades.Remove(grade!);
+            db.Audit(this, "DeleteGrade",
+                $"Removed GWA {grade!.Gwa} for {profile!.User.FullName} " +
+                $"({grade.AcademicYear} Sem {grade.Semester})");
+            await db.SaveChangesAsync();
+            _ = notifications.BroadcastAsync("AnalyticsChanged");
+            return NoContent();
+        }
+
+        private async Task<(ScholarProfile?, AcademicGrade?, IActionResult?)> FindGradeAsync(string userId, int gradeId)
+        {
+            var profile = await db.ScholarProfiles
+                .Include(sp => sp.ScholarshipType)
+                .Include(sp => sp.User)
+                .FirstOrDefaultAsync(sp => sp.UserId == userId);
+
+            if (profile is null)
+                return (null, null, NotFound(new { message = "Scholar profile not found." }));
+
+            var grade = await db.AcademicGrades
+                .FirstOrDefaultAsync(g => g.Id == gradeId && g.ScholarProfileId == profile.Id);
+
+            return grade is null
+                ? (profile, null, NotFound(new { message = "Grade record not found for this scholar." }))
+                : (profile, grade, null);
+        }
+
+        /// <summary>
+        /// A scholarship with no GWA ceiling is met by definition; otherwise the GWA has to be
+        /// at or below it (lower is better on the 1.00–5.00 scale).
+        /// </summary>
+        private static bool MeetsRequirement(decimal gwa, ScholarProfile profile) =>
+            profile.ScholarshipType is null || gwa <= profile.ScholarshipType.MinimumGwa;
+
+        /// <summary>
+        /// Refuses a period later than the active semester. Uses <see cref="AcademicPeriod"/>
+        /// rather than a local year comparison, which failed open on anything it could not parse.
+        /// </summary>
+        private async Task<string?> CheckNotLaterThanActiveAsync(AcademicPeriod period)
+        {
+            var active = await db.ActiveSemesters.FirstOrDefaultAsync();
+            if (active is null) return null;
+            if (!AcademicPeriod.TryParse(active.AcademicYear, active.Semester, out var activePeriod, out _))
+                return null;   // the stored active period predates validation; don't block on it
+
+            return period > activePeriod
+                ? $"Cannot record a grade for {period.Label} — it is later than the active period ({activePeriod.Label})."
+                : null;
         }
 
         private static ScholarProfileDto Map(ScholarProfile sp, LedgerSummary? ledger = null)

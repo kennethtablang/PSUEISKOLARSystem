@@ -1,4 +1,4 @@
-import { errorMessage } from './_error';
+import { apiFetch, apiGet, apiSend, apiDelete } from './_client';
 
 const API = '/api/scholars';
 
@@ -12,91 +12,55 @@ export async function getScholars(token, filters = {}) {
   if (filters.approvalStatus) params.set('approvalStatus', filters.approvalStatus);
   if (filters.page) params.set('page', filters.page);
   if (filters.pageSize) params.set('pageSize', filters.pageSize);
-  const res = await fetch(`${API}?${params}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error('Failed to load scholars.');
   // Returns { total, page, pageSize, totalPages, items }
-  return res.json();
+  return apiGet(`${API}?${params}`, token, 'Failed to load scholars.');
 }
 
 export async function getScholarProfile(userId, token) {
-  const res = await fetch(`${API}/${userId}`, {
-    headers: { Authorization: `Bearer ${token}` },
+  // A scholar with no profile row yet is an ordinary state, not an error — the onboarding
+  // gate exists precisely to fill it in.
+  const res = await apiFetch(`${API}/${userId}`, {
+    token, fallback: 'Failed to load scholar profile.', expect: [404],
   });
-  if (res.status === 404) return null;
-  if (!res.ok) throw new Error('Failed to load scholar profile.');
-  return res.json();
+  return res.status === 404 ? null : res.json();
 }
 
 export async function upsertScholarProfile(userId, data, token) {
-  const res = await fetch(`${API}/${userId}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(errorMessage(err, 'Failed to save profile.'));
-  }
+  return apiSend(`${API}/${userId}`, 'PUT', data, token, 'Failed to save profile.');
 }
 
 export async function setLifecycleStatus(userId, status, token) {
-  const res = await fetch(`${API}/${userId}/lifecycle`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ status }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || 'Failed to update status.');
-  }
+  return apiSend(`${API}/${userId}/lifecycle`, 'PATCH', { status }, token, 'Failed to update status.');
 }
 
 // Every scholarship this scholar has ever been registered under; exactly one row
 // should have isActive = true (the "strictly one scholarship" rule).
 export async function getScholarshipHistory(userId, token) {
-  const res = await fetch(`${API}/${userId}/scholarship-history`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error('Failed to load scholarship history.');
-  return res.json();
+  return apiGet(`${API}/${userId}/scholarship-history`, token, 'Failed to load scholarship history.');
 }
 
 // Verification report: scholars whose scholarship records need a second look.
 export async function getScholarshipVerification(token) {
-  const res = await fetch(`${API}/scholarship-verification`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error('Failed to load the scholarship verification report.');
-  return res.json();
+  return apiGet(`${API}/scholarship-verification`, token,
+    'Failed to load the scholarship verification report.');
 }
 
 export async function exportScholarData(userId, token) {
-  const res = await fetch(`${API}/${userId}/export`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error('Failed to export data.');
-  return res.json();
+  return apiGet(`${API}/${userId}/export`, token, 'Failed to export data.');
 }
 
 export async function getGrades(userId, token) {
-  const res = await fetch(`${API}/${userId}/grades`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error('Failed to load grades.');
-  return res.json();
+  return apiGet(`${API}/${userId}/grades`, token, 'Failed to load grades.');
 }
 
 export async function addGrade(userId, data, token) {
-  const res = await fetch(`${API}/${userId}/grades`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(errorMessage(err, 'Failed to add grade.'));
-  }
-  return res.json();
+  return apiSend(`${API}/${userId}/grades`, 'POST', data, token, 'Failed to add grade.');
+}
+
+export async function updateGrade(userId, gradeId, data, token) {
+  return apiSend(`${API}/${userId}/grades/${gradeId}`, 'PATCH', data, token, 'Failed to update grade.');
+}
+
+export async function deleteGrade(userId, gradeId, token) {
+  return apiDelete(`${API}/${userId}/grades/${gradeId}`, token, 'Failed to remove grade.');
 }

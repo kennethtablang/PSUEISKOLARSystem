@@ -11,6 +11,7 @@ using PSUEISKOLARSystem.Server.Data;
 using PSUEISKOLARSystem.Server.Interfaces;
 using PSUEISKOLARSystem.Server.Models;
 using PSUEISKOLARSystem.Server.Models.Enums;
+using PSUEISKOLARSystem.Server.Services;
 using PSUEISKOLARSystem.Server.Settings;
 
 namespace PSUEISKOLARSystem.Server.Controllers
@@ -22,7 +23,8 @@ namespace PSUEISKOLARSystem.Server.Controllers
     public class UserImportController(
         ApplicationDbContext db,
         UserManager<ApplicationUser> userManager,
-        IEmailService emailService,
+        BackgroundEmailer mail,
+        ILogger<UserImportController> logger,
         IOptions<EmailSettings> emailOptions) : ControllerBase
     {
         private const int MaxRows = 1000;
@@ -269,18 +271,42 @@ namespace PSUEISKOLARSystem.Server.Controllers
             });
             await db.SaveChangesAsync();
 
-            _ = SendWelcomeEmailsAsync(welcomeEmails);
+            SendWelcomeEmails(welcomeEmails);
 
             return Ok(new ImportSummary(rows.Count, created, rows.Count - created, results));
         }
 
-        private async Task SendWelcomeEmailsAsync(List<(string Email, string Name, string Password, string Link)> emails)
+        /// <summary>
+        /// Welcomes every newly created scholar, after the response has gone back.
+        /// <para>
+        /// This is the largest bulk send in the system — an import may create a thousand
+        /// accounts. It used to fire the request-scoped <c>IEmailService</c> from a discarded
+        /// task, so it reached past the end of the request into a disposed scope, and it opened
+        /// a fresh TLS connection and re-authenticated for every single account. Now it runs in
+        /// a scope of its own over one connection.
+        /// </para>
+        /// </summary>
+        private void SendWelcomeEmails(List<(string Email, string Name, string Password, string Link)> emails)
         {
-            foreach (var e in emails)
+            if (emails.Count == 0) return;
+
+            mail.Queue($"{emails.Count} scholar welcome email(s)", async email =>
             {
-                try { await emailService.SendScholarWelcomeAsync(e.Email, e.Name, e.Password, e.Link); }
-                catch { /* one failed email shouldn't abort the rest */ }
-            }
+                await using var batch = await email.BeginBatchAsync();
+
+                foreach (var e in emails)
+                {
+                    try
+                    {
+                        await email.SendScholarWelcomeAsync(e.Email, e.Name, e.Password, e.Link);
+                    }
+                    catch (Exception ex)
+                    {
+                        // One bad address must not cost the other 999 their credentials.
+                        logger.LogWarning(ex, "Welcome email to {Email} failed.", e.Email);
+                    }
+                }
+            });
         }
 
         // ── Parsing helpers ──────────────────────────────────────────────

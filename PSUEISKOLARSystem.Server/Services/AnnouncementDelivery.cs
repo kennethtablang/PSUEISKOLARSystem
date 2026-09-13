@@ -115,6 +115,9 @@ namespace PSUEISKOLARSystem.Server.Services
             using var scope = scopeFactory.CreateScope();
             var email = scope.ServiceProvider.GetRequiredService<IEmailService>();
 
+            // One connection for the whole announcement rather than one per scholar.
+            await using var batch = await email.BeginBatchAsync();
+
             foreach (var scholar in scholars)
             {
                 try

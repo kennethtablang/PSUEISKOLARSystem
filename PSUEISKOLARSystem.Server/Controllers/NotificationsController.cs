@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PSUEISKOLARSystem.Server.Data;
+using PSUEISKOLARSystem.Server.DTOs;
 
 namespace PSUEISKOLARSystem.Server.Controllers
 {
@@ -48,14 +49,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 })
                 .ToListAsync();
 
-            return Ok(new
-            {
-                total,
-                page,
-                pageSize,
-                totalPages = (int)Math.Ceiling(total / (double)pageSize),
-                items,
-            });
+            return Ok(PagedResult<object>.From(items, total, page, pageSize));
         }
 
         // GET /api/notifications/unread-count

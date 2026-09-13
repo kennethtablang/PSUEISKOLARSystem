@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using PSUEISKOLARSystem.Server.Models;
+using PSUEISKOLARSystem.Server.Models.Enums;
 
 namespace PSUEISKOLARSystem.Server.Data
 {
@@ -100,10 +101,17 @@ namespace PSUEISKOLARSystem.Server.Data
         /// <summary>
         /// How many of a scholarship type's slots are currently taken. Counts scholar profiles
         /// pointing at the type, which is the same figure the Scholarship Types page shows.
+        /// <para>
+        /// Only scholars who still <see cref="LifecycleStatuses.Holding">hold</see> the
+        /// scholarship occupy a slot. Counting every pointer meant a graduated cohort kept its
+        /// slots forever, and the quota refused new assignments on behalf of people who left
+        /// years ago.
+        /// </para>
         /// </summary>
         public static Task<int> CountFilledSlotsAsync(ApplicationDbContext db, int scholarshipTypeId, string? excludingScholarId = null) =>
             db.ScholarProfiles.CountAsync(sp =>
                 sp.ScholarshipTypeId == scholarshipTypeId &&
+                LifecycleStatuses.Holding.Contains(sp.LifecycleStatus) &&
                 (excludingScholarId == null || sp.UserId != excludingScholarId));
 
         private static void Close(ScholarshipAssignment assignment, string actorId, string reason)

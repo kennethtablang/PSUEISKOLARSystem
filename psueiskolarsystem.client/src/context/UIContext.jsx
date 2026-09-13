@@ -7,8 +7,8 @@ let idSeq = 0;
 
 const TOAST_STYLE = {
   success: { bg: '#e7f7ee', border: '#9bdcb6', color: '#0a5a3a', Icon: CheckCircle },
-  error:   { bg: '#fff0f0', border: '#f5b0b0', color: '#b03030', Icon: AlertTriangle },
-  info:    { bg: '#eef6ff', border: '#bcd4f5', color: '#003087', Icon: Info },
+  error:   { bg: 'var(--danger-bg)', border: 'var(--danger-border)', color: 'var(--danger)', Icon: AlertTriangle },
+  info:    { bg: 'var(--accent-soft-bg)', border: 'var(--accent-soft-border)', color: 'var(--accent)', Icon: Info },
 };
 
 /**

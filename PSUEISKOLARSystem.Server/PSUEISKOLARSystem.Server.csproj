@@ -8,6 +8,22 @@
     <SpaProxyLaunchCommand>npm run dev</SpaProxyLaunchCommand>
     <SpaProxyServerUrl>https://localhost:56806</SpaProxyServerUrl>
     <UserSecretsId>a7cc3e16-f2cb-48bc-b186-7decacee693e</UserSecretsId>
+    <!--
+      Every .cs file here is UTF-8 without a BOM, and Roslyn falls back to the machine's
+      ANSI codepage for BOM-less sources. On a Windows-1252 box that turned the "·"
+      separators in report headers and period labels into "Â·" at runtime. Pinning the
+      codepage makes the build read the files as what they actually are, on any machine.
+    -->
+    <CodePage>65001</CodePage>
+    <!--
+      This project builds warning-free, so warnings are errors here to keep it that way; the
+      one warning it ever carried (CS9113, an injected dependency nothing read) sat unnoticed
+      for months. Set on the project rather than passed as -warnaserror on the command line
+      because the client .esproj reference reports npm advisories as MSBuild warnings, and a
+      solution-wide switch would turn a dependency advisory into a compile failure. Those are
+      gated properly by the audit job in .github/workflows/ci.yml.
+    -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
 
   <ItemGroup>

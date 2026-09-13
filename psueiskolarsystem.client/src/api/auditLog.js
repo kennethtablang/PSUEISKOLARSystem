@@ -1,22 +1,16 @@
+import { apiFetch, apiGet } from './_client';
+
 const API = '/api/audit-log';
 
 export async function getAuditLog(token, { page = 1, pageSize = 50, search, action } = {}) {
   const params = new URLSearchParams({ page, pageSize });
   if (search)  params.set('search', search);
   if (action)  params.set('action', action);
-  const res = await fetch(`${API}?${params}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error('Failed to load activity log.');
-  return res.json();
+  return apiGet(`${API}?${params}`, token, 'Failed to load activity log.');
 }
 
 export async function getRecentActivity(token, take = 8) {
-  const res = await fetch(`${API}/recent?take=${take}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error('Failed to load recent activity.');
-  return res.json();
+  return apiGet(`${API}/recent?take=${take}`, token, 'Failed to load recent activity.');
 }
 
 export async function exportAuditLog(token, { search, action } = {}) {
@@ -24,25 +18,14 @@ export async function exportAuditLog(token, { search, action } = {}) {
   if (search) params.set('search', search);
   if (action) params.set('action', action);
   const qs = params.toString() ? `?${params}` : '';
-  const res = await fetch(`${API}/export.xlsx${qs}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || 'Export failed.');
-  }
-  const blob = await res.blob();
+  const res = await apiFetch(`${API}/export.xlsx${qs}`, { token, fallback: 'Export failed.' });
   const link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
+  link.href = URL.createObjectURL(await res.blob());
   link.download = `activity_log_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.xlsx`;
   link.click();
   URL.revokeObjectURL(link.href);
 }
 
 export async function getDistinctActions(token) {
-  const res = await fetch(`${API}/actions`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error('Failed to load actions.');
-  return res.json();
+  return apiGet(`${API}/actions`, token, 'Failed to load actions.');
 }

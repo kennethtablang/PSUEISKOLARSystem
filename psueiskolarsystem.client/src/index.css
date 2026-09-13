@@ -15,6 +15,45 @@
   --text: #4a5a7a;
   --text-muted: #7a8aaa;
   --text-faint: #9aaabb;
+
+  /* PSU blue as *ink*. The brand blue is only legible as text on a light surface,
+     so every blue label, link, figure, and badge reads these rather than #003087
+     directly — dark mode then lifts the whole family in one place. */
+  --accent: #003087;
+  --accent-strong: #002570;
+  --accent-soft-bg: #dce8ff;
+  --accent-soft-border: #80aaee;
+  --accent-wash: rgba(0, 48, 135, 0.08);
+  /* Progress/meter fill. Sits on --clay-progress-track, which inverts with the theme. */
+  --accent-bar-from: #003087;
+  --accent-bar-to: #0040b8;
+
+  /* Table rules. Black at 5% vanishes on a dark card, so these flip rather than
+     staying a fixed ink. */
+  --hairline: rgba(0, 0, 0, 0.06);
+  --hairline-strong: rgba(0, 0, 0, 0.10);
+
+  /* ── Status tones ──────────────────────────────────────────────────────────
+     Six meanings, not thirty statuses. "Verified", "Approved", "Released" and
+     "Active" all mean the same thing to the eye, and they were each written out
+     as their own pale-green literal in a different file — which is why every
+     dark-mode pass fixed the badges someone happened to look at and missed the
+     rest. A status maps to a tone (see components/StatusBadge.jsx); the tone
+     picks its colours from here, and dark mode overrides them once. */
+  --tone-ok-bg: #d1fae5;          --tone-ok-fg: #0a5a3a;   --tone-ok-border: #86efac;
+  --tone-warn-bg: #fef3c7;        --tone-warn-fg: #7d5a00; --tone-warn-border: #f5d060;
+  --tone-bad-bg: #fee2e2;         --tone-bad-fg: #991b1b;  --tone-bad-border: #fca5a5;
+  --tone-info-bg: #dbeafe;        --tone-info-fg: #1e40af; --tone-info-border: #93c5fd;
+  --tone-attention-bg: #ffedd5;   --tone-attention-fg: #9a3412; --tone-attention-border: #fdba74;
+  --tone-neutral-bg: #e5e9f2;     --tone-neutral-fg: #4a5a7a;   --tone-neutral-border: #cbd5e1;
+
+  /* Danger: validation errors, destructive actions, error toasts. Distinct from the "bad"
+     *status* tone, which colours a record's state rather than the app talking to the user —
+     they are allowed to diverge. This replaced three different reds (#e03030, #dc2626,
+     #b03030) doing the same job in different files. */
+  --danger: #c62828;
+  --danger-bg: #fff0f0;
+  --danger-border: #f5b0b0;
 }
 
 :root[data-theme="dark"] {
@@ -28,6 +67,52 @@
   --text: #b3c0d4;
   --text-muted: #8896aa;
   --text-faint: #6b7788;
+
+  /* Lifted well past the brand blue: #003087 on the dark card measures ~1.3:1.
+     #7fb3ff clears 7:1 on --surface and still reads as PSU blue rather than cyan. */
+  --accent: #7fb3ff;
+  --accent-strong: #a9ccff;
+  --accent-soft-bg: rgba(96, 150, 255, 0.16);
+  --accent-soft-border: rgba(127, 179, 255, 0.38);
+  --accent-wash: rgba(127, 179, 255, 0.13);
+  --accent-bar-from: #3d78d8;
+  --accent-bar-to: #7fb3ff;
+
+  --hairline: rgba(255, 255, 255, 0.08);
+  --hairline-strong: rgba(255, 255, 255, 0.14);
+
+  /* Status tones, dark. A pale tint carries no colour on a near-black card and the dark ink
+     on it disappears, so the pattern inverts: the fill becomes a translucent wash of the hue
+     and the text becomes the light, saturated version of it — the same move --accent already
+     makes (#003087 → #7fb3ff). Foregrounds are the 300-level of each hue, which is the band
+     that stays legible on a dark wash; worth re-checking with a contrast tool if the surface
+     colours are ever changed. */
+  --tone-ok-bg: rgba(16, 160, 96, 0.20);        --tone-ok-fg: #6ee7b7;   --tone-ok-border: rgba(110, 231, 183, 0.36);
+  --tone-warn-bg: rgba(224, 160, 0, 0.20);      --tone-warn-fg: #fcd34d; --tone-warn-border: rgba(252, 211, 77, 0.36);
+  --tone-bad-bg: rgba(224, 70, 60, 0.22);       --tone-bad-fg: #fca5a5;  --tone-bad-border: rgba(252, 165, 165, 0.38);
+  --tone-info-bg: rgba(96, 150, 255, 0.20);     --tone-info-fg: #93c5fd; --tone-info-border: rgba(147, 197, 253, 0.36);
+  --tone-attention-bg: rgba(240, 120, 40, 0.22); --tone-attention-fg: #fdba74; --tone-attention-border: rgba(253, 186, 116, 0.38);
+  --tone-neutral-bg: rgba(255, 255, 255, 0.09); --tone-neutral-fg: #b3c0d4; --tone-neutral-border: rgba(255, 255, 255, 0.18);
+
+  /* #c62828 on a near-black card is the same unreadable-red problem as the brand blue. */
+  --danger: #ff9a9a;
+  --danger-bg: rgba(224, 60, 60, 0.14);
+  --danger-border: rgba(255, 154, 154, 0.32);
+
+  /* ── Dark elevation ──
+     Neomorphism works by putting a light source top-left and a shadow bottom-right. On a
+     light surface the highlight is a wide soft *white blur*, because white-on-near-white
+     genuinely diffuses. Carrying that blur into dark mode was the mistake: a white haze
+     bleeding 14px out of a near-black card doesn't read as light falling on an edge, it
+     reads as the card glowing — every panel wearing a halo.
+
+     In the dark the highlight has to be a *specular edge*: one crisp pixel where the bevel
+     catches the light, no blur at all. The depth then comes entirely from the shadow, which
+     can go deeper here than it ever could on the light theme. */
+  --nm-shadow: rgba(0, 0, 0, 0.55);
+  --nm-shadow-soft: rgba(0, 0, 0, 0.38);
+  --nm-edge: rgba(255, 255, 255, 0.055);
+  --nm-edge-top: rgba(255, 255, 255, 0.07);
 }
 
 body {
@@ -39,37 +124,89 @@ body {
   transition: background-color 0.2s ease;
 }
 
-/* ═══ DARK-MODE SURFACE OVERRIDES ═══ */
+/* ═══ DARK-MODE SURFACE OVERRIDES ═══
+   Every raised surface below follows the same two-part recipe: a deep, offset drop shadow
+   for the lift, and a 1px specular edge (never a blur) for the light. See --nm-edge. */
+
 :root[data-theme="dark"] .clay-card {
   background: var(--surface);
-  box-shadow: 8px 8px 20px rgba(0,0,0,0.45), -5px -5px 14px rgba(255,255,255,0.03), inset 0 1px 0 rgba(255,255,255,0.04);
+  box-shadow:
+    10px 10px 26px var(--nm-shadow),
+    -1px -1px 0 var(--nm-edge),
+    inset 0 1px 0 var(--nm-edge-top);
 }
 :root[data-theme="dark"] .clay-card-modal {
   background: var(--surface-modal);
-  box-shadow: 0 30px 72px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.05);
+  box-shadow:
+    0 30px 72px rgba(0, 0, 0, 0.66),
+    -1px -1px 0 var(--nm-edge),
+    inset 0 1px 0 var(--nm-edge-top);
 }
+/* Recessed: the light now catches the *bottom* inner edge, since the surface falls away
+   from the viewer. Same principle, mirrored. */
 :root[data-theme="dark"] .clay-card-inner {
   background: var(--surface-inset);
-  box-shadow: inset 3px 3px 8px rgba(0,0,0,0.4), inset -2px -2px 6px rgba(255,255,255,0.02);
+  box-shadow:
+    inset 4px 4px 10px var(--nm-shadow),
+    inset -1px -1px 0 var(--nm-edge);
 }
 :root[data-theme="dark"] .clay-btn-ghost {
   background: var(--surface);
   color: var(--text-strong);
-  box-shadow: 4px 4px 10px rgba(0,0,0,0.4), -3px -3px 8px rgba(255,255,255,0.03), inset 0 1px 0 rgba(255,255,255,0.04);
+  box-shadow:
+    5px 5px 13px var(--nm-shadow-soft),
+    -1px -1px 0 var(--nm-edge),
+    inset 0 1px 0 var(--nm-edge-top);
+}
+:root[data-theme="dark"] .clay-btn-ghost:hover {
+  box-shadow:
+    7px 7px 18px var(--nm-shadow),
+    -1px -1px 0 var(--nm-edge),
+    inset 0 1px 0 var(--nm-edge-top);
+}
+:root[data-theme="dark"] .clay-btn-ghost:active {
+  box-shadow:
+    inset 4px 4px 10px var(--nm-shadow),
+    inset -1px -1px 0 var(--nm-edge);
 }
 :root[data-theme="dark"] .clay-input {
   background: var(--input-bg);
   color: var(--text-strong);
-  box-shadow: inset 4px 4px 10px rgba(0,0,0,0.42), inset -3px -3px 8px rgba(255,255,255,0.02);
+  box-shadow:
+    inset 5px 5px 12px var(--nm-shadow),
+    inset -1px -1px 0 var(--nm-edge);
+}
+:root[data-theme="dark"] .clay-input:focus {
+  box-shadow:
+    inset 5px 5px 12px var(--nm-shadow),
+    inset -1px -1px 0 var(--nm-edge),
+    0 0 0 3px rgba(127, 179, 255, 0.24);
 }
 :root[data-theme="dark"] .clay-input::placeholder { color: rgba(179,192,212,0.4); }
 :root[data-theme="dark"] .clay-table-head { background: rgba(255,255,255,0.05); border-bottom-color: rgba(255,255,255,0.09); }
 :root[data-theme="dark"] .clay-table-row:hover { background: rgba(255,255,255,0.04); }
 :root[data-theme="dark"] .clay-table-row + .clay-table-row { border-top-color: rgba(255,255,255,0.06); }
 :root[data-theme="dark"] .clay-progress-track {
-  background: rgba(0,0,0,0.35);
-  box-shadow: inset 3px 3px 7px rgba(0,0,0,0.5), inset -2px -2px 5px rgba(255,255,255,0.02);
+  background: rgba(0,0,0,0.4);
+  box-shadow:
+    inset 3px 3px 8px var(--nm-shadow),
+    inset -1px -1px 0 var(--nm-edge);
 }
+/* The clay buttons cast a hard offset shadow in a colour darker than their own gradient.
+   #001040 on the light page reads as depth; on the dark page it is the page, so the button
+   loses its footing. A translucent black keeps the same solid-offset language and works on
+   whatever it happens to sit on. */
+:root[data-theme="dark"] .clay-btn-primary { box-shadow: 5px 5px 0 rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.18); }
+:root[data-theme="dark"] .clay-btn-primary:hover { box-shadow: 7px 7px 0 rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.18); }
+:root[data-theme="dark"] .clay-btn-primary:active { box-shadow: 2px 2px 0 rgba(0,0,0,0.55); }
+:root[data-theme="dark"] .clay-btn-gold { box-shadow: 5px 5px 0 rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.38); }
+:root[data-theme="dark"] .clay-btn-gold:hover { box-shadow: 7px 7px 0 rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.38); }
+:root[data-theme="dark"] .clay-btn-gold:active { box-shadow: 2px 2px 0 rgba(0,0,0,0.5); }
+:root[data-theme="dark"] .clay-btn-danger { box-shadow: 5px 5px 0 rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.18); }
+:root[data-theme="dark"] .clay-btn-danger:hover { box-shadow: 7px 7px 0 rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.18); }
+:root[data-theme="dark"] .clay-btn-danger:active { box-shadow: 2px 2px 0 rgba(0,0,0,0.55); }
+/* Badges carry the same soft white bloom as the cards did. */
+:root[data-theme="dark"] .clay-badge { box-shadow: 2px 2px 6px rgba(0,0,0,0.35); }
 
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(10px); }
@@ -92,11 +229,14 @@ body {
 :root[data-theme="dark"] .stat-tile {
   /* Darken the pastel toward the surface so tiles read on the dark theme while keeping their hue */
   background: color-mix(in srgb, var(--tile-bg) 20%, var(--surface));
-  box-shadow: 8px 8px 20px rgba(0,0,0,0.45), -5px -5px 14px rgba(255,255,255,0.03), inset 0 1px 0 rgba(255,255,255,0.04);
+  box-shadow:
+    10px 10px 26px var(--nm-shadow),
+    -1px -1px 0 var(--nm-edge),
+    inset 0 1px 0 var(--nm-edge-top);
 }
 :root[data-theme="dark"] .stat-tile-icon {
   background: rgba(255,255,255,0.09);
-  box-shadow: none;
+  box-shadow: inset 0 1px 0 var(--nm-edge-top);
 }
 :root[data-theme="dark"] .stat-tile-label { color: var(--text-muted); }
 :root[data-theme="dark"] .stat-tile-value { color: var(--text-strong); }
@@ -259,9 +399,14 @@ body {
   box-shadow: 4px 4px 10px rgba(163, 177, 198, 0.4), -3px -3px 7px rgba(255, 255, 255, 0.8);
 }
 :root[data-theme="dark"] .mini-stat {
-  box-shadow: 3px 3px 9px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  box-shadow: 4px 4px 12px var(--nm-shadow-soft), inset 0 1px 0 rgba(255, 255, 255, 0.12);
   filter: saturate(0.78) brightness(0.92);
 }
+
+/* The "Live · 2m ago" chip on Data Visualization. A pale mint chip is right on the
+   light page and glares on the dark one, so the tint follows the theme. */
+.live-badge { background: #d4f5e2; color: #0a5a3a; }
+:root[data-theme="dark"] .live-badge { background: rgba(16, 160, 96, 0.18); color: #6ee0ab; }
 
 /* ═══ PAGE SHELL ═══
    Every routed page opens with `.page-shell`. It owns the outer padding and stops the
@@ -334,6 +479,17 @@ body {
     max-height: calc(100dvh - 110px);
     overflow-y: auto;
     overscroll-behavior: contain;
+
+    /* `overflow-y: auto` clips on *both* axes, and a .clay-card throws its shadow
+       10px right and 26px past that. Without room inside the scroll box the drop
+       shadow is sliced off flush against the rail's edge. The padding buys that
+       room; the negative margin gives it back so the rail still lines up with the
+       shell. Same story below the last card, hence the block padding. */
+    padding-right: 18px;
+    margin-right: -18px;
+    padding-bottom: 30px;
+    margin-bottom: -30px;
+    padding-top: 4px;
   }
 }
 
@@ -660,6 +816,20 @@ body.modal-open { overflow: hidden; }
   min-height: 44px;
 }
 
+/* Compact controls (filters, pickers) set a height inline — 34px, 36px, 40px. With
+   11px of block padding on a border-box element the content box drops to ~12px and
+   the glyphs get sheared off at the top and bottom. Single-line inputs and selects
+   centre their own text vertically, so they don't need the block padding at all and
+   stay legible at any height the page asks for. Textareas and file inputs lay their
+   content out from the top, so those keep it. */
+input.clay-input,
+select.clay-input {
+  padding-block: 0;
+}
+input[type="file"].clay-input {
+  padding-block: 10px;
+}
+
 .clay-input:focus {
   box-shadow:
     inset 5px 5px 12px rgba(163, 177, 198, 0.56),
@@ -701,6 +871,29 @@ select.clay-input {
   text-transform: uppercase;
 }
 
+/* Status pill. One rule, six tones, no inline colours — so a theme change reaches every
+   badge in the app instead of the ones a fix pass happened to visit. See StatusBadge.jsx. */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  background: var(--tone-bg);
+  color: var(--tone-fg);
+  border: 1px solid var(--tone-border);
+}
+
+.tone-ok        { --tone-bg: var(--tone-ok-bg);        --tone-fg: var(--tone-ok-fg);        --tone-border: var(--tone-ok-border); }
+.tone-warn      { --tone-bg: var(--tone-warn-bg);      --tone-fg: var(--tone-warn-fg);      --tone-border: var(--tone-warn-border); }
+.tone-bad       { --tone-bg: var(--tone-bad-bg);       --tone-fg: var(--tone-bad-fg);       --tone-border: var(--tone-bad-border); }
+.tone-info      { --tone-bg: var(--tone-info-bg);      --tone-fg: var(--tone-info-fg);      --tone-border: var(--tone-info-border); }
+.tone-attention { --tone-bg: var(--tone-attention-bg); --tone-fg: var(--tone-attention-fg); --tone-border: var(--tone-attention-border); }
+.tone-neutral   { --tone-bg: var(--tone-neutral-bg);   --tone-fg: var(--tone-neutral-fg);   --tone-border: var(--tone-neutral-border); }
+
 .badge-pending    { background: #fef3c7; color: #78450a; }
 .badge-verified   { background: #d1fae5; color: #065f46; }
 .badge-incomplete { background: #fee2e2; color: #991b1b; }
@@ -709,6 +902,71 @@ select.clay-input {
 .badge-admin      { background: #ede9fe; color: #4c1d95; }
 .badge-coord      { background: #dbeafe; color: #1e3a8a; }
 .badge-scholar    { background: #fef3c7; color: #78450a; }
+
+/* Notification dropdown rows. The unread tint and the hover were assigned imperatively and
+   hardcoded `rgba(0,48,135,…)` — PSU blue, which is invisible on the dark dropdown. Both now
+   come off --accent-wash, which the dark theme already lifts. */
+.notif-row {
+  background: transparent;
+  transition: background 0.12s ease;
+}
+.notif-row.is-unread { background: var(--accent-wash); }
+.notif-row:hover,
+.notif-row:focus-visible { background: var(--accent-soft-bg); }
+
+/* ═══ SIDEBAR HOVER ═══
+   These states used to be written as onMouseEnter/onMouseLeave handlers assigning to
+   element.style. Two problems with that: the style is imperative, so any re-render while
+   the pointer is over the element wipes it and the control reads as un-hovered until the
+   mouse moves again; and a hover expressed in JS cannot answer a media query, so it can
+   never be themed, respect prefers-reduced-motion, or apply to :focus-visible. As classes
+   they get keyboard focus styling for free, which is the point of §6.3 as much as this one.
+
+   Fixed rgba values are correct here: the sidebar is the same deep navy in both themes. */
+.sidebar-btn {
+  background: rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.55);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.sidebar-btn:hover,
+.sidebar-btn:focus-visible {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+.sidebar-btn-danger {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.38);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.sidebar-btn-danger:hover,
+.sidebar-btn-danger:focus-visible {
+  background: rgba(255, 60, 60, 0.12);
+  color: #ff8888;
+}
+
+/* The icon-only variant starts dimmer and, when destructive, starts red-tinted. */
+.sidebar-icon-btn { color: rgba(255, 255, 255, 0.5); }
+.sidebar-icon-btn.is-danger { color: rgba(255, 160, 160, 0.7); }
+.sidebar-icon-btn.is-danger:hover,
+.sidebar-icon-btn.is-danger:focus-visible {
+  background: rgba(255, 60, 60, 0.15);
+  color: #ff8888;
+}
+
+.sidebar-chip {
+  background: rgba(255, 255, 255, 0.1);
+  transition: background 0.15s ease;
+}
+.sidebar-chip:hover,
+.sidebar-chip:focus-visible { background: rgba(255, 255, 255, 0.18); }
+
+/* Nav rows carry their selected state inline (a gold gradient wash), so only the
+   unselected ones take a hover. */
+.sidebar-nav-item:not(.is-active):hover,
+.sidebar-nav-item:not(.is-active):focus-visible {
+  background: rgba(255, 255, 255, 0.055);
+}
 
 /* ═══ SIDEBAR ═══ */
 .clay-sidebar {

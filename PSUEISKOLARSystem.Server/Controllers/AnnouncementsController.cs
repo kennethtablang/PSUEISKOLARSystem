@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PSUEISKOLARSystem.Server.Data;
+using PSUEISKOLARSystem.Server.DTOs.Announcements;
 using PSUEISKOLARSystem.Server.Interfaces;
 using PSUEISKOLARSystem.Server.Models;
 using PSUEISKOLARSystem.Server.Models.Enums;
@@ -15,88 +16,15 @@ namespace PSUEISKOLARSystem.Server.Controllers
     [Authorize]
     public class AnnouncementsController(ApplicationDbContext db, IAnnouncementDelivery delivery, IFileStorageService storage) : ControllerBase
     {
+        // Visibility and shape both live in AnnouncementFeed — the dashboard renders the same
+        // list, and two copies of a targeting rule is one copy that eventually leaks.
         [HttpGet]
-        public async Task<IActionResult> GetAll()
-        {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-            var role = User.FindFirstValue(ClaimTypes.Role);
-
-            var now = DateTime.UtcNow;
-
-            // Admins and coordinators see all active announcements for management.
-            // Scholars see only what is targeted at them.
-            var isManager = role == UserRoles.Administrator || role == UserRoles.ScholarshipCoordinator;
-
-            int? scholarshipTypeId = null;
-            int? programId = null;
-
-            if (!isManager)
-            {
-                var profile = await db.ScholarProfiles
-                    .Where(sp => sp.UserId == userId)
-                    .Select(sp => new { sp.ScholarshipTypeId, sp.ProgramId })
-                    .FirstOrDefaultAsync();
-                scholarshipTypeId = profile?.ScholarshipTypeId;
-                programId = profile?.ProgramId;
-            }
-
-            var query = db.Announcements
-                .Include(a => a.CreatedBy)
-                .Include(a => a.TargetScholarshipType)
-                .Include(a => a.TargetProgram)
-                .Include(a => a.Recipients)
-                    .ThenInclude(r => r.Scholar)
-                .Where(a =>
-                    a.IsActive &&
-                    (a.ExpiresAt == null || a.ExpiresAt > now));
-
-            if (!isManager)
-            {
-                // A scheduled announcement stays invisible to its audience until it is due —
-                // managers still see it in the list, badged as Scheduled.
-                query = query.Where(a => a.PublishAt == null || a.PublishAt <= now);
-
-                // An announcement addressed to named scholars reaches exactly those scholars;
-                // one with no named recipients falls back to the audience filters.
-                query = query.Where(a =>
-                    a.Recipients.Any()
-                        ? a.Recipients.Any(r => r.ScholarId == userId)
-                        : (a.TargetRole == null || a.TargetRole == role) &&
-                          (a.TargetScholarshipTypeId == null || a.TargetScholarshipTypeId == scholarshipTypeId) &&
-                          (a.TargetProgramId == null || a.TargetProgramId == programId));
-            }
-
-            var announcements = await query
-                // Sort by when the announcement actually reaches people, so a scheduled post
-                // sits at the top of the manager's list until it goes out.
-                .OrderByDescending(a => a.PublishAt ?? a.CreatedAt)
-                .ToListAsync();
-
-            return Ok(announcements.Select(a => new
-            {
-                a.Id,
-                a.Title,
-                a.Content,
-                a.TargetRole,
-                TargetScholarshipType = a.TargetScholarshipType?.Name,
-                TargetProgram = a.TargetProgram?.Name,
-                a.ExpiresAt,
-                a.PublishAt,
-                a.IsScheduled,
-                a.IntentAction,
-                HasImage = a.ImagePath != null,
-                a.CreatedAt,
-                // Managers get the named audience back so the editor can prefill it.
-                RecipientIds = isManager ? a.Recipients.Select(r => r.ScholarId).ToList() : [],
-                RecipientNames = isManager
-                    ? a.Recipients.Select(r => r.Scholar.FullName).OrderBy(n => n).ToList()
-                    : [],
-                RecipientCount = a.Recipients.Count,
-                CreatedBy = a.CreatedBy.MiddleName != null
-                    ? a.CreatedBy.FirstName + " " + a.CreatedBy.MiddleName + " " + a.CreatedBy.LastName
-                    : a.CreatedBy.FirstName + " " + a.CreatedBy.LastName,
-            }));
-        }
+        public async Task<ActionResult<IReadOnlyList<AnnouncementDto>>> GetAll(CancellationToken ct)
+            => Ok(await AnnouncementFeed.LoadAsync(
+                db,
+                User.FindFirstValue(ClaimTypes.NameIdentifier)!,
+                User.FindFirstValue(ClaimTypes.Role),
+                ct));
 
         [HttpPost]
         [Authorize(Roles = $"{UserRoles.Administrator},{UserRoles.ScholarshipCoordinator}")]
@@ -261,7 +189,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
             try
             {
-                var (stored, _) = await storage.SaveAsync(file);
+                var (stored, _) = await storage.SaveAsync(file, FileUploadPolicy.Images);
                 if (announcement.ImagePath is not null)
                     await storage.DeleteAsync(announcement.ImagePath);
                 announcement.ImagePath = stored;

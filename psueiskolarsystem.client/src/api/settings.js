@@ -1,41 +1,17 @@
+import { apiGet, apiSend } from './_client';
+
 export async function getActiveSemester(token) {
-  const res = await fetch('/api/active-semester', {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error('Failed to load active semester.');
-  return res.json();
+  return apiGet('/api/active-semester', token, 'Failed to load active semester.');
 }
 
 export async function setActiveSemester(data, token) {
-  const res = await fetch('/api/active-semester', {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || 'Failed to update active semester.');
-  }
-  return res.json();
+  return apiSend('/api/active-semester', 'PUT', data, token, 'Failed to update active semester.');
 }
 
 export async function getMessagingSettings(token) {
-  const res = await fetch('/api/messaging-settings', {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error('Failed to load messaging settings.');
-  return res.json();
+  return apiGet('/api/messaging-settings', token, 'Failed to load messaging settings.');
 }
 
 export async function setMessagingSettings(data, token) {
-  const res = await fetch('/api/messaging-settings', {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || 'Failed to update messaging settings.');
-  }
-  return res.json();
+  return apiSend('/api/messaging-settings', 'PUT', data, token, 'Failed to update messaging settings.');
 }

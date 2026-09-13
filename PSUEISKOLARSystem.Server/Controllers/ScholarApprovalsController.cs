@@ -3,9 +3,11 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PSUEISKOLARSystem.Server.Data;
+using PSUEISKOLARSystem.Server.DTOs;
 using PSUEISKOLARSystem.Server.Interfaces;
 using PSUEISKOLARSystem.Server.Models;
 using PSUEISKOLARSystem.Server.Models.Enums;
+using PSUEISKOLARSystem.Server.Services;
 
 namespace PSUEISKOLARSystem.Server.Controllers
 {
@@ -20,7 +22,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
     public class ScholarApprovalsController(
         ApplicationDbContext db,
         INotificationService notifications,
-        IEmailService emailService) : ControllerBase
+        BackgroundEmailer mail) : ControllerBase
     {
         // GET /api/scholar-approvals?status=Pending&search=&page=1&pageSize=20
         [HttpGet]
@@ -179,14 +181,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 };
             });
 
-            return Ok(new
-            {
-                total,
-                page,
-                pageSize,
-                totalPages = (int)Math.Ceiling(total / (double)pageSize),
-                items,
-            });
+            return Ok(PagedResult<object>.From(items.ToList(), total, page, pageSize));
         }
 
         // GET /api/scholar-approvals/pending-count  — sidebar / dashboard badge
@@ -270,8 +265,10 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
             if (user.Email is not null)
             {
-                _ = emailService.SendScholarApprovalDecisionAsync(
-                    user.Email, user.FullName, approved, profile?.ScholarshipType?.Name, user.ApprovalNote);
+                var typeName = profile?.ScholarshipType?.Name;
+                mail.Queue($"approval decision to {user.Email}", email =>
+                    email.SendScholarApprovalDecisionAsync(
+                        user.Email!, user.FullName, approved, typeName, user.ApprovalNote));
             }
 
             _ = notifications.BroadcastAsync("AnalyticsChanged");

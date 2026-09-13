@@ -300,7 +300,7 @@ export default function ResetPasswordPage() {
           <Logo size={40} shadow="0 3px 0px rgba(0,37,112,0.35)" />
           <div>
             <p className="font-black text-base leading-tight" style={{ color: 'var(--text-strong)' }}>e-Iskolar</p>
-            <p className="text-xs" style={{ color: '#7a8aaa' }}>Lingayen Campus</p>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Lingayen Campus</p>
           </div>
         </div>
 
@@ -320,8 +320,8 @@ export default function ResetPasswordPage() {
             {success ? (
               <div className="text-center py-2">
                 <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4"
-                  style={{ background: 'rgba(0,48,135,0.08)', border: '2px solid rgba(0,48,135,0.15)' }}>
-                  <ShieldCheck size={26} color="#002570" strokeWidth={2} />
+                  style={{ background: 'var(--accent-wash)', border: '2px solid rgba(0,48,135,0.15)' }}>
+                  <ShieldCheck size={26} style={{ color: 'var(--accent-strong)' }} strokeWidth={2} />
                 </div>
                 <p className="font-black text-lg mb-1" style={{ color: 'var(--text-strong)' }}>Password Updated!</p>
                 <p className="text-sm mb-6" style={{ color: 'var(--text)' }}>
@@ -338,7 +338,7 @@ export default function ResetPasswordPage() {
               <>
                 {(!email || !token) && (
                   <div className="mb-5 flex items-start gap-2.5 p-3.5 rounded-2xl text-sm"
-                    style={{ background: '#fff0f0', color: '#b03030', border: '1.5px solid #f5b0b0' }}>
+                    style={{ background: 'var(--danger-bg)', color: 'var(--danger)', border: '1.5px solid var(--danger-border)' }}>
                     <AlertTriangle size={14} strokeWidth={2.5} className="mt-px shrink-0" />
                     <span>Invalid or missing reset link. Please request a new one from the login page.</span>
                   </div>
@@ -346,7 +346,7 @@ export default function ResetPasswordPage() {
 
                 {error && (
                   <div className="mb-5 flex items-start gap-2.5 p-3.5 rounded-2xl text-sm"
-                    style={{ background: '#fff0f0', color: '#b03030', border: '1.5px solid #f5b0b0' }}>
+                    style={{ background: 'var(--danger-bg)', color: 'var(--danger)', border: '1.5px solid var(--danger-border)' }}>
                     <AlertTriangle size={14} strokeWidth={2.5} className="mt-px shrink-0" />
                     <span>{error}</span>
                   </div>
@@ -356,15 +356,16 @@ export default function ResetPasswordPage() {
 
                   {/* New Password */}
                   <div>
-                    <label className="block text-xs font-bold mb-2 uppercase tracking-wider"
+                    <label htmlFor="reset-new-password" className="block text-xs font-bold mb-2 uppercase tracking-wider"
                       style={{ color: 'var(--text)' }}>
                       New Password
                     </label>
                     <div className="relative">
                       <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
-                        <Lock size={15} color="#7a8aaa" strokeWidth={2} />
+                        <Lock size={15} style={{ color: 'var(--text-muted)' }} strokeWidth={2} />
                       </span>
                       <input
+                        id="reset-new-password"
                         type="password"
                         required
                         minLength={8}
@@ -382,15 +383,16 @@ export default function ResetPasswordPage() {
 
                   {/* Confirm Password */}
                   <div>
-                    <label className="block text-xs font-bold mb-2 uppercase tracking-wider"
+                    <label htmlFor="reset-confirm-password" className="block text-xs font-bold mb-2 uppercase tracking-wider"
                       style={{ color: 'var(--text)' }}>
                       Confirm Password
                     </label>
                     <div className="relative">
                       <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
-                        <Lock size={15} color="#7a8aaa" strokeWidth={2} />
+                        <Lock size={15} style={{ color: 'var(--text-muted)' }} strokeWidth={2} />
                       </span>
                       <input
+                        id="reset-confirm-password"
                         type="password"
                         required
                         minLength={8}

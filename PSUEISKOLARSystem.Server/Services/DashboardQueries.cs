@@ -1,0 +1,222 @@
+using Microsoft.EntityFrameworkCore;
+using PSUEISKOLARSystem.Server.Data;
+using PSUEISKOLARSystem.Server.DTOs.Dashboard;
+using PSUEISKOLARSystem.Server.Models.Enums;
+
+namespace PSUEISKOLARSystem.Server.Services
+{
+    /// <summary>
+    /// Assembles the dashboard for one user, server-side.
+    /// <para>
+    /// This replaces eleven client-issued round trips with one. Beyond the latency, it removes
+    /// a class of bug the page could not avoid: with each card fetching independently, a slow
+    /// or failing call left the screen half-rendered, and the scholar's compliance figures were
+    /// computed in the browser by cross-referencing three separate responses — so a requirement
+    /// list that arrived from a different moment than the submission list could disagree with
+    /// itself.
+    /// </para>
+    /// </summary>
+    public sealed class DashboardQueries(ApplicationDbContext db, AnalyticsQueries analytics)
+    {
+        public async Task<DashboardDto> ForScholarAsync(string userId, string role, CancellationToken ct = default)
+        {
+            var announcements = await AnnouncementFeed.LoadAsync(db, userId, role, ct);
+
+            var profile = await db.ScholarProfiles
+                .Where(sp => sp.UserId == userId)
+                .Select(sp => new
+                {
+                    sp.Id,
+                    sp.ScholarshipTypeId,
+                    ScholarshipTypeName = sp.ScholarshipType != null ? sp.ScholarshipType.Name : null,
+                    MinimumGwa = sp.ScholarshipType != null ? (decimal?)sp.ScholarshipType.MinimumGwa : null,
+                })
+                .FirstOrDefaultAsync(ct);
+
+            var active = await db.ActiveSemesters.AsNoTracking().FirstOrDefaultAsync(ct);
+            var academicYear = active?.AcademicYear ?? CurrentAcademicYear();
+            var semester = active?.Semester ?? 1;
+
+            var requirements = await ApplicableRequirementsAsync(profile?.ScholarshipTypeId, ct);
+            var requirementIds = requirements.Select(r => r.Id).ToList();
+
+            var submissions = await db.DocumentSubmissions
+                .Where(s => s.ScholarId == userId && s.AcademicYear == academicYear)
+                .Select(s => new { s.RequirementId, s.Status, s.SubmittedAt })
+                .ToListAsync(ct);
+
+            /* A requirement can legitimately hold more than one row for a period — an
+               Incomplete one the scholar has since replaced sits alongside the new Pending one
+               (that is exactly what the filtered unique index permits). The scholar's standing
+               is whichever came last, so order it rather than trusting the order rows come back
+               in. */
+            var latestByRequirement = submissions
+                .GroupBy(s => s.RequirementId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.OrderByDescending(s => s.SubmittedAt).First().Status);
+
+            var compliance = new ComplianceDto(
+                TotalRequired: requirements.Count(r => r.IsRequired),
+                VerifiedCount: submissions.Count(s => s.Status == DocumentStatus.Verified),
+                PendingCount: submissions.Count(s => s.Status == DocumentStatus.Pending),
+                IncompleteItems: requirements
+                    .Where(r => latestByRequirement.TryGetValue(r.Id, out var status)
+                                && status == DocumentStatus.Incomplete)
+                    .Select(r => r.Name)
+                    .ToList(),
+                ScholarshipTypeName: profile?.ScholarshipTypeName,
+                AcademicYear: academicYear);
+
+            // Still open: applicable to this scholar, not yet verified, and not yet due.
+            var verified = latestByRequirement
+                .Where(kv => kv.Value == DocumentStatus.Verified)
+                .Select(kv => kv.Key)
+                .ToHashSet();
+
+            var now = DateTime.UtcNow;
+            var deadlines = await db.SubmissionDeadlines
+                .Where(d => d.AcademicYear == academicYear
+                         && d.Semester == semester
+                         && d.DueDate > now
+                         && requirementIds.Contains(d.RequirementId)
+                         && !verified.Contains(d.RequirementId))
+                .OrderBy(d => d.DueDate)
+                .Take(3)
+                .Select(d => new UpcomingDeadlineDto(d.Id, d.RequirementId, d.Requirement.Name, d.DueDate))
+                .ToListAsync(ct);
+
+            ScholarGwaDto? gwa = null;
+            if (profile is not null)
+            {
+                var latest = await db.AcademicGrades
+                    .Where(g => g.ScholarProfileId == profile.Id)
+                    .OrderByDescending(g => g.AcademicYear).ThenByDescending(g => g.Semester)
+                    .Select(g => new { g.Gwa, g.MeetsRequirement })
+                    .FirstOrDefaultAsync(ct);
+
+                if (latest is not null)
+                    gwa = new ScholarGwaDto(
+                        latest.Gwa, profile.MinimumGwa, profile.ScholarshipTypeName, latest.MeetsRequirement);
+            }
+
+            return new DashboardDto(role, announcements, new ScholarDashboardDto(compliance, gwa, deadlines), null);
+        }
+
+        public async Task<DashboardDto> ForStaffAsync(string userId, string role, CancellationToken ct = default)
+        {
+            var isAdmin = role == UserRoles.Administrator;
+
+            var announcements = await AnnouncementFeed.LoadAsync(db, userId, role, ct);
+            var overview = await analytics.OverviewAsync(ct: ct);
+
+            var scholarRoleId = await db.Roles
+                .Where(r => r.Name == UserRoles.Scholar)
+                .Select(r => r.Id)
+                .FirstOrDefaultAsync(ct);
+
+            var pendingApprovals = await db.Users
+                .CountAsync(u => u.ApprovalStatus == ApprovalStatuses.Pending &&
+                                 db.UserRoles.Any(ur => ur.RoleId == scholarRoleId && ur.UserId == u.Id), ct);
+
+            // Scholars whose scholarship needs a renewal decision. One count, not the two
+            // paged list calls the page used to make just to read their totals.
+            var renewalCount = await db.ScholarProfiles
+                .CountAsync(sp => sp.LifecycleStatus == LifecycleStatuses.Lapsed
+                               || sp.LifecycleStatus == LifecycleStatuses.Suspended, ct);
+
+            int? coordinators = null;
+            if (isAdmin)
+            {
+                var coordRoleId = await db.Roles
+                    .Where(r => r.Name == UserRoles.ScholarshipCoordinator)
+                    .Select(r => r.Id)
+                    .FirstOrDefaultAsync(ct);
+
+                coordinators = await db.Users
+                    .CountAsync(u => u.IsActive &&
+                                     db.UserRoles.Any(ur => ur.RoleId == coordRoleId && ur.UserId == u.Id), ct);
+            }
+
+            var grantBuckets = await db.OneTimeGrants
+                .GroupBy(g => g.ReleaseStatus)
+                .Select(g => new { Status = g.Key, Count = g.Count(), Amount = g.Sum(x => x.Amount) })
+                .ToListAsync(ct);
+
+            decimal AmountFor(string s) => grantBuckets.FirstOrDefault(g => g.Status == s)?.Amount ?? 0m;
+            int CountFor(string s) => grantBuckets.FirstOrDefault(g => g.Status == s)?.Count ?? 0;
+
+            var grants = new GrantSummaryDto(
+                grantBuckets.Sum(g => g.Count),
+                grantBuckets.Sum(g => g.Amount),
+                CountFor(GrantReleaseStatuses.Pending),
+                AmountFor(GrantReleaseStatuses.Pending),
+                CountFor(GrantReleaseStatuses.Released),
+                AmountFor(GrantReleaseStatuses.Released),
+                CountFor(GrantReleaseStatuses.Cancelled));
+
+            var activity = await RecentActivityAsync(8, ct);
+
+            return new DashboardDto(role, announcements, null,
+                new StaffDashboardDto(overview, coordinators, renewalCount, pendingApprovals, grants, activity));
+        }
+
+        /// <summary>
+        /// The requirements a scholar on <paramref name="scholarshipTypeId"/> must satisfy,
+        /// with the same fallback <c>DocumentRequirementsController.GetAll</c> applies: a type
+        /// with no configured links sees the whole catalogue.
+        /// </summary>
+        private async Task<List<RequirementRow>> ApplicableRequirementsAsync(int? scholarshipTypeId, CancellationToken ct)
+        {
+            var query = db.DocumentRequirements.Where(dr => dr.IsActive);
+
+            if (scholarshipTypeId is int typeId)
+            {
+                var linkedIds = await db.ScholarshipTypeRequirements
+                    .Where(str => str.ScholarshipTypeId == typeId)
+                    .Select(str => str.RequirementId)
+                    .ToListAsync(ct);
+
+                if (linkedIds.Count > 0)
+                    query = query.Where(dr => linkedIds.Contains(dr.Id));
+            }
+
+            return await query
+                .Select(dr => new RequirementRow(dr.Id, dr.Name, dr.IsRequired))
+                .ToListAsync(ct);
+        }
+
+        private async Task<List<ActivityEntryDto>> RecentActivityAsync(int take, CancellationToken ct)
+        {
+            var logs = await db.AuditLogs
+                .OrderByDescending(l => l.TimestampUtc)
+                .Take(take)
+                .Select(l => new { l.Id, l.UserId, l.Action, l.Details, l.TimestampUtc })
+                .ToListAsync(ct);
+
+            var userIds = logs.Select(l => l.UserId).Distinct().ToList();
+            var names = await db.Users
+                .Where(u => userIds.Contains(u.Id))
+                .Select(u => new { u.Id, u.FirstName, u.LastName })
+                .ToDictionaryAsync(u => u.Id, u => $"{u.FirstName} {u.LastName}".Trim(), ct);
+
+            return logs
+                .Select(l => new ActivityEntryDto(
+                    l.Id, names.GetValueOrDefault(l.UserId, "System"), l.Action, l.Details, l.TimestampUtc))
+                .ToList();
+        }
+
+        /// <summary>
+        /// Fallback academic year when no active semester is set. The PSU year turns over in
+        /// August, so anything from August on belongs to the year that starts this calendar year.
+        /// </summary>
+        private static string CurrentAcademicYear()
+        {
+            var now = DateTime.UtcNow;
+            var start = now.Month >= 8 ? now.Year : now.Year - 1;
+            return $"{start}-{start + 1}";
+        }
+
+        private sealed record RequirementRow(int Id, string Name, bool IsRequired);
+    }
+}

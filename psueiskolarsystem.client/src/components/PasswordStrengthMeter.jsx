@@ -14,7 +14,7 @@ export function getPasswordStrength(pw) {
 }
 
 const LEVELS = [
-  { label: 'Very weak', color: '#dc2626' },
+  { label: 'Very weak', color: 'var(--danger)' },
   { label: 'Weak',      color: '#e0533a' },
   { label: 'Fair',      color: '#e0a000' },
   { label: 'Good',      color: '#3b9a4a' },
@@ -63,8 +63,8 @@ export default function PasswordStrengthMeter({ password, showRules = true }) {
             <div key={key} className="flex items-center gap-1.5 text-xs">
               {checks[key]
                 ? <CheckCircle size={12} color="#16a34a" strokeWidth={2.5} />
-                : <XCircle size={12} color="#9aaabb" strokeWidth={2.5} />}
-              <span style={{ color: checks[key] ? '#16a34a' : '#9aaabb' }}>{label}</span>
+                : <XCircle size={12} style={{ color: 'var(--text-faint)' }} strokeWidth={2.5} />}
+              <span style={{ color: checks[key] ? 'var(--tone-ok-fg)' : 'var(--text-faint)' }}>{label}</span>
             </div>
           ))}
         </div>

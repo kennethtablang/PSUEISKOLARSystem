@@ -46,7 +46,7 @@ export default function ConfirmDialog({
             style={{
               width: 40, height: 40,
               background: danger ? 'rgba(220,38,38,0.12)' : 'rgba(0,48,135,0.10)',
-              color: danger ? '#dc2626' : '#003087',
+              color: danger ? 'var(--danger)' : 'var(--accent)',
             }}
           >
             <AlertTriangle size={20} strokeWidth={2.4} />
