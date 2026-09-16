@@ -123,6 +123,22 @@ namespace PSUEISKOLARSystem.Server.Controllers
             });
         }
 
+        private string ActorId => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+
+        /// <summary>
+        /// Whether <paramref name="user"/> is the only active Administrator left. Removing,
+        /// archiving, or demoting that account would leave nobody able to reach User
+        /// Management, Settings, or the Activity Log — a lockout only a database edit undoes.
+        /// </summary>
+        private async Task<bool> IsLastActiveAdministratorAsync(ApplicationUser user)
+        {
+            if (!user.IsActive || !await userManager.IsInRoleAsync(user, UserRoles.Administrator))
+                return false;
+
+            var admins = await userManager.GetUsersInRoleAsync(UserRoles.Administrator);
+            return admins.Count(a => a.IsActive) <= 1;
+        }
+
         [HttpPut("{id}")]
         public async Task<IActionResult> Update(string id, UpdateUserDto dto)
         {
@@ -131,6 +147,15 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
             if (!await db.Roles.AnyAsync(r => r.Name == dto.Role))
                 return BadRequest(new { message = $"Role '{dto.Role}' does not exist." });
+
+            var currentRoles = await userManager.GetRolesAsync(user);
+            var roleChanged = !(currentRoles.Count == 1 && currentRoles[0] == dto.Role);
+
+            if (roleChanged && id == ActorId)
+                return BadRequest(new { message = "You cannot change your own role. Ask another administrator to do it." });
+
+            if (roleChanged && dto.Role != UserRoles.Administrator && await IsLastActiveAdministratorAsync(user))
+                return BadRequest(new { message = "This is the only active administrator. Promote another user to Administrator first." });
 
             // Email / login change — enforce uniqueness, keep the account confirmed.
             var newEmail = dto.Email.Trim();
@@ -150,13 +175,27 @@ namespace PSUEISKOLARSystem.Server.Controllers
             user.MiddleName = string.IsNullOrWhiteSpace(dto.MiddleName) ? null : dto.MiddleName.Trim();
             user.LastName = dto.LastName.Trim();
 
-            var currentRoles = await userManager.GetRolesAsync(user);
-            await userManager.RemoveFromRolesAsync(user, currentRoles);
-            await userManager.AddToRoleAsync(user, dto.Role);
+            /* The result used to be discarded, so a rejected update (an email Identity refuses,
+               a concurrency conflict) still answered 204 and the admin saw "saved". */
+            var updated = await userManager.UpdateAsync(user);
+            if (!updated.Succeeded)
+                return BadRequest(new { message = string.Join(" ", updated.Errors.Select(e => e.Description)) });
 
-            await userManager.UpdateAsync(user);
+            if (roleChanged)
+            {
+                var removed = await userManager.RemoveFromRolesAsync(user, currentRoles);
+                var added = removed.Succeeded ? await userManager.AddToRoleAsync(user, dto.Role) : removed;
+                if (!added.Succeeded)
+                    return BadRequest(new { message = string.Join(" ", added.Errors.Select(e => e.Description)) });
 
-            var actorId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+                /* The role travels inside the JWT, so without this a demoted coordinator kept
+                   staff access until their token expired. Rotating the stamp makes
+                   SessionValidator reject the old token on its next request. */
+                await userManager.UpdateSecurityStampAsync(user);
+                sessions.Invalidate(user.Id);
+            }
+
+            var actorId = ActorId;
             db.AuditLogs.Add(new AuditLog
             {
                 UserId  = actorId,
@@ -173,6 +212,12 @@ namespace PSUEISKOLARSystem.Server.Controllers
         {
             var user = await userManager.FindByIdAsync(id);
             if (user is null) return NotFound(new { message = "User not found." });
+
+            if (!isActive && id == ActorId)
+                return BadRequest(new { message = "You cannot archive your own account." });
+
+            if (!isActive && await IsLastActiveAdministratorAsync(user))
+                return BadRequest(new { message = "This is the only active administrator and cannot be archived." });
 
             user.IsActive = isActive;
             await userManager.UpdateAsync(user);
@@ -222,6 +267,35 @@ namespace PSUEISKOLARSystem.Server.Controllers
             var user = await userManager.FindByIdAsync(id);
             if (user is null) return NotFound(new { message = "User not found." });
 
+            if (id == ActorId)
+                return BadRequest(new { message = "You cannot delete your own account." });
+
+            if (await IsLastActiveAdministratorAsync(user))
+                return BadRequest(new { message = "This is the only active administrator and cannot be deleted." });
+
+            /* Some records name their author in a required column that the database refuses to
+               orphan: announcements, the reviewer on a document's status history, and messages
+               sent into someone else's thread. They are part of the institution's record, so
+               they are not deleted with the account — and before this check the delete simply
+               failed on the foreign key with an unexplained 500. Archiving keeps the history
+               and still revokes access. */
+            var authoredAnnouncements = await db.Announcements.CountAsync(a => a.CreatedById == id);
+            var reviewedHistory = await db.DocumentStatusHistories
+                .CountAsync(h => h.ChangedById == id && h.Submission.ScholarId != id);
+            var sentMessages = await db.Messages.CountAsync(m => m.SenderId == id && m.ScholarId != id);
+
+            if (authoredAnnouncements + reviewedHistory + sentMessages > 0)
+            {
+                var owned = new List<string>();
+                if (authoredAnnouncements > 0) owned.Add($"{authoredAnnouncements} announcement(s)");
+                if (reviewedHistory > 0) owned.Add($"{reviewedHistory} document review(s)");
+                if (sentMessages > 0) owned.Add($"{sentMessages} message(s) to scholars");
+                return Conflict(new
+                {
+                    message = $"{user.FullName} cannot be deleted because they are recorded on {string.Join(", ", owned)}. Archive the account instead to revoke access while keeping that history.",
+                });
+            }
+
             var deletedEmail = user.Email;
             var avatarPath = user.AvatarPath;
 
@@ -234,8 +308,29 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 .Select(ds => ds.StoredFileName)
                 .ToListAsync();
 
+            // The clean-up below is several statements; if the final delete fails, none of it
+            // should stick, or the user survives with their audit links already nulled.
+            await using var transaction = await db.Database.BeginTransactionAsync();
+
+            // A scholar's own conversation goes with them, as their submissions do. Messages
+            // restrict deletes (two FKs into the users table), so they must go first.
+            await db.Messages
+                .Where(m => m.ScholarId == id)
+                .ExecuteDeleteAsync();
+
+            // Likewise the status history of their own submissions: those rows name the
+            // scholar as the uploader through a restricting FK, so they are cleared explicitly
+            // rather than trusting the submission cascade to reach them first.
+            await db.DocumentStatusHistories
+                .Where(h => h.Submission.ScholarId == id)
+                .ExecuteDeleteAsync();
+
             // Null out audit FK fields before deleting to avoid FK constraint violations
             // (ClientSetNull on these columns means EF won't cascade automatically)
+            await db.ScholarshipReleases
+                .Where(r => r.RecordedById == id)
+                .ExecuteUpdateAsync(s => s.SetProperty(r => r.RecordedById, (string?)null));
+
             await db.AcademicGrades
                 .Where(g => g.RecordedById == id)
                 .ExecuteUpdateAsync(s => s.SetProperty(g => g.RecordedById, (string?)null));
@@ -256,6 +351,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             if (!result.Succeeded)
                 return BadRequest(new { message = string.Join("; ", result.Errors.Select(e => e.Description)) });
 
+            await transaction.CommitAsync();
             sessions.Invalidate(id);
 
             // The rows are gone, so nothing points at these files any more. A failure here is

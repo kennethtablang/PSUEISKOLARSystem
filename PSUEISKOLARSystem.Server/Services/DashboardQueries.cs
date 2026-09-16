@@ -40,8 +40,12 @@ namespace PSUEISKOLARSystem.Server.Services
             var requirements = await ApplicableRequirementsAsync(profile?.ScholarshipTypeId, ct);
             var requirementIds = requirements.Select(r => r.Id).ToList();
 
+            /* The active *semester*, not just the year. Filtering on the year alone let a document
+               verified in Semester 1 count toward Semester 2, so the dashboard disagreed with the
+               My Documents checklist (which is per semester) and could report more documents
+               verified than are required. */
             var submissions = await db.DocumentSubmissions
-                .Where(s => s.ScholarId == userId && s.AcademicYear == academicYear)
+                .Where(s => s.ScholarId == userId && s.AcademicYear == academicYear && s.Semester == semester)
                 .Select(s => new { s.RequirementId, s.Status, s.SubmittedAt })
                 .ToListAsync(ct);
 
@@ -56,17 +60,24 @@ namespace PSUEISKOLARSystem.Server.Services
                     g => g.Key,
                     g => g.OrderByDescending(s => s.SubmittedAt).First().Status);
 
+            DocumentStatus? LatestFor(int requirementId) =>
+                latestByRequirement.TryGetValue(requirementId, out var s) ? s : null;
+
+            // Counted per requirement from its latest row, and only over what applies to this
+            // scholar — raw row counts included superseded rows and documents outside the
+            // checklist, so "verified" could exceed "required".
             var compliance = new ComplianceDto(
                 TotalRequired: requirements.Count(r => r.IsRequired),
-                VerifiedCount: submissions.Count(s => s.Status == DocumentStatus.Verified),
-                PendingCount: submissions.Count(s => s.Status == DocumentStatus.Pending),
+                VerifiedCount: requirements.Count(r => r.IsRequired && LatestFor(r.Id) == DocumentStatus.Verified),
+                PendingCount: requirements.Count(r => LatestFor(r.Id) == DocumentStatus.Pending),
                 IncompleteItems: requirements
                     .Where(r => latestByRequirement.TryGetValue(r.Id, out var status)
                                 && status == DocumentStatus.Incomplete)
                     .Select(r => r.Name)
                     .ToList(),
                 ScholarshipTypeName: profile?.ScholarshipTypeName,
-                AcademicYear: academicYear);
+                AcademicYear: academicYear,
+                Semester: semester);
 
             // Still open: applicable to this scholar, not yet verified, and not yet due.
             var verified = latestByRequirement

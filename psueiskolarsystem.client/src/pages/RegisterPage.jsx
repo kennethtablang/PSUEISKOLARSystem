@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { registerScholar, checkEmailAvailable } from '../api/auth';
+import { getPrograms, getScholarshipTypes } from '../api/lookups';
 import { useTitle } from '../hooks/useTitle';
-import { Mail, Lock, User, UserCheck, FolderUp, TrendingUp, Bell, ArrowRight, ArrowLeft, AlertTriangle, GraduationCap, MailCheck, XCircle, ShieldQuestion } from 'lucide-react';
+import { Mail, Lock, User, UserCheck, FolderUp, TrendingUp, Bell, ArrowRight, ArrowLeft, AlertTriangle, GraduationCap, CheckCircle2, XCircle, ShieldQuestion, IdCard, Phone } from 'lucide-react';
 import PasswordStrengthMeter, { getPasswordStrength } from '../components/PasswordStrengthMeter';
 import Logo from '../components/Logo';
 
@@ -13,11 +14,20 @@ const HIGHLIGHTS = [
   { Icon: Bell,       label: 'Announcements',       desc: 'Deadlines and notices in one place' },
 ];
 
+const EMPTY_FORM = {
+  firstName: '', middleName: '', lastName: '',
+  email: '', password: '', confirmPassword: '',
+  // Scholar profile — captured here so the office only reviews it, instead of having to
+  // open each new account and fill the profile in before there is anything to approve.
+  studentId: '', programId: '', yearLevel: '1', scholarshipTypeId: '',
+  contactNumber: '', birthDate: '', address: '',
+};
+
 export default function RegisterPage() {
-  const [form, setForm] = useState({
-    firstName: '', middleName: '', lastName: '',
-    email: '', password: '', confirmPassword: '',
-  });
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [step, setStep]         = useState(1); // 1 = account, 2 = scholar profile
+  const [programs, setPrograms] = useState([]);
+  const [scholarshipTypes, setScholarshipTypes] = useState([]);
   const [error, setError]       = useState('');
   const [success, setSuccess]   = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -47,12 +57,19 @@ export default function RegisterPage() {
     return () => { clearTimeout(t); controller.abort(); };
   }, [form.email]);
 
+  useEffect(() => {
+    getPrograms(null).then(setPrograms).catch(() => setPrograms([]));
+    getScholarshipTypes(null).then(setScholarshipTypes).catch(() => setScholarshipTypes([]));
+  }, []);
+
   function isPasswordValid() {
     const { passed } = getPasswordStrength(form.password);
     return passed === 5;
   }
 
-  async function handleSubmit(e) {
+  /* Step 1 → 2. The account details are checked before moving on, so a password problem
+     is not discovered only after the scholar has filled in the whole profile. */
+  function handleNext(e) {
     e.preventDefault();
     setError('');
 
@@ -69,6 +86,27 @@ export default function RegisterPage() {
       setError('Passwords do not match.');
       return;
     }
+    setStep(2);
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError('');
+
+    if (!/^[A-Za-z0-9-]{3,30}$/.test(form.studentId.trim())) {
+      setError('Student ID may only contain letters, numbers, and hyphens (3–30 characters).');
+      return;
+    }
+    if (!form.programId)         { setError('Select your program.'); return; }
+    if (!form.scholarshipTypeId) { setError('Select the scholarship you are enrolled in.'); return; }
+    if (form.contactNumber && !/^(09\d{9}|\+639\d{9})$/.test(form.contactNumber.trim())) {
+      setError('Contact number must be a valid PH mobile number (e.g. 09171234567).');
+      return;
+    }
+    if (form.birthDate && new Date(form.birthDate) > new Date()) {
+      setError('Birth date cannot be in the future.');
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -76,8 +114,17 @@ export default function RegisterPage() {
         firstName:  form.firstName.trim(),
         middleName: form.middleName.trim() || null,
         lastName:   form.lastName.trim(),
-        email:      form.email,
+        // Trimmed like the live availability check above: a stray trailing space passed that
+        // check, then failed the server's email validation.
+        email:      form.email.trim(),
         password:   form.password,
+        studentId:  form.studentId.trim(),
+        programId:  parseInt(form.programId),
+        yearLevel:  parseInt(form.yearLevel),
+        scholarshipTypeId: parseInt(form.scholarshipTypeId),
+        contactNumber: form.contactNumber.trim() || null,
+        birthDate:  form.birthDate || null,
+        address:    form.address.trim() || null,
       });
       setSuccess(true);
     } catch (err) {
@@ -210,44 +257,41 @@ export default function RegisterPage() {
           <div className="clay-card-modal p-8">
 
             {success ? (
-              /* ── Email Verification Sent State ── */
-              <div className="text-center py-4">
+              /* ── Account Created State ── */
+              <div className="text-center py-4" role="status">
                 <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
-                  style={{ background: 'var(--accent-wash)', border: '2px solid rgba(0,48,135,0.15)' }}>
-                  <MailCheck size={30} style={{ color: 'var(--accent-strong)' }} strokeWidth={1.8} />
+                  style={{ background: 'var(--tone-ok-bg)', border: '2px solid rgba(16,160,96,0.25)' }}>
+                  <CheckCircle2 size={32} style={{ color: 'var(--tone-ok-fg)' }} strokeWidth={1.8} />
                 </div>
-                <p className="font-black text-lg mb-2" style={{ color: 'var(--text-strong)' }}>Check Your Email!</p>
+                <p className="font-black text-lg mb-2" style={{ color: 'var(--text-strong)' }}>Account Created!</p>
                 <p className="text-sm leading-relaxed mb-4" style={{ color: 'var(--text)' }}>
-                  A verification link has been sent to <strong>{form.email}</strong>.
-                  Please click the link in that email to activate your account before signing in.
+                  Your scholar account for <strong>{form.email}</strong> has been created and sent
+                  to the scholarship office for approval.
                 </p>
 
-                {/* Self-registration is verified by the scholarship office before a scholar
-                    can submit documents — set that expectation up front. */}
                 <div className="rounded-2xl p-4 mb-4 text-left flex items-start gap-2.5"
                   style={{ background: 'rgba(0,48,135,0.05)', border: '1px solid rgba(0,48,135,0.15)' }}>
                   <ShieldQuestion size={15} strokeWidth={2.2} className="mt-px shrink-0" style={{ color: 'var(--accent-strong)' }} />
                   <p className="text-xs leading-relaxed" style={{ color: 'var(--text)' }}>
-                    <strong>What happens next:</strong> after verifying your email, sign in and set up
-                    your scholar profile — student ID, program, and the <strong>one</strong> scholarship
-                    you are enrolled in. The scholarship office then reviews your registration. You can
-                    start submitting documents once it is approved.
+                    <strong>Please wait for approval.</strong> A coordinator will review your profile.
+                    You will be notified by email once your registration is approved, and you can then
+                    sign in and start submitting your documents.
                   </p>
                 </div>
 
                 <div className="rounded-2xl p-4 mb-5 text-left"
                   style={{ background: '#fffbea', border: '1px solid rgba(245,184,0,0.35)' }}>
                   <p className="text-xs leading-relaxed" style={{ color: '#7a5c00' }}>
-                    <strong>Can&apos;t find the email?</strong> Check your <strong>spam</strong> or{' '}
-                    <strong>junk</strong> folder. If it&apos;s there, mark it as &quot;Not Spam&quot; so
-                    future emails reach your inbox.
+                    We also sent a verification link to your email. Verifying lets you sign in before
+                    approval. Can&apos;t find it? Check your <strong>spam</strong> or <strong>junk</strong> folder.
                   </p>
                 </div>
 
                 <div className="flex gap-3">
                   <button
                     onClick={() => {
-                      setForm({ firstName: '', middleName: '', lastName: '', email: '', password: '', confirmPassword: '' });
+                      setForm(EMPTY_FORM);
+                      setStep(1);
                       setSuccess(false);
                     }}
                     className="clay-btn clay-btn-ghost flex-1 py-3 text-sm">
@@ -270,8 +314,29 @@ export default function RegisterPage() {
                   </div>
                 )}
 
-                <form onSubmit={handleSubmit} className="space-y-4">
+                {/* Step indicator */}
+                <div className="flex items-center gap-2 mb-5 text-xs font-bold" aria-label={`Step ${step} of 2`}>
+                  {['Account', 'Scholar Profile'].map((label, i) => {
+                    const active = step === i + 1;
+                    const done = step > i + 1;
+                    return (
+                      <div key={label} className="flex items-center gap-2 flex-1">
+                        <span className="w-6 h-6 rounded-full flex items-center justify-center shrink-0"
+                          style={{
+                            background: active || done ? 'var(--accent-strong)' : 'var(--surface-inset)',
+                            color: active || done ? '#fff' : 'var(--text-muted)',
+                          }}>
+                          {i + 1}
+                        </span>
+                        <span style={{ color: active ? 'var(--text-strong)' : 'var(--text-muted)' }}>{label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
 
+                <form onSubmit={step === 1 ? handleNext : handleSubmit} className="space-y-4">
+
+                  {step === 1 && (<>
                   {/* First Name + Last Name */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -426,16 +491,164 @@ export default function RegisterPage() {
 
                   <button
                     type="submit"
-                    disabled={submitting}
-                    className="clay-btn clay-btn-primary w-full py-3.5 text-sm flex items-center justify-center gap-2 mt-2"
-                    style={{ opacity: submitting ? 0.65 : 1 }}>
-                    {submitting ? 'Creating account…' : (
-                      <>
-                        Create Scholar Account
-                        <ArrowRight size={15} strokeWidth={2.5} />
-                      </>
-                    )}
+                    className="clay-btn clay-btn-primary w-full py-3.5 text-sm flex items-center justify-center gap-2 mt-2">
+                    Next: Scholar Profile
+                    <ArrowRight size={15} strokeWidth={2.5} />
                   </button>
+                  </>)}
+
+                  {step === 2 && (<>
+                  <p className="text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+                    The scholarship office reviews these details to approve your registration.
+                    Only a coordinator can change your student ID and program after approval.
+                  </p>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label htmlFor="reg-student-id" className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
+                        Student ID
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
+                          <IdCard size={14} style={{ color: 'var(--text-muted)' }} strokeWidth={2} />
+                        </span>
+                        <input
+                          id="reg-student-id"
+                          type="text"
+                          required
+                          maxLength={30}
+                          value={form.studentId}
+                          onChange={e => set('studentId', e.target.value)}
+                          placeholder="22-LN-0001"
+                          className="clay-input"
+                          style={{ paddingLeft: '36px' }}
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label htmlFor="reg-year-level" className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
+                        Year Level
+                      </label>
+                      <select
+                        id="reg-year-level"
+                        value={form.yearLevel}
+                        onChange={e => set('yearLevel', e.target.value)}
+                        className="clay-input">
+                        {[1, 2, 3, 4, 5].map(y => <option key={y} value={y}>Year {y}</option>)}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="reg-program" className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
+                      Program
+                    </label>
+                    <select
+                      id="reg-program"
+                      required
+                      value={form.programId}
+                      onChange={e => set('programId', e.target.value)}
+                      className="clay-input">
+                      <option value="">— Select Program —</option>
+                      {programs.map(p => <option key={p.id} value={p.id}>{p.name} ({p.code})</option>)}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label htmlFor="reg-scholarship" className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
+                      Scholarship
+                    </label>
+                    <select
+                      id="reg-scholarship"
+                      required
+                      value={form.scholarshipTypeId}
+                      onChange={e => set('scholarshipTypeId', e.target.value)}
+                      className="clay-input">
+                      <option value="">— Select the scholarship you hold —</option>
+                      {scholarshipTypes.map(st => (
+                        <option key={st.id} value={st.id} disabled={st.isFull}>
+                          {st.name}{st.isFull ? ' (full)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                      A student may hold only one scholarship.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label htmlFor="reg-contact" className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
+                        Contact <span style={{ color: 'var(--text-faint)', fontWeight: 400, textTransform: 'none' }}>(optional)</span>
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
+                          <Phone size={14} style={{ color: 'var(--text-muted)' }} strokeWidth={2} />
+                        </span>
+                        <input
+                          id="reg-contact"
+                          type="tel"
+                          value={form.contactNumber}
+                          onChange={e => set('contactNumber', e.target.value)}
+                          placeholder="09171234567"
+                          className="clay-input"
+                          style={{ paddingLeft: '36px' }}
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label htmlFor="reg-birth-date" className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
+                        Birth Date <span style={{ color: 'var(--text-faint)', fontWeight: 400, textTransform: 'none' }}>(optional)</span>
+                      </label>
+                      <input
+                        id="reg-birth-date"
+                        type="date"
+                        value={form.birthDate}
+                        onChange={e => set('birthDate', e.target.value)}
+                        className="clay-input"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="reg-address" className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
+                      Address <span style={{ color: 'var(--text-faint)', fontWeight: 400, textTransform: 'none' }}>(optional)</span>
+                    </label>
+                    <textarea
+                      id="reg-address"
+                      rows={2}
+                      maxLength={500}
+                      value={form.address}
+                      onChange={e => set('address', e.target.value)}
+                      placeholder="Street, Barangay, Municipality, Province"
+                      className="clay-input"
+                    />
+                  </div>
+
+                  <div className="flex gap-3 mt-2">
+                    <button
+                      type="button"
+                      disabled={submitting}
+                      onClick={() => { setError(''); setStep(1); }}
+                      className="clay-btn clay-btn-ghost py-3.5 px-5 text-sm flex items-center justify-center gap-2">
+                      <ArrowLeft size={15} strokeWidth={2.5} /> Back
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={submitting}
+                      className="clay-btn clay-btn-primary flex-1 py-3.5 text-sm flex items-center justify-center gap-2"
+                      style={{ opacity: submitting ? 0.65 : 1 }}>
+                      {submitting ? 'Creating account…' : (
+                        <>
+                          Create Scholar Account
+                          <ArrowRight size={15} strokeWidth={2.5} />
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  </>)}
                 </form>
               </>
             )}

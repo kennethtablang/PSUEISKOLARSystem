@@ -49,10 +49,15 @@ export default function MessagesPage() {
     setLoadingThread(true);
     getThread(token, { scholarId: selected.scholarId, requirementId: selected.requirementId })
       .then(msgs => { if (!cancelled) setMessages(msgs); })
-      .catch(() => { if (!cancelled) setMessages([]); })
+      .catch(e => {
+        if (cancelled) return;
+        setMessages([]);
+        // An empty pane on its own reads as "no messages yet", not as a failed load.
+        toast(e.message, 'error');
+      })
       .finally(() => { if (!cancelled) setLoadingThread(false); loadThreads(); refreshMessageUnread(); });
     return () => { cancelled = true; };
-  }, [selected, token, loadThreads, refreshMessageUnread]);
+  }, [selected, token, loadThreads, refreshMessageUnread, toast]);
 
   // Real-time: append incoming messages to the open thread; always refresh the list.
   useEffect(() => {
@@ -85,7 +90,9 @@ export default function MessagesPage() {
 
   async function handleSend(e) {
     e.preventDefault();
-    if (!body.trim() || !selected) return;
+    // Enter submits from the textarea directly, bypassing the disabled Send button, so a
+    // second Enter while the first request was in flight posted the message twice.
+    if (sending || !body.trim() || !selected) return;
     setSending(true);
     try {
       const sent = await sendMessage({
@@ -269,6 +276,8 @@ export default function MessagesPage() {
                     onChange={e => setBody(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(e); } }}
                     rows={1}
+                    maxLength={2000}
+                    aria-label="Message"
                     placeholder="Type a message…"
                     className="clay-input flex-1 resize-none"
                     style={{ maxHeight: 120 }}

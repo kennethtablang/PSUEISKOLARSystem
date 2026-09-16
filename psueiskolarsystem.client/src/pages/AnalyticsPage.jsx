@@ -39,12 +39,17 @@ export default function AnalyticsPage() {
   const [trends, setTrends] = useState(null);       // per-period rows for the comparison charts
   const [money, setMoney] = useState(null);         // release + grant disbursement figures
   const periodRef = useRef(period);
+  // Only the newest overview/disbursement request may write state: switching periods quickly
+  // let a slow earlier response land last and show another period's figures under this one.
+  const overviewSeq = useRef(0);
+  const moneySeq = useRef(0);
 
   // Mark colours are per-mode values, so they come from the resolved theme rather
   // than being derived from the light set.
   const t = vizTokens(resolved);
 
   const refetch = useCallback(async (silent = false) => {
+    const seq = ++overviewSeq.current;
     if (!silent) setLoading(true);
     try {
       const [ay, sem] = (periodRef.current || '').split('__');
@@ -52,13 +57,14 @@ export default function AnalyticsPage() {
         academicYear: ay || undefined,
         semester: sem || undefined,
       });
+      if (seq !== overviewSeq.current) return;
       setData(d);
       setLastUpdated(new Date());
       setError('');
     } catch (e) {
-      if (!silent) setError(e.message);
+      if (!silent && seq === overviewSeq.current) setError(e.message);
     } finally {
-      if (!silent) setLoading(false);
+      if (!silent && seq === overviewSeq.current) setLoading(false);
     }
   }, [token]);
 
@@ -90,9 +96,10 @@ export default function AnalyticsPage() {
 
   // Disbursements follow the period filter, same as the overview.
   const loadMoney = useCallback(() => {
+    const seq = ++moneySeq.current;
     const [ay, sem] = (periodRef.current || '').split('__');
     getAnalyticsDisbursements(token, { academicYear: ay || undefined, semester: sem || undefined })
-      .then(setMoney)
+      .then(m => { if (seq === moneySeq.current) setMoney(m); })
       .catch(() => {});
   }, [token]);
   useEffect(() => { loadMoney(); }, [period, loadMoney]);
@@ -117,10 +124,14 @@ export default function AnalyticsPage() {
     </Layout>
   );
 
+  // This replaces the whole page, filter included, so it has to offer the way back.
   if (error) return (
     <Layout>
       <div className="page-shell">
-        <p className="text-sm" style={{ color: 'var(--danger)' }}>{error}</p>
+        <p role="alert" className="text-sm mb-4" style={{ color: 'var(--danger)' }}>{error}</p>
+        <button onClick={() => refetch()} className="clay-btn clay-btn-ghost px-4 py-2 text-sm">
+          Try again
+        </button>
       </div>
     </Layout>
   );

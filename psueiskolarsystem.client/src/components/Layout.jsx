@@ -15,18 +15,8 @@ import {
   Sun, Moon, Monitor, HelpCircle, UserCheck, Banknote, ShieldCheck, Wallet,
 } from 'lucide-react';
 import { getPendingApprovalCount } from '../api/scholarApprovals';
-
-/* ── Responsive hook ─────────────────────────────── */
-function useMediaQuery(query) {
-  const [matches, setMatches] = useState(() => window.matchMedia(query).matches);
-  useEffect(() => {
-    const mql = window.matchMedia(query);
-    const handler = e => setMatches(e.matches);
-    mql.addEventListener('change', handler);
-    return () => mql.removeEventListener('change', handler);
-  }, [query]);
-  return matches;
-}
+import { getPendingDocumentCount } from '../api/documents';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 
 /* ── Nav config ──────────────────────────────────── */
 const navByRole = {
@@ -35,7 +25,7 @@ const navByRole = {
     { section: 'Manage' },
     { to: '/scholars',        label: 'Scholars',         Icon: GraduationCap },
     { to: '/scholar-approvals', label: 'Scholar Approvals', Icon: UserCheck, badge: 'approvals' },
-    { to: '/document-review', label: 'Document Review',  Icon: FileCheck },
+    { to: '/document-review', label: 'Document Review',  Icon: FileCheck, badge: 'documents' },
     { to: '/deadlines',       label: 'Deadlines',        Icon: CalendarClock },
     { to: '/scholarship-types', label: 'Scholarship Types', Icon: Award },
     { to: '/scholarship-releases', label: 'Releases',    Icon: Wallet },
@@ -57,7 +47,7 @@ const navByRole = {
     { section: 'Manage' },
     { to: '/scholars',        label: 'Scholars',         Icon: GraduationCap },
     { to: '/scholar-approvals', label: 'Scholar Approvals', Icon: UserCheck, badge: 'approvals' },
-    { to: '/document-review', label: 'Document Review',  Icon: FileCheck },
+    { to: '/document-review', label: 'Document Review',  Icon: FileCheck, badge: 'documents' },
     { to: '/deadlines',       label: 'Deadlines',        Icon: CalendarClock },
     { to: '/scholarship-releases', label: 'Releases',    Icon: Wallet },
     { to: '/one-time-grants', label: 'One-Time Grants',  Icon: Banknote },
@@ -111,6 +101,7 @@ export default function Layout({ children }) {
   const { user, token, signOut } = useAuth();
   const { messageUnread } = useNotifications();
   const [pendingApprovals, setPendingApprovals] = useState(0);
+  const [pendingDocuments, setPendingDocuments] = useState(0);
   const { theme, setTheme } = useTheme();
   const navigate   = useNavigate();
 
@@ -133,9 +124,12 @@ export default function Layout({ children }) {
     localStorage.setItem('sidebar-collapsed', String(collapsed));
   }, [collapsed]);
 
-  /* Auto-close mobile drawer on route change */
+  /* Auto-close mobile drawer on route change, and start the new page at the top. The window
+     is what scrolls, and the router does not reset it, so arriving from halfway down a long
+     list used to land you halfway down the next page. */
   useEffect(() => {
     setMobileOpen(false);
+    window.scrollTo(0, 0);
   }, [location.pathname]);
 
   /* Pending scholar registrations, for the sidebar badge. Re-read on navigation so
@@ -143,10 +137,23 @@ export default function Layout({ children }) {
   useEffect(() => {
     if (user?.role !== 'Administrator' && user?.role !== 'ScholarshipCoordinator') return;
     let cancelled = false;
-    getPendingApprovalCount(token)
+    const refresh = () => getPendingApprovalCount(token)
       .then(c => { if (!cancelled) setPendingApprovals(c); })
       .catch(() => {});
-    return () => { cancelled = true; };
+    // Documents waiting in the review queue, badged the same way.
+    const refreshDocs = () => getPendingDocumentCount(token)
+      .then(c => { if (!cancelled) setPendingDocuments(c); })
+      .catch(() => {});
+    refresh();
+    refreshDocs();
+    // The queues announce decisions made without leaving the page.
+    window.addEventListener('scholar-approvals-changed', refresh);
+    window.addEventListener('document-review-changed', refreshDocs);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('scholar-approvals-changed', refresh);
+      window.removeEventListener('document-review-changed', refreshDocs);
+    };
   }, [user?.role, token, location.pathname]);
 
   /* Auto-close drawer when viewport becomes desktop */
@@ -252,6 +259,7 @@ export default function Layout({ children }) {
         {!isDesktop && (
           <button
             onClick={() => setMobileOpen(false)}
+            aria-label="Close menu"
             style={{
               width: 28, height: 28, borderRadius: 8, border: 'none', cursor: 'pointer',
               background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center',
@@ -307,6 +315,7 @@ export default function Layout({ children }) {
           const { to, label, Icon, badge } = item;
           const count = to === '/messages' ? messageUnread
                       : badge === 'approvals' ? pendingApprovals
+                      : badge === 'documents' ? pendingDocuments
                       : 0;
           return (
             <NavLink key={to} to={to} data-tour={to} style={{ display: 'block', marginBottom: 2 }} title={isCollapsed ? label : undefined}>
@@ -370,11 +379,11 @@ export default function Layout({ children }) {
                     {label}
                   </span>
 
-                  {/* Count badge — unread messages, or scholars waiting for approval */}
+                  {/* Count badge — unread messages, or scholars / documents waiting for review */}
                   {count > 0 && !isCollapsed && (
                     <span style={{
                       minWidth: 18, height: 18, padding: '0 5px', borderRadius: 999,
-                      background: badge === 'approvals' ? '#c07800' : '#d92020',
+                      background: badge === 'approvals' || badge === 'documents' ? '#c07800' : '#d92020',
                       color: '#fff', fontSize: 10, fontWeight: 800,
                       display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                     }}>
@@ -505,51 +514,58 @@ export default function Layout({ children }) {
 
       {/* ── Mobile drawer (fixed overlay) ── */}
       {!isDesktop && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, height: '100dvh', zIndex: 50,
-          transform: mobileOpen ? 'translateX(0)' : 'translateX(-100%)',
-          transition: 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
-          width: EXPANDED_W,
-        }}>
+        /* `inert` while closed: the drawer is only translated off-screen, so without it
+           every nav link stayed in the Tab order and a keyboard user tabbed through a column
+           of invisible links before reaching the page. */
+        <div
+          inert={!mobileOpen}
+          style={{
+            position: 'fixed', top: 0, left: 0, height: '100dvh', zIndex: 50,
+            transform: mobileOpen ? 'translateX(0)' : 'translateX(-100%)',
+            transition: 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+            width: EXPANDED_W, maxWidth: '85vw',
+          }}>
           {SidebarContent}
         </div>
       )}
 
       {/* ── Main content ── */}
-      <main style={{ flex: 1, overflow: 'auto', minWidth: 0 }}>
+      {/* `overflow-x: clip`, not `overflow: auto`. An overflow of auto made <main> the
+          scroll container for its sticky children, but <main> never actually scrolls (the
+          window does), so the "sticky" top bar and the .page-rail panels scrolled away with
+          the page. Clip still stops a wide child from widening the page, without creating a
+          scroll container. */}
+      <main style={{ flex: 1, overflowX: 'clip', minWidth: 0 }}>
 
         {/* ── Top navbar (all screens) ── */}
         <header style={{
           position: 'sticky', top: 0, zIndex: 30,
           background: 'var(--bg)',
           backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)',
-          borderBottom: '1px solid rgba(0,48,135,0.08)',
+          borderBottom: '1px solid var(--hairline)',
           minHeight: 58,
         }}>
           {/* The bar spans the viewport so its rule and blur are edge-to-edge, but its
               controls sit inside the same shell the page content uses — so the search
               lines up with the page title and the avatar with the page's right edge. */}
-          <div className="page-shell" style={{ padding: '9px 32px', display: 'flex', alignItems: 'center', gap: 12, minHeight: 58 }}>
+          {/* Side padding comes from .page-shell (32px, 16px on phones). An inline 32px used
+              to override the phone breakpoint, leaving the bar out of line with the content. */}
+          <div className="page-shell" style={{ paddingTop: 9, paddingBottom: 9, display: 'flex', alignItems: 'center', gap: isDesktop ? 12 : 8, minHeight: 58 }}>
           {/* Mobile: hamburger + brand */}
           {!isDesktop && (
             <>
               <button
                 onClick={() => setMobileOpen(true)}
-                style={{
-                  width: 38, height: 38, borderRadius: 12, border: 'none', cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: 'var(--bg)',
-                  boxShadow: '4px 4px 10px rgba(163,177,198,0.55), -3px -3px 8px rgba(255,255,255,0.9)',
-                }}
+                aria-label="Open menu"
+                aria-expanded={mobileOpen}
+                className="topbar-btn"
               >
-                <Menu size={17} strokeWidth={2.5} color="#003087" />
+                <Menu size={17} strokeWidth={2.5} />
               </button>
-              <div style={{
-                width: 30, height: 30, borderRadius: 9,
-                background: 'linear-gradient(145deg, #ffd030, #e0a000)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 9, fontWeight: 900, color: '#1a0e00',
-              }}>PSU</div>
+              {/* The official seal, as in the sidebar. The text "PSU" chip here was missed
+                  when the logo was replaced everywhere else. Hidden when the search needs
+                  the room. */}
+              {!(user?.role === 'Administrator' || user?.role === 'ScholarshipCoordinator') && <Logo size={30} />}
             </>
           )}
 
@@ -559,18 +575,14 @@ export default function Layout({ children }) {
           )}
 
           {/* Right cluster */}
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: isDesktop ? 12 : 8, flexShrink: 0 }}>
             <button
               onClick={cycleTheme}
               title={`Theme: ${theme} (click to change)`}
-              style={{
-                width: 40, height: 40, borderRadius: 12, border: 'none', cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: 'var(--bg)',
-                boxShadow: '4px 4px 10px rgba(163,177,198,0.55), -3px -3px 8px rgba(255,255,255,0.9)',
-              }}
+              aria-label={`Theme: ${theme}. Click to change.`}
+              className="topbar-btn"
             >
-              <ThemeIcon size={17} strokeWidth={2.2} color="#003087" />
+              <ThemeIcon size={17} strokeWidth={2.2} />
             </button>
             <span data-tour="notifications"><NotificationBell variant="inline" /></span>
             <Avatar

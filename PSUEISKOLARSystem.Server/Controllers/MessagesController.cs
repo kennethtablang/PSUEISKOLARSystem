@@ -132,6 +132,9 @@ namespace PSUEISKOLARSystem.Server.Controllers
         {
             if (string.IsNullOrWhiteSpace(dto.Body))
                 return BadRequest(new { message = "Message cannot be empty." });
+            // The column holds 2000 characters; past that the insert failed at SaveChanges.
+            if (dto.Body.Trim().Length > 2000)
+                return BadRequest(new { message = "Messages can be at most 2000 characters." });
 
             // Scholars always post to their own thread; staff post to the named scholar.
             string scholarId = IsStaff ? dto.ScholarId ?? "" : UserId;
@@ -140,6 +143,15 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
             var scholar = await db.Users.FindAsync(scholarId);
             if (scholar is null) return BadRequest(new { message = "Scholar not found." });
+
+            // A thread belongs to a scholar. Without this, staff could open one "for" another
+            // administrator or coordinator, which then surfaced in every staff inbox as a
+            // scholar conversation.
+            var isScholar = await db.UserRoles.AnyAsync(ur =>
+                ur.UserId == scholarId &&
+                db.Roles.Any(r => r.Id == ur.RoleId && r.Name == UserRoles.Scholar));
+            if (!isScholar)
+                return BadRequest(new { message = "Messages can only be sent to scholar accounts." });
 
             if (dto.RequirementId.HasValue &&
                 !await db.DocumentRequirements.AnyAsync(r => r.Id == dto.RequirementId))

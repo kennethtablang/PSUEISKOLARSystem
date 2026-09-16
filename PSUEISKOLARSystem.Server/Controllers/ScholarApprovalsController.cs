@@ -135,8 +135,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 profiles.TryGetValue(u.Id, out var p);
                 var warnings = new List<string>();
 
-                if (!u.EmailConfirmed)
-                    warnings.Add("Email address is not verified yet.");
+                // Unverified email is not a warning: approving the registration verifies it.
                 if (p is null)
                     warnings.Add("Scholar profile has not been set up.");
                 else
@@ -226,6 +225,13 @@ namespace PSUEISKOLARSystem.Server.Controllers
             if (!isScholar)
                 return BadRequest(new { message = "Only scholar accounts go through registration approval." });
 
+            /* Repeating a decision that already stands (a double click, or two coordinators
+               working the same queue) re-ran everything below — a second audit row, a second
+               notification, a second email. Answer with the current state instead. */
+            var target = approved ? ApprovalStatuses.Approved : ApprovalStatuses.Rejected;
+            if (user.ApprovalStatus == target)
+                return Ok(new { user.ApprovalStatus, user.ApprovalDecidedAt, user.ApprovalNote });
+
             var actorId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
             var profile = await db.ScholarProfiles
                 .Include(sp => sp.ScholarshipType)
@@ -241,6 +247,12 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 // Open the ledger row that records which scholarship they were verified into.
                 await ScholarshipRegistry.BackfillAsync(db, profile, actorId);
             }
+
+            /* Approval stands in for email verification. The office has just checked this
+               scholar by hand, and without this a verification email that never arrived
+               (spam filter, mail relay down) locked an approved scholar out of sign-in. */
+            if (approved)
+                user.EmailConfirmed = true;
 
             user.ApprovalStatus = approved ? ApprovalStatuses.Approved : ApprovalStatuses.Rejected;
             user.ApprovalDecidedAt = DateTime.UtcNow;

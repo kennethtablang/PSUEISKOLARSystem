@@ -33,6 +33,11 @@ export async function uploadDocument(file, requirementId, academicYear, semester
   return apiForm(API, form, token, 'Upload failed.');
 }
 
+export async function getPendingDocumentCount(token) {
+  const { count } = await apiGet(`${API}/pending-count`, token, 'Failed to load pending count.');
+  return count;
+}
+
 export async function previewFile(id, token) {
   const res = await apiFetch(`${API}/${id}/preview`, { token, fallback: 'Preview failed.' });
   const blob = await res.blob();

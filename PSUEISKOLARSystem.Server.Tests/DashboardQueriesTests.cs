@@ -47,6 +47,33 @@ public class DashboardQueriesTests
     }
 
     [Fact]
+    public async Task Compliance_counts_the_active_semester_only_and_never_exceeds_the_requirements()
+    {
+        using var db = TestDb.New();
+        db.AddType(1, "T");
+        db.AddRequirement(1, "COR");
+        db.AddRequirement(2, "Grades");
+        db.AddScholar("me");
+        db.AddProfile("me", 1);
+        db.SetActiveSemester("2025-2026", 2);
+        db.SaveChanges();
+
+        // Semester 1 history must not leak into Semester 2's standing.
+        db.AddSubmission("me", 1, DocumentStatus.Verified, sem: 1);
+        db.AddSubmission("me", 2, DocumentStatus.Verified, sem: 1);
+        db.AddSubmission("me", 1, DocumentStatus.Verified, sem: 2);
+        db.AddSubmission("me", 2, DocumentStatus.Pending, sem: 2);
+        db.SaveChanges();
+
+        var c = (await Queries(db).ForScholarAsync("me", UserRoles.Scholar)).Scholar!.Compliance;
+
+        Assert.Equal(2, c.TotalRequired);
+        Assert.Equal(1, c.VerifiedCount);
+        Assert.Equal(1, c.PendingCount);
+        Assert.Equal(2, c.Semester);
+    }
+
+    [Fact]
     public async Task Only_requirements_linked_to_the_scholarship_count_toward_the_total()
     {
         using var db = TestDb.New();

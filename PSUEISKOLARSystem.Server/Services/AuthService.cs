@@ -24,7 +24,8 @@ namespace PSUEISKOLARSystem.Server.Services
         IMapper mapper,
         IOptions<JwtSettings> jwtOptions,
         IOptions<EmailSettings> emailOptions,
-        IEmailService emailService) : IAuthService
+        IEmailService emailService,
+        BackgroundEmailer mail) : IAuthService
     {
         private readonly JwtSettings _jwtSettings = jwtOptions.Value;
         private readonly EmailSettings _emailSettings = emailOptions.Value;
@@ -95,7 +96,9 @@ namespace PSUEISKOLARSystem.Server.Services
                     Details = $"Failed login for '{request.Email}': email not verified",
                 });
                 await dbContext.SaveChangesAsync();
-                throw new UnauthorizedException("Your email address has not been verified. Please check your inbox and click the verification link before signing in.");
+                throw new UnauthorizedException(user.ApprovalStatus == ApprovalStatuses.Pending
+                    ? "Your registration is waiting for approval by the scholarship office. You can sign in once it is approved, or sooner by clicking the verification link sent to your email."
+                    : "Your email address has not been verified. Please check your inbox and click the verification link before signing in.");
             }
 
             if (user.TwoFactorEnabled)
@@ -164,6 +167,15 @@ namespace PSUEISKOLARSystem.Server.Services
             if (await userManager.FindByEmailAsync(request.Email) is not null)
                 throw new BadRequestException("An account with this email already exists.");
 
+            // Profile checks run before the account exists, so a rejected profile never
+            // leaves a half-registered user behind.
+            var studentId = request.StudentId.Trim();
+            if (await dbContext.ScholarProfiles.AnyAsync(sp => sp.StudentId == studentId))
+                throw new BadRequestException($"Student ID {studentId} is already registered to another scholar.");
+
+            if (!await dbContext.AcademicPrograms.AnyAsync(p => p.Id == request.ProgramId))
+                throw new BadRequestException("The selected program no longer exists.");
+
             var policy = await SystemSettingsStore.GetAsync(dbContext);
 
             var user = new ApplicationUser
@@ -188,25 +200,63 @@ namespace PSUEISKOLARSystem.Server.Services
             if (!result.Succeeded)
                 throw new BadRequestException(string.Join("; ", result.Errors.Select(e => e.Description)));
 
-            await userManager.AddToRoleAsync(user, "Scholar");
+            // The ledger enforces one scholarship per student and the slot quota. A scholar
+            // picking their first scholarship is exactly the non-staff case it allows.
+            var rejection = await ScholarshipRegistry.SetAsync(
+                dbContext, user.Id, request.ScholarshipTypeId, user.Id, actorIsStaff: false);
+            if (rejection is not null)
+            {
+                await userManager.DeleteAsync(user);
+                throw new BadRequestException(rejection);
+            }
+
+            dbContext.ScholarProfiles.Add(new ScholarProfile
+            {
+                UserId = user.Id,
+                StudentId = studentId,
+                ProgramId = request.ProgramId,
+                ScholarshipTypeId = request.ScholarshipTypeId,
+                YearLevel = request.YearLevel,
+                ContactNumber = string.IsNullOrWhiteSpace(request.ContactNumber) ? null : request.ContactNumber.Trim(),
+                BirthDate = request.BirthDate,
+                Address = string.IsNullOrWhiteSpace(request.Address) ? null : request.Address.Trim(),
+            });
+
+            try
+            {
+                await userManager.AddToRoleAsync(user, UserRoles.Scholar);
+                await dbContext.SaveChangesAsync();
+            }
+            catch
+            {
+                // Drop the unsaved profile and ledger row so the delete doesn't retry them.
+                dbContext.ChangeTracker.Clear();
+                await userManager.DeleteAsync(user);
+                throw;
+            }
 
             if (policy.RequireEmailVerification && policy.EmailEnabled)
-                await SendVerificationEmailAsync(user);
+                await QueueVerificationEmailAsync(user);
 
             var userDto = mapper.Map<UserDto>(user);
-            userDto.Role = "Scholar";
+            userDto.Role = UserRoles.Scholar;
             return userDto;
         }
 
-        // Generates a fresh confirmation token and emails the verification link.
-        private async Task SendVerificationEmailAsync(ApplicationUser user)
+        /* Generates a fresh confirmation token and emails the verification link.
+           The send is queued rather than awaited: an SMTP failure (wrong app password, relay
+           down) used to throw out of registration after the account had already been
+           created, leaving the sign-up form stuck on "Creating account…" — and under the
+           debugger, freezing the whole server. BackgroundEmailer logs the failure instead. */
+        private async Task QueueVerificationEmailAsync(ApplicationUser user)
         {
             var token = await userManager.GenerateEmailConfirmationTokenAsync(user);
             var verifyLink = $"{_emailSettings.AppBaseUrl}/verify-email" +
                              $"?email={Uri.EscapeDataString(user.Email!)}" +
                              $"&token={Uri.EscapeDataString(token)}";
 
-            await emailService.SendEmailVerificationAsync(user.Email!, user.FullName, verifyLink);
+            string email = user.Email!, name = user.FullName;
+            mail.Queue($"email verification to {email}", s => s.SendEmailVerificationAsync(email, name, verifyLink));
         }
 
         // Re-sends the verification link if the account exists and is still unverified.
@@ -217,7 +267,7 @@ namespace PSUEISKOLARSystem.Server.Services
             var user = await userManager.FindByEmailAsync(email);
             if (user is null || user.EmailConfirmed) return false;
 
-            await SendVerificationEmailAsync(user);
+            await QueueVerificationEmailAsync(user);
             return true;
         }
 
@@ -237,7 +287,9 @@ namespace PSUEISKOLARSystem.Server.Services
 
             var result = await userManager.ConfirmEmailAsync(user, token);
             if (!result.Succeeded)
-                throw new BadRequestException("Invalid or expired verification link. Please register again to receive a new link.");
+                // Registering again is refused (the email is taken), so point at the recovery that
+                // actually exists: the resend link offered on the sign-in page.
+                throw new BadRequestException("This verification link is invalid or has expired. Sign in with your email to request a new link.");
         }
 
         public async Task<UserDto> GetCurrentUserAsync(string userId)
@@ -289,7 +341,8 @@ namespace PSUEISKOLARSystem.Server.Services
                             $"?email={Uri.EscapeDataString(user.Email!)}" +
                             $"&token={Uri.EscapeDataString(token)}";
 
-            await emailService.SendPasswordResetEmailAsync(user.Email!, user.FullName, resetLink);
+            string to = user.Email!, name = user.FullName;
+            mail.Queue($"password reset to {to}", s => s.SendPasswordResetEmailAsync(to, name, resetLink));
             return true;
         }
 
@@ -413,6 +466,18 @@ namespace PSUEISKOLARSystem.Server.Services
             {
                 throw new UnauthorizedException("Session expired. Please sign in again.");
             }
+        }
+
+        public async Task<AuthResponseDto> IssueSessionAsync(string userId)
+        {
+            var user = await userManager.FindByIdAsync(userId)
+                ?? throw new NotFoundException("User not found.");
+            var role = (await userManager.GetRolesAsync(user)).FirstOrDefault() ?? string.Empty;
+
+            var (token, expiresAtUtc) = GenerateJwtToken(user, role);
+            var userDto = mapper.Map<UserDto>(user);
+            userDto.Role = role;
+            return new AuthResponseDto { Token = token, ExpiresAtUtc = expiresAtUtc, User = userDto };
         }
 
         private (string Token, DateTime ExpiresAtUtc) GenerateJwtToken(ApplicationUser user, string role)

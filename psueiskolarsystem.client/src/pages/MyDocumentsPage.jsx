@@ -9,15 +9,20 @@ import { getActiveSemester } from '../api/settings';
 import { getDeadlines } from '../api/deadlines';
 import { getUploadPolicy, acceptAttribute, validateUpload, FALLBACK_UPLOAD_POLICY } from '../api/uploadPolicy';
 import { useTitle } from '../hooks/useTitle';
-import { Eye, X, Download, Image, FileX, Loader, BookOpen, ChevronDown, ChevronUp, CalendarClock, Lock } from 'lucide-react';
+import DocumentPreview from '../components/DocumentPreview';
+import { Eye, X, Download, Image, Loader, BookOpen, ChevronDown, ChevronUp, CalendarClock, Lock } from 'lucide-react';
 import ImageLightbox from '../components/ImageLightbox';
 import InfoTip from '../components/InfoTip';
 import StatusBadge from '../components/StatusBadge';
 import { statusDot } from '../constants/statusTones';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 
 export default function MyDocumentsPage() {
   useTitle('My Documents');
-  const { token, user } = useAuth();
+  const { token, user, refreshUser } = useAuth();
+  // Below this the preview opens as a full-screen sheet; a 50/50 split on a phone left
+  // two unreadable 200px columns.
+  const isWide = useMediaQuery('(min-width: 1024px)');
   const toast = useToast();
   const confirm = useConfirm();
 
@@ -91,6 +96,10 @@ export default function MyDocumentsPage() {
   async function load() {
     setLoading(true);
     setError('');
+    // The approval gate reads the signed-in user, which is otherwise only fetched at sign-in.
+    // A scholar approved mid-session followed the "Registration approved" notification here
+    // and still found every upload locked until they reloaded the browser.
+    refreshUser();
     try {
       const [p, types] = await Promise.all([
         getScholarProfile(user.id, token).catch(() => null),
@@ -130,6 +139,7 @@ export default function MyDocumentsPage() {
         address:           profile?.address ?? null,
       }, token);
       setShowTypePicker(false);
+      toast('Scholarship type saved.', 'success');
       await load();
     } catch (e) {
       toast(e.message, 'error');
@@ -166,6 +176,7 @@ export default function MyDocumentsPage() {
     setUploading(requirementId);
     try {
       await uploadDocument(file, requirementId, period.academicYear, period.semester, token);
+      toast(`${file.name} uploaded. It will be reviewed by the scholarship office.`, 'success');
       await load();
     } catch (e) {
       toast(e.message, 'error');
@@ -174,14 +185,21 @@ export default function MyDocumentsPage() {
     }
   }
 
+  const [removing, setRemoving] = useState(null);
+
   async function handleDelete(submissionId) {
+    if (removing) return;
     if (!(await confirm({ title: 'Remove submission', message: 'Remove this submission?', confirmLabel: 'Remove', danger: true }))) return;
     if (preview?.submissionId === submissionId) closePreview();
+    setRemoving(submissionId);
     try {
       await deleteSubmission(submissionId, token);
       setSubmissions(prev => prev.filter(s => s.id !== submissionId));
+      toast('Submission removed.', 'success');
     } catch (e) {
       toast(e.message, 'error');
+    } finally {
+      setRemoving(null);
     }
   }
 
@@ -204,15 +222,15 @@ export default function MyDocumentsPage() {
         <div
           className="flex flex-col overflow-y-auto"
           style={{
-            width: preview ? '50%' : '100%',
+            width: preview && isWide ? '50%' : '100%',
             transition: 'width 0.25s ease',
-            borderRight: preview ? '1.5px solid var(--surface-inset)' : 'none',
+            borderRight: preview && isWide ? '1.5px solid var(--surface-inset)' : 'none',
           }}
         >
           {/* A checklist is a single-column reading task, so it keeps a readable measure —
               but centred in the pane rather than pinned to the left with a void beside it.
               With the preview open the pane is already half-width, so it fills instead. */}
-          <div className={`page-shell${preview ? '' : ' page-shell-narrow'}`}>
+          <div className={`page-shell${preview && isWide ? '' : ' page-shell-narrow'}`}>
 
             <div className="page-head">
               <div>
@@ -255,12 +273,12 @@ export default function MyDocumentsPage() {
             {!isApproved && (
               <div className="clay-card p-5 mb-5"
                 style={approvalStatus === 'Rejected'
-                  ? { background: '#fff1f1', border: '1.5px solid #fca5a5' }
-                  : { background: '#fffbe8', border: '1.5px solid #f5d060' }}>
+                  ? { background: 'var(--tone-bad-bg)', border: '1.5px solid var(--tone-bad-border)' }
+                  : { background: 'var(--tone-warn-bg)', border: '1.5px solid var(--tone-warn-border)' }}>
                 <div className="flex items-start gap-3">
                   <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-                    style={{ background: approvalStatus === 'Rejected' ? 'rgba(192,32,32,0.10)' : 'rgba(192,120,0,0.12)' }}>
-                    <Lock size={16} strokeWidth={2.2} style={{ color: approvalStatus === 'Rejected' ? '#c02020' : '#8a5a00' }} />
+                    style={{ background: 'var(--surface-2)' }}>
+                    <Lock size={16} strokeWidth={2.2} style={{ color: approvalStatus === 'Rejected' ? 'var(--tone-bad-fg)' : 'var(--tone-warn-fg)' }} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-bold mb-0.5" style={{ color: 'var(--text-strong)' }}>
@@ -274,7 +292,7 @@ export default function MyDocumentsPage() {
                         : 'You can review your requirements now. Uploading unlocks as soon as your registration is approved — you will be notified by email.'}
                     </p>
                     {user?.approvalNote && (
-                      <p className="text-xs mt-1.5 italic" style={{ color: '#7a5500' }}>“{user.approvalNote}”</p>
+                      <p className="text-xs mt-1.5 italic" style={{ color: 'var(--text)' }}>“{user.approvalNote}”</p>
                     )}
                   </div>
                 </div>
@@ -334,14 +352,14 @@ export default function MyDocumentsPage() {
               </div>
             )}
 
-            {error && <p className="text-sm mb-4" style={{ color: 'var(--danger)' }}>{error}</p>}
+            {error && <p role="alert" className="text-sm mb-4" style={{ color: 'var(--danger)' }}>{error}</p>}
 
             {previewError && (
               <div className="mb-4 flex items-start gap-2.5 p-3.5 rounded-2xl text-sm"
                 style={{ background: 'var(--danger-bg)', color: 'var(--danger)', border: '1.5px solid var(--danger-border)' }}>
                 <span className="shrink-0 mt-px">⚠</span>
                 <span>{previewError}</span>
-                <button onClick={() => setPreviewError('')} className="ml-auto shrink-0 opacity-50 hover:opacity-100">✕</button>
+                <button onClick={() => setPreviewError('')} aria-label="Dismiss" className="ml-auto shrink-0 opacity-50 hover:opacity-100">✕</button>
               </div>
             )}
 
@@ -363,7 +381,7 @@ export default function MyDocumentsPage() {
                       const sub = submissionFor(req.id);
                       return (
                         <RequirementRow
-                          key={req.id}
+                          key={`${req.id}-${sub?.id ?? 'none'}-${sub?.status ?? ''}`}
                           requirement={req}
                           submission={sub}
                           deadline={deadlineByReq[req.id]}
@@ -372,6 +390,7 @@ export default function MyDocumentsPage() {
                           isPreviewing={preview?.submissionId === sub?.id}
                           onUpload={file => handleUpload(req.id, file)}
                           onDelete={() => handleDelete(sub.id)}
+                          removing={removing === sub?.id}
                           onPreview={() => handlePreview(sub)}
                           onViewSample={() => handleViewSample(req.id)}
                           uploadLocked={!isApproved}
@@ -389,15 +408,22 @@ export default function MyDocumentsPage() {
 
         {/* ── Right: Preview panel ── */}
         {preview && (
+          /* Desktop: a side panel pinned under the top bar, sized to the viewport so a PDF
+             gets a real height instead of the iframe's 150px default. Narrow screens: a
+             full-screen sheet above the top bar. */
           <div
             className="flex flex-col"
-            style={{ width: '50%', minHeight: 0, background: 'var(--bg)' }}
+            role={isWide ? undefined : 'dialog'}
+            aria-label={isWide ? undefined : `Preview of ${preview.fileName}`}
+            style={isWide
+              ? { width: '50%', position: 'sticky', top: 58, height: 'calc(100dvh - 58px)', background: 'var(--bg)' }
+              : { position: 'fixed', inset: 0, zIndex: 60, background: 'var(--bg)' }}
           >
             {/* Panel header */}
             <div className="flex items-center justify-between gap-3 px-5 py-3 shrink-0"
               style={{
                 background: 'var(--surface-modal)',
-                borderBottom: '1.5px solid rgba(0,48,135,0.12)',
+                borderBottom: '1.5px solid var(--hairline-strong)',
                 boxShadow: '0 2px 0 rgba(0,37,112,0.04)',
               }}>
               <div className="flex items-center gap-2.5 min-w-0">
@@ -419,7 +445,8 @@ export default function MyDocumentsPage() {
                 </button>
                 <button
                   onClick={closePreview}
-                  className="w-7 h-7 rounded-xl flex items-center justify-center hover:bg-black/5 transition-colors shrink-0">
+                  aria-label="Close preview"
+                  className="modal-close shrink-0">
                   <X size={15} style={{ color: 'var(--text-muted)' }} strokeWidth={2.5} />
                 </button>
               </div>
@@ -427,7 +454,7 @@ export default function MyDocumentsPage() {
 
             {/* Preview content */}
             <div className="flex-1 overflow-hidden">
-              <PreviewContent preview={preview} />
+              <DocumentPreview preview={preview} />
             </div>
           </div>
         )}
@@ -445,52 +472,6 @@ export default function MyDocumentsPage() {
   );
 }
 
-function PreviewContent({ preview }) {
-  const { url, contentType, fileName } = preview;
-  const isPdf   = contentType === 'application/pdf';
-  const isImage = contentType?.startsWith('image/');
-
-  if (isPdf) {
-    return (
-      <iframe
-        src={url}
-        title={fileName}
-        className="w-full h-full"
-        style={{ border: 'none', display: 'block' }}
-      />
-    );
-  }
-
-  if (isImage) {
-    return (
-      <div className="w-full h-full flex items-center justify-center p-6 overflow-auto">
-        <img
-          src={url}
-          alt={fileName}
-          style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: 12,
-            boxShadow: '0 4px 24px rgba(0,0,0,0.12)' }}
-        />
-      </div>
-    );
-  }
-
-  // Word docs and other unsupported types
-  return (
-    <div className="w-full h-full flex flex-col items-center justify-center gap-4 p-8">
-      <div className="w-16 h-16 rounded-2xl flex items-center justify-center"
-        style={{ background: 'rgba(0,37,112,0.07)', border: '1.5px solid rgba(0,37,112,0.12)' }}>
-        <FileX size={28} style={{ color: 'var(--text-muted)' }} strokeWidth={1.5} />
-      </div>
-      <div className="text-center">
-        <p className="font-bold text-sm mb-1" style={{ color: 'var(--text-strong)' }}>Preview Not Available</p>
-        <p className="text-xs leading-relaxed" style={{ color: 'var(--text-muted)', maxWidth: 240 }}>
-          This file type cannot be previewed in the browser. Use the Download button to open it.
-        </p>
-      </div>
-    </div>
-  );
-}
-
 function DeadlineBadge({ deadline, submission }) {
   if (!deadline) return null;
   const due = new Date(deadline.dueDate);
@@ -498,30 +479,29 @@ function DeadlineBadge({ deadline, submission }) {
   // If already submitted, reflect on-time vs late against the deadline.
   if (submission) {
     if (submission.isLate)
-      return <Badge color="#c2410c" bg="#ffedd5">Submitted late</Badge>;
-    return <Badge color="#0a7d43" bg="#d1fae5">On time</Badge>;
+      return <Badge tone="attention">Submitted late</Badge>;
+    return <Badge tone="ok">On time</Badge>;
   }
 
   const msPerDay = 86400000;
   const days = Math.ceil((due - new Date()) / msPerDay);
   const dueLabel = due.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 
-  if (days < 0) return <Badge color="#c0342c" bg="#fee2e2">Overdue · was due {dueLabel}</Badge>;
-  if (days === 0) return <Badge color="#c0342c" bg="#fee2e2">Due today</Badge>;
-  if (days <= 3) return <Badge color="#c2410c" bg="#ffedd5">Due in {days} day{days > 1 ? 's' : ''}</Badge>;
-  return <Badge color="#4a5a7a" bg="#eef2f9">Due {dueLabel}</Badge>;
+  if (days < 0) return <Badge tone="bad">Overdue · was due {dueLabel}</Badge>;
+  if (days === 0) return <Badge tone="bad">Due today</Badge>;
+  if (days <= 3) return <Badge tone="attention">Due in {days} day{days > 1 ? 's' : ''}</Badge>;
+  return <Badge tone="neutral">Due {dueLabel}</Badge>;
 }
 
-function Badge({ color, bg, children }) {
+function Badge({ tone, children }) {
   return (
-    <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium"
-      style={{ color, background: bg }}>
+    <span className={`status-badge tone-${tone}`} style={{ fontWeight: 500 }}>
       <CalendarClock size={11} strokeWidth={2.4} /> {children}
     </span>
   );
 }
 
-function RequirementRow({ requirement, submission, deadline, uploading, loadingPreview, isPreviewing, onUpload, onDelete, onPreview, onViewSample, uploadLocked, accept, token }) {
+function RequirementRow({ requirement, submission, deadline, uploading, removing, loadingPreview, isPreviewing, onUpload, onDelete, onPreview, onViewSample, uploadLocked, accept, token }) {
   const toast = useToast();
   const inputId  = `file-${requirement.id}`;
   const canUpload = !submission || submission.status === 'Incomplete';
@@ -584,7 +564,7 @@ function RequirementRow({ requirement, submission, deadline, uploading, loadingP
 
       {submission?.feedbackNote && (
         <div className="mt-2 p-2 rounded-xl text-xs"
-          style={{ background: 'var(--danger-bg)', border: '1px solid #fcc', color: '#c03030' }}>
+          style={{ background: 'var(--danger-bg)', border: '1px solid var(--danger-border)', color: 'var(--danger)' }}>
           <span className="font-medium">Feedback:</span> {submission.feedbackNote}
         </div>
       )}
@@ -639,15 +619,15 @@ function RequirementRow({ requirement, submission, deadline, uploading, loadingP
         ))}
 
         {submission && submission.status !== 'Verified' && (
-          <button onClick={onDelete} className="text-xs hover:underline ml-auto" style={{ color: 'var(--danger)' }}>
-            Remove
+          <button onClick={onDelete} disabled={removing} className="text-xs hover:underline ml-auto" style={{ color: 'var(--danger)', opacity: removing ? 0.6 : 1 }}>
+            {removing ? 'Removing…' : 'Remove'}
           </button>
         )}
 
         {submission && (
           <button
             onClick={toggleHistory}
-            className="text-xs flex items-center gap-1 ml-auto hover:underline"
+            className={`text-xs flex items-center gap-1 hover:underline ${submission.status === 'Verified' ? 'ml-auto' : ''}`}
             style={{ color: 'var(--text-muted)' }}>
             {showHistory ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
             History
@@ -656,7 +636,7 @@ function RequirementRow({ requirement, submission, deadline, uploading, loadingP
       </div>
 
       {showHistory && history !== null && (
-        <div className="mt-3 pt-3" style={{ borderTop: '1px solid rgba(0,0,0,0.07)' }}>
+        <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--hairline)' }}>
           {history.length === 0 ? (
             <p className="text-xs" style={{ color: 'var(--text-faint)' }}>No history yet.</p>
           ) : (
@@ -665,7 +645,7 @@ function RequirementRow({ requirement, submission, deadline, uploading, loadingP
                 <li key={h.id} className="flex items-start gap-2.5">
                   <div className="flex flex-col items-center shrink-0">
                     <div className="w-2 h-2 rounded-full mt-0.5" style={{ background: statusDot(h.status) }} />
-                    {i < history.length - 1 && <div className="w-px flex-1 mt-1" style={{ background: 'rgba(0,0,0,0.1)', minHeight: 12 }} />}
+                    {i < history.length - 1 && <div className="w-px flex-1 mt-1" style={{ background: 'var(--hairline-strong)', minHeight: 12 }} />}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold" style={{ color: 'var(--text-strong)' }}>{h.status}</p>

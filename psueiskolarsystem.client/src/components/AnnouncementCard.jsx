@@ -121,7 +121,9 @@ export default function AnnouncementCard({ a, variant = 'feed', onEdit, onDelete
               </button>
             )}
             <button onClick={onEdit} className="text-xs font-medium hover:underline" style={{ color: 'var(--accent)' }}>Edit</button>
-            <button onClick={onDelete} className="text-xs font-medium hover:underline" style={{ color: 'var(--danger)' }}>Delete</button>
+            {onDelete && (
+              <button onClick={onDelete} className="text-xs font-medium hover:underline" style={{ color: 'var(--danger)' }}>Delete</button>
+            )}
           </div>
         </div>
       )}

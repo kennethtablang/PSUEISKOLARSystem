@@ -14,7 +14,7 @@ import Modal from '../components/Modal';
 import { ErrorBox, ModalButtons } from './UsersPage';
 import Field from '../components/Field';
 import { useTitle } from '../hooks/useTitle';
-import { ctlStyle } from '../constants/ui';
+import { ctlStyle, localDateInput } from '../constants/ui';
 import { GRANT_RELEASE_STATUSES, peso } from '../constants/grants';
 import { Plus, BanknoteArrowUp, Wallet, CircleCheckBig, Clock } from 'lucide-react';
 import StatusBadge from '../components/StatusBadge';
@@ -77,7 +77,11 @@ export default function OneTimeGrantsPage() {
     }))) return;
     try {
       await deleteOneTimeGrant(grant.id, token);
-      load(data?.page ?? 1);
+      toast('Grant deleted.', 'success');
+      // Deleting the only row on a later page used to reload that page, which no longer
+      // exists, and showed an empty list while grants remained on earlier pages.
+      const page = data?.page ?? 1;
+      load(items.length === 1 && page > 1 ? page - 1 : page);
     } catch (e) { toast(e.message, 'error'); }
   }
 
@@ -227,7 +231,11 @@ export default function OneTimeGrantsPage() {
           scholarshipTypes={scholarshipTypes}
           token={token}
           onClose={() => setEditing(undefined)}
-          onSaved={() => { setEditing(undefined); load(data?.page ?? 1); }}
+          onSaved={() => {
+            toast(editing ? 'Grant updated.' : 'Grant recorded.', 'success');
+            setEditing(undefined);
+            load(data?.page ?? 1);
+          }}
         />
       )}
 
@@ -331,7 +339,7 @@ export function GrantModal({ initial, scholarshipTypes = [], token, fixedScholar
     purpose:   initial?.purpose ?? '',
     amount:    initial?.amount != null ? String(initial.amount) : '',
     source:    initial?.source ?? '',
-    awardedOn: (initial?.awardedOn ?? new Date().toISOString()).split('T')[0],
+    awardedOn: initial?.awardedOn ? initial.awardedOn.split('T')[0] : localDateInput(),
     notes:     initial?.notes ?? '',
   });
   const [error, setError] = useState('');
@@ -505,9 +513,9 @@ export function GrantModal({ initial, scholarshipTypes = [], token, fixedScholar
   );
 }
 
-function ReleaseModal({ grant, token, onClose, onSaved }) {
+export function ReleaseModal({ grant, token, onClose, onSaved }) {
   const [referenceNo, setReferenceNo] = useState('');
-  const [releasedAt, setReleasedAt] = useState(new Date().toISOString().split('T')[0]);
+  const [releasedAt, setReleasedAt] = useState(localDateInput);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 

@@ -7,7 +7,14 @@ import { getMessageUnreadCount } from '../api/messages';
 const NotificationContext = createContext(null);
 
 export function NotificationProvider({ children }) {
-  const { token } = useAuth();
+  const { token, refreshUser } = useAuth();
+
+  // Account notices (registration approved/rejected, profile changes) mean the signed-in
+  // user's own record changed. Re-read it so screens gated on it — uploads unlock on
+  // approval — update now instead of after a reload. Held in a ref so the hub connection
+  // is not torn down every time AuthContext re-renders.
+  const refreshUserRef = useRef(refreshUser);
+  useEffect(() => { refreshUserRef.current = refreshUser; }, [refreshUser]);
   const [items, setItems] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [messageUnread, setMessageUnread] = useState(0);
@@ -75,6 +82,7 @@ export function NotificationProvider({ children }) {
     connection.on('ReceiveNotification', (n) => {
       setItems(prev => [n, ...prev].slice(0, 50));
       setUnreadCount(prev => prev + 1);
+      if (n?.category === 'Account') refreshUserRef.current?.();
     });
 
     connection.on('ReceiveMessage', (m) => {

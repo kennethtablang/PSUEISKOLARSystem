@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
+import { useToast } from '../context/UIContext';
 import { getNotifications, markRead, markUnread, markAllRead, deleteNotification } from '../api/notifications';
 import { useTitle } from '../hooks/useTitle';
 import { NOTIFICATION_CATEGORIES, NOTIFICATION_FILTER_CATEGORIES } from '../constants/notifications';
@@ -32,7 +33,9 @@ export default function NotificationsPage() {
   useTitle('Notifications');
   const { token } = useAuth();
   const { refresh } = useNotifications();
+  const toast = useToast();
   const navigate = useNavigate();
+  const [error, setError] = useState('');
 
   const [items, setItems] = useState([]);
   const [paging, setPaging] = useState({ page: 1, totalPages: 1, total: 0 });
@@ -42,11 +45,16 @@ export default function NotificationsPage() {
 
   const load = useCallback(async (page = 1) => {
     setLoading(true);
+    setError('');
     try {
       const data = await getNotifications(token, { category, unreadOnly, page, pageSize: 25 });
       setItems(data.items);
       setPaging({ page: data.page, totalPages: data.totalPages, total: data.total });
-    } catch { /* ignore */ }
+    } catch (e) {
+      // Swallowed before, which left the page reading "No notifications." on a failed load.
+      setError(e.message);
+      setItems([]);
+    }
     finally { setLoading(false); }
   }, [token, category, unreadOnly]);
 
@@ -73,9 +81,17 @@ export default function NotificationsPage() {
     refresh();
   }
 
+  // Removed from the list only once the server has deleted it. The row used to vanish even
+  // when the request failed, and then reappear on the next visit.
   async function handleDelete(n) {
-    try { await deleteNotification(n.id, token); } catch { /* best effort */ }
+    try {
+      await deleteNotification(n.id, token);
+    } catch (e) {
+      toast(e.message, 'error');
+      return;
+    }
     setItems(prev => prev.filter(x => x.id !== n.id));
+    setPaging(p => ({ ...p, total: Math.max(0, p.total - 1) }));
     refresh();
   }
 
@@ -100,6 +116,8 @@ export default function NotificationsPage() {
         <div className="clay-card overflow-hidden">
           {loading ? (
             <p className="text-center py-12 text-sm" style={{ color: 'var(--text-muted)' }}>Loading…</p>
+          ) : error ? (
+            <p role="alert" className="text-center py-12 text-sm" style={{ color: 'var(--danger)' }}>{error}</p>
           ) : items.length === 0 ? (
             <div className="text-center py-14">
               <Bell size={28} strokeWidth={1.5} color="rgba(0,48,135,0.25)" />

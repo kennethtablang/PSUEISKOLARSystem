@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
@@ -44,7 +44,13 @@ export default function ScholarsPage() {
     approvalStatus: searchParams.get('approval') ?? '',
   });
 
+  // Only the newest request may write the table: typing fired one per keystroke, and an
+  // earlier, slower response could land last and show results for a shorter query.
+  const requestSeq = useRef(0);
+  const searchTimer = useRef(null);
+
   async function loadScholars(f = filters, page = 1, size = pageSize) {
+    const seq = ++requestSeq.current;
     setLoading(true);
     setError('');
     try {
@@ -58,25 +64,47 @@ export default function ScholarsPage() {
         page,
         pageSize: size,
       });
+      if (seq !== requestSeq.current) return;
       setScholars(data.items);
       setPaging({ page: data.page, totalPages: data.totalPages, total: data.total });
     } catch (e) {
-      setError(e.message);
+      if (seq === requestSeq.current) setError(e.message);
     } finally {
-      setLoading(false);
+      if (seq === requestSeq.current) setLoading(false);
     }
   }
 
   useEffect(() => {
     Promise.all([getPrograms(token), getScholarshipTypes(token)])
-      .then(([p, st]) => { setPrograms(p); setScholarshipTypes(st); });
+      .then(([p, st]) => { setPrograms(p); setScholarshipTypes(st); })
+      .catch(e => setError(e.message));
     loadScholars();
+    return () => clearTimeout(searchTimer.current);
   }, []);
+
+  /* The top-bar search sends people here as /scholars?search=… . Arriving from another page
+     mounts this component fresh, but searching again while already here only changes the
+     query string — the initial-state read above never saw it, so nothing happened. */
+  const urlSearch = searchParams.get('search') ?? '';
+  const lastUrlSearch = useRef(urlSearch);
+  useEffect(() => {
+    if (urlSearch === lastUrlSearch.current) return;
+    lastUrlSearch.current = urlSearch;
+    const next = { ...filters, search: urlSearch };
+    setFilters(next);
+    loadScholars(next, 1);
+    // Keyed to the URL alone on purpose: re-running on `filters` would undo the user's own
+    // edits to the search box, and loadScholars is a plain function recreated every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlSearch]);
 
   function setFilter(key, value) {
     const next = { ...filters, [key]: value };
     setFilters(next);
-    loadScholars(next, 1);
+    clearTimeout(searchTimer.current);
+    // Dropdowns apply at once; the text box waits for a pause in typing.
+    if (key === 'search') searchTimer.current = setTimeout(() => loadScholars(next, 1), 350);
+    else loadScholars(next, 1);
   }
 
   function goToPage(page) {

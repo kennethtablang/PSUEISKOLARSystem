@@ -58,16 +58,20 @@ export default function GlobalSearch({ isDesktop }) {
     // field would stop helping — rather than sitting at a fixed 340px with a void beside it.
     <div ref={rootRef} style={{ position: 'relative', flex: isDesktop ? '1 1 340px' : 1, maxWidth: 460 }}>
       <form onSubmit={submit}>
-        <Search size={15} strokeWidth={2.2} style={{ color: 'var(--text-muted)' }}
-          style={{ position: 'absolute', left: 12, top: 19, transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+        {/* This icon used to carry two `style` props; JSX keeps only the last, so its colour
+            was silently dropped. */}
+        <Search size={15} strokeWidth={2.2} aria-hidden="true"
+          style={{ color: 'var(--text-muted)', position: 'absolute', left: 12, top: 19, transform: 'translateY(-50%)', pointerEvents: 'none' }} />
         <input
           value={q}
           onChange={e => setQ(e.target.value)}
           onFocus={() => { if (total > 0) setOpen(true); }}
+          onKeyDown={e => { if (e.key === 'Escape') setOpen(false); }}
+          aria-label="Search scholars, announcements, and requirements"
           placeholder="Search scholars, announcements…"
           style={{
             width: '100%', height: 38, paddingLeft: 34, paddingRight: 12,
-            borderRadius: 11, border: '1px solid rgba(0,48,135,0.1)',
+            borderRadius: 11, border: '1px solid var(--hairline-strong)',
             background: 'var(--input-bg)', fontSize: 13, color: 'var(--text-strong)', outline: 'none',
           }}
         />
@@ -107,7 +111,7 @@ function Group({ label, icon: Icon, items, render, onGo }) {
         const { key, title, subtitle, url } = render(item);
         return (
           <button key={key} onClick={() => onGo(url)}
-            className="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-black/5">
+            className="notif-row w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-xl">
             <Icon size={14} strokeWidth={2.2} style={{ color: 'var(--accent)', flexShrink: 0 }} />
             <span className="min-w-0 flex-1">
               <span className="block text-sm truncate" style={{ color: 'var(--text-strong)' }}>{title}</span>

@@ -39,8 +39,15 @@ export default function NotificationBell({ variant = 'floating' }) {
     function onDown(e) {
       if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false);
     }
+    function onKey(e) {
+      if (e.key === 'Escape') setOpen(false);
+    }
     window.addEventListener('mousedown', onDown);
-    return () => window.removeEventListener('mousedown', onDown);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('mousedown', onDown);
+      window.removeEventListener('keydown', onKey);
+    };
   }, [open]);
 
   function handleItemClick(n) {
@@ -59,17 +66,12 @@ export default function NotificationBell({ variant = 'floating' }) {
       <button
         onClick={() => setOpen(o => !o)}
         title="Notifications"
-        style={{
-          position: 'relative', width: 40, height: 40, borderRadius: 12, border: 'none', cursor: 'pointer',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'var(--bg)',
-          boxShadow: open
-            ? 'inset 3px 3px 7px rgba(163,177,198,0.6), inset -3px -3px 7px rgba(255,255,255,0.9)'
-            : '4px 4px 10px rgba(163,177,198,0.55), -3px -3px 8px rgba(255,255,255,0.9)',
-          transition: 'box-shadow 0.15s',
-        }}
+        aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
+        aria-expanded={open}
+        aria-haspopup="true"
+        className="topbar-btn"
       >
-        <Bell size={18} strokeWidth={2.3} style={{ color: 'var(--accent)' }} />
+        <Bell size={18} strokeWidth={2.3} />
         {unreadCount > 0 && (
           <span style={{
             position: 'absolute', top: -3, right: -3, minWidth: 18, height: 18, padding: '0 4px',
@@ -88,16 +90,16 @@ export default function NotificationBell({ variant = 'floating' }) {
           position: 'absolute', top: 48, right: 0, width: 360, maxWidth: 'calc(100vw - 32px)',
           background: 'var(--surface-2)', borderRadius: 16, overflow: 'hidden',
           boxShadow: '0 12px 40px rgba(0,20,60,0.22), 0 2px 8px rgba(0,20,60,0.1)',
-          border: '1px solid rgba(0,48,135,0.08)', zIndex: 50,
+          border: '1px solid var(--hairline-strong)', zIndex: 50,
         }}>
           {/* Header */}
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '13px 16px', borderBottom: '1px solid rgba(0,48,135,0.07)',
+            padding: '13px 16px', borderBottom: '1px solid var(--hairline)',
           }}>
             <p style={{ fontWeight: 800, fontSize: 14, color: 'var(--text-strong)' }}>
               Notifications {unreadCount > 0 && (
-                <span style={{ color: '#d92020', fontSize: 12, fontWeight: 700 }}>· {unreadCount} new</span>
+                <span style={{ color: 'var(--danger)', fontSize: 12, fontWeight: 700 }}>· {unreadCount} new</span>
               )}
             </p>
             {unreadCount > 0 && (
@@ -117,8 +119,8 @@ export default function NotificationBell({ variant = 'floating' }) {
           <div style={{ maxHeight: 380, overflowY: 'auto' }}>
             {items.length === 0 ? (
               <div style={{ padding: '36px 20px', textAlign: 'center' }}>
-                <Bell size={26} strokeWidth={1.6} color="rgba(0,48,135,0.25)" />
-                <p style={{ marginTop: 8, fontSize: 12.5, color: '#7a869c', fontWeight: 500 }}>
+                <Bell size={26} strokeWidth={1.6} style={{ color: 'var(--text-faint)' }} />
+                <p style={{ marginTop: 8, fontSize: 12.5, color: 'var(--text-muted)', fontWeight: 500 }}>
                   You're all caught up.
                 </p>
               </div>
@@ -154,10 +156,10 @@ export default function NotificationBell({ variant = 'floating' }) {
                         <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#d92020', flexShrink: 0 }} />
                       )}
                     </div>
-                    <p style={{ fontSize: 12, color: '#5a6a85', lineHeight: 1.4, marginTop: 2 }}>
+                    <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.4, marginTop: 2 }}>
                       {n.message}
                     </p>
-                    <p style={{ fontSize: 10.5, color: '#9aa6bc', fontWeight: 600, marginTop: 4 }}>
+                    <p style={{ fontSize: 10.5, color: 'var(--text-faint)', fontWeight: 600, marginTop: 4 }}>
                       {timeAgo(n.createdAt)}
                     </p>
                   </div>
@@ -171,7 +173,7 @@ export default function NotificationBell({ variant = 'floating' }) {
             onClick={() => { setOpen(false); navigate('/notifications'); }}
             style={{
               width: '100%', padding: '11px 16px', border: 'none', cursor: 'pointer',
-              borderTop: '1px solid rgba(0,48,135,0.07)', background: 'var(--surface-2)',
+              borderTop: '1px solid var(--hairline)', background: 'var(--surface-2)',
               color: 'var(--accent)', fontSize: 12.5, fontWeight: 700,
             }}
           >

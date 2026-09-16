@@ -58,6 +58,9 @@ export default function ScholarshipTypesPage() {
       ]);
       setTypes(t);
       setRequirements(r);
+    } catch (e) {
+      // Uncaught before: a failed load left the page on an empty list with no explanation.
+      toast(e.message, 'error');
     } finally {
       setLoading(false);
     }
@@ -69,6 +72,7 @@ export default function ScholarshipTypesPage() {
     try {
       const { isActive } = await toggleScholarshipTypeActive(id, token);
       setTypes(prev => prev.map(t => t.id === id ? { ...t, isActive } : t));
+      toast(isActive ? 'Scholarship type activated.' : 'Scholarship type deactivated.', 'success');
     } catch (e) {
       toast(e.message, 'error');
     }
@@ -79,6 +83,7 @@ export default function ScholarshipTypesPage() {
     try {
       await deleteScholarshipType(id, token);
       setTypes(prev => prev.filter(t => t.id !== id));
+      toast('Scholarship type deleted.', 'success');
     } catch (e) {
       toast(e.message, 'error');
     }
@@ -246,7 +251,7 @@ export default function ScholarshipTypesPage() {
           allRequirements={requirements}
           token={token}
           onClose={() => setShowModal(false)}
-          onSaved={() => { setShowModal(false); load(); }}
+          onSaved={() => { toast(editing ? 'Scholarship type updated.' : 'Scholarship type created.', 'success'); setShowModal(false); load(); }}
         />
       )}
 

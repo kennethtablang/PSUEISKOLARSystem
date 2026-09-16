@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using PSUEISKOLARSystem.Server.Data;
 using PSUEISKOLARSystem.Server.DTOs.Auth;
 using PSUEISKOLARSystem.Server.Exceptions;
+using PSUEISKOLARSystem.Server.Infrastructure;
 using PSUEISKOLARSystem.Server.Interfaces;
 using PSUEISKOLARSystem.Server.Models;
 using PSUEISKOLARSystem.Server.Models.Enums;
@@ -13,8 +14,21 @@ namespace PSUEISKOLARSystem.Server.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class AuthController(IAuthService authService, ApplicationDbContext db) : ControllerBase
+    public class AuthController(IAuthService authService, ApplicationDbContext db, SessionValidator sessions) : ControllerBase
     {
+        /// <summary>
+        /// Changing your password or two-factor setting rotates the account's security stamp,
+        /// and SessionValidator rightly rejects every token minted before it. That included the
+        /// token of the person who just made the change: thirty seconds later (the validator's
+        /// cache window) their next click answered "Your session has expired". Hand them a token
+        /// carrying the new stamp, and drop the cached old one so it is honoured immediately.
+        /// </summary>
+        private async Task<AuthResponseDto> RenewSessionAsync(string userId)
+        {
+            sessions.Invalidate(userId);
+            return await authService.IssueSessionAsync(userId);
+        }
+
         [HttpPost("login")]
         [EnableRateLimiting("auth")]
         public async Task<ActionResult<AuthResponseDto>> Login(LoginRequestDto request)
@@ -167,7 +181,8 @@ namespace PSUEISKOLARSystem.Server.Controllers
             try
             {
                 await authService.EnableTwoFactorAsync(userId);
-                return Ok(new { message = "Two-factor authentication enabled." });
+                var session = await RenewSessionAsync(userId);
+                return Ok(new { message = "Two-factor authentication enabled.", session.Token, session.ExpiresAtUtc, session.User });
             }
             catch (NotFoundException ex)
             {
@@ -184,7 +199,8 @@ namespace PSUEISKOLARSystem.Server.Controllers
             try
             {
                 await authService.DisableTwoFactorAsync(userId, dto.Password);
-                return Ok(new { message = "Two-factor authentication disabled." });
+                var session = await RenewSessionAsync(userId);
+                return Ok(new { message = "Two-factor authentication disabled.", session.Token, session.ExpiresAtUtc, session.User });
             }
             catch (NotFoundException ex)
             {
@@ -243,7 +259,11 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
             try
             {
-                return Ok(await authService.UpdateProfileAsync(userId, dto));
+                var updated = await authService.UpdateProfileAsync(userId, dto);
+
+                // A password change ends every other session; this one continues on a new token.
+                var passwordChanged = !string.IsNullOrEmpty(dto.CurrentPassword) && !string.IsNullOrEmpty(dto.NewPassword);
+                return passwordChanged ? Ok(await RenewSessionAsync(userId)) : Ok(updated);
             }
             catch (NotFoundException ex)
             {

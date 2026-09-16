@@ -7,18 +7,18 @@ import { useAuth } from '../context/AuthContext';
 import { useToast, useConfirm } from '../context/UIContext';
 import { getScholarProfile, upsertScholarProfile, getGrades, addGrade, updateGrade, deleteGrade, setLifecycleStatus, getScholarshipHistory } from '../api/scholars';
 import { getPrograms, getScholarshipTypes } from '../api/lookups';
-import { getOneTimeGrants, releaseOneTimeGrant } from '../api/oneTimeGrants';
+import { getOneTimeGrants } from '../api/oneTimeGrants';
 import { getScholarReleases } from '../api/scholarshipReleases';
 import { approveScholar, rejectScholar } from '../api/scholarApprovals';
 import { uploadAvatarFor, clearAvatarCache } from '../api/avatars';
 import { useTitle } from '../hooks/useTitle';
 import { useTheme } from '../context/ThemeContext';
 import { vizTokens, tooltipStyle } from '../constants/viz';
-import Modal from '../components/Modal';
 import Avatar from '../components/Avatar';
 import logoPsu from '../assets/logo-psu.png';
 import StatusBadge from '../components/StatusBadge';
-import { GrantModal } from './OneTimeGrantsPage';
+import { GrantModal, ReleaseModal } from './OneTimeGrantsPage';
+import { ClayModal, ErrorBox, ModalButtons } from './UsersPage';
 import { peso } from '../constants/grants';
 import Field from '../components/Field';
 
@@ -45,10 +45,25 @@ export default function ScholarDetailPage() {
   const [releases, setReleases] = useState([]);       // recurring per-period payouts
   const [showGrantModal, setShowGrantModal] = useState(false);
   const [decision, setDecision] = useState(null);      // 'approve' | 'reject'
+  const [releasingGrant, setReleasingGrant] = useState(null);
 
+  // Graduated, Lapsed and Suspended take a scholar out of releases, reminders and slot counts,
+  // and the select used to apply the change the moment it was touched.
   async function handleStatusChange(status) {
+    if (status === profile.lifecycleStatus) return;
+    const ok = await confirm({
+      title: 'Change scholarship status',
+      message: `Change ${profile.fullName}'s status from ${profile.lifecycleStatus} to ${status}? The scholar is notified.`,
+      confirmLabel: `Set to ${status}`,
+      danger: ['Lapsed', 'Suspended', 'Graduated'].includes(status),
+    });
+    if (!ok) return;
     setSavingStatus(true);
-    try { await setLifecycleStatus(targetUserId, status, token); await load(); }
+    try {
+      await setLifecycleStatus(targetUserId, status, token);
+      toast(`Status changed to ${status}.`, 'success');
+      await load();
+    }
     catch (e) { toast(e.message, 'error'); }
     finally { setSavingStatus(false); }
   }
@@ -132,7 +147,11 @@ export default function ScholarDetailPage() {
   }
 
   async function load() {
-    setLoading(true);
+    /* The full-page "Loading…" is for the first visit only. Every save used to swap the whole
+       profile out for it and back, losing the scroll position; and a failed load was never
+       cleared, so one hiccup left the page stuck on its error even after a good reload. */
+    if (!profile) setLoading(true);
+    setError('');
     try {
       const [p, prog, st, g, hist, gr, rel] = await Promise.all([
         getScholarProfile(targetUserId, token),
@@ -172,16 +191,16 @@ export default function ScholarDetailPage() {
     if (!ok) return;
     try {
       await deleteGrade(targetUserId, grade.id, token);
+      toast('Grade removed.', 'success');
       await load();
     } catch (e) { toast(e.message, 'error'); }
   }
 
-  async function handleReleaseGrant(grant) {
-    try {
-      await releaseOneTimeGrant(grant.id, {}, token);
-      toast(`${grant.title} released.`, 'success');
-      await load();
-    } catch (e) { toast(e.message, 'error'); }
+  /* Releasing is final — a released grant can no longer be edited, cancelled or deleted. From
+     this page it used to happen on a single click, with no confirmation, no reference number
+     and no guard against a double click. It now goes through the same form as the Grants page. */
+  function handleReleaseGrant(grant) {
+    setReleasingGrant({ ...grant, scholarName: grant.scholarName ?? profile?.fullName });
   }
 
   useEffect(() => { load(); }, [targetUserId]);
@@ -265,7 +284,7 @@ export default function ScholarDetailPage() {
         </div>
 
         {!profile ? (
-          <div className="clay-card p-5 text-sm" style={{ background: '#fffbe8', border: '1.5px solid #f5d060', color: '#7a5500' }}>
+          <div className="clay-card p-5 text-sm" style={{ background: 'var(--tone-warn-bg)', border: '1.5px solid var(--tone-warn-border)', color: 'var(--text)' }}>
             {isOwnProfile
             ? 'Your scholar profile has not been set up yet.'
             : 'No scholar profile set up yet.'}
@@ -277,11 +296,11 @@ export default function ScholarDetailPage() {
           <>
             {/* GWA threshold alert */}
             {profile.latestGwa != null && profile.minimumGwa != null && profile.latestGwa > profile.minimumGwa && (
-              <div className="flex items-start gap-3 p-4 rounded-2xl mb-5"
-                style={{ background: '#fff2ec', border: '1.5px solid #fca572', color: '#7a3010' }}>
-                <AlertTriangle size={16} strokeWidth={2.5} className="mt-0.5 shrink-0" style={{ color: '#d05010' }} />
+              <div className="flex items-start gap-3 p-4 rounded-2xl mb-5 tone-attention"
+                style={{ background: 'var(--tone-bg)', border: '1.5px solid var(--tone-border)', color: 'var(--text)' }}>
+                <AlertTriangle size={16} strokeWidth={2.5} className="mt-0.5 shrink-0" style={{ color: 'var(--tone-fg)' }} />
                 <div>
-                  <p className="text-sm font-bold" style={{ color: '#7a3010' }}>GWA Below Scholarship Threshold</p>
+                  <p className="text-sm font-bold" style={{ color: 'var(--tone-fg)' }}>GWA Below Scholarship Threshold</p>
                   <p className="text-xs mt-0.5">
                     Current GWA <strong>{profile.latestGwa.toFixed(2)}</strong> exceeds the maximum of{' '}
                     <strong>{profile.minimumGwa.toFixed(2)}</strong> required for{' '}
@@ -296,8 +315,8 @@ export default function ScholarDetailPage() {
             {profile.approvalStatus && profile.approvalStatus !== 'Approved' && (
               <div className="rounded-2xl p-4 mb-5 flex items-start gap-3 flex-wrap"
                 style={profile.approvalStatus === 'Rejected'
-                  ? { background: '#fff1f1', border: '1.5px solid #fca5a5' }
-                  : { background: '#fffbe8', border: '1.5px solid #f5d060' }}>
+                  ? { background: 'var(--tone-bad-bg)', border: '1.5px solid var(--tone-bad-border)' }
+                  : { background: 'var(--tone-warn-bg)', border: '1.5px solid var(--tone-warn-border)' }}>
                 <div className="flex-1 min-w-[220px]">
                   <div className="flex items-center gap-2 mb-1">
                     <StatusBadge status={profile.approvalStatus} />
@@ -313,7 +332,7 @@ export default function ScholarDetailPage() {
                       : 'This scholar cannot submit documents until their registration is verified.'}
                   </p>
                   {profile.approvalNote && (
-                    <p className="text-xs mt-1.5 italic" style={{ color: '#7a5500' }}>“{profile.approvalNote}”</p>
+                    <p className="text-xs mt-1.5 italic" style={{ color: 'var(--text)' }}>“{profile.approvalNote}”</p>
                   )}
                 </div>
                 {isAdminOrCoord && (
@@ -325,7 +344,7 @@ export default function ScholarDetailPage() {
                     {profile.approvalStatus !== 'Rejected' && (
                       <button onClick={() => setDecision('reject')}
                         className="clay-btn clay-btn-ghost px-3.5 py-2 text-xs flex items-center gap-1.5"
-                        style={{ color: '#c02020' }}>
+                        style={{ color: 'var(--danger)' }}>
                         <ShieldX size={13} strokeWidth={2.6} /> Reject
                       </button>
                     )}
@@ -425,17 +444,15 @@ export default function ScholarDetailPage() {
                         <td className="py-2.5" style={{ color: 'var(--text)' }}>{g.academicYear}</td>
                         <td className="py-2.5" style={{ color: 'var(--text)' }}>Sem {g.semester}</td>
                         <td className="py-2.5">
-                          <span className="font-mono font-bold" style={{ color: g.meetsRequirement ? 'var(--text-strong)' : '#c03010' }}>
+                          <span className="font-mono font-bold" style={{ color: g.meetsRequirement ? 'var(--text-strong)' : 'var(--danger)' }}>
                             {g.gwa.toFixed(2)}
                           </span>
                         </td>
                         <td className="py-2.5">
                           {g.meetsRequirement ? (
-                            <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium" style={{ background: '#d4f4e2', color: '#166534' }}>
-                              Compliant
-                            </span>
+                            <span className="status-badge tone-ok">Compliant</span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium" style={{ background: '#ffe4dc', color: '#c03010' }}>
+                            <span className="status-badge tone-bad">
                               <AlertTriangle size={10} strokeWidth={2.5} />
                               Flagged
                             </span>
@@ -447,7 +464,7 @@ export default function ScholarDetailPage() {
                             <button onClick={() => setEditingGrade(g)} className="text-xs font-medium hover:underline" style={{ color: 'var(--accent)' }}>
                               Edit
                             </button>
-                            <button onClick={() => handleDeleteGrade(g)} className="text-xs font-medium hover:underline ml-3" style={{ color: '#c03010' }}>
+                            <button onClick={() => handleDeleteGrade(g)} className="text-xs font-medium hover:underline ml-3" style={{ color: 'var(--danger)' }}>
                               Remove
                             </button>
                           </td>
@@ -471,7 +488,7 @@ export default function ScholarDetailPage() {
           token={token}
           scholarMode={isOwnProfile}
           onClose={() => setEditing(false)}
-          onSaved={() => { setEditing(false); load(); }}
+          onSaved={() => { setEditing(false); toast('Profile saved.', 'success'); load(); }}
         />
       )}
 
@@ -481,7 +498,7 @@ export default function ScholarDetailPage() {
           token={token}
           grade={editingGrade}
           onClose={closeGradeModal}
-          onSaved={() => { closeGradeModal(); load(); }}
+          onSaved={() => { toast(editingGrade ? 'Grade corrected.' : 'Grade recorded.', 'success'); closeGradeModal(); load(); }}
         />
       )}
 
@@ -497,7 +514,16 @@ export default function ScholarDetailPage() {
           }}
           token={token}
           onClose={() => setShowGrantModal(false)}
-          onSaved={() => { setShowGrantModal(false); load(); }}
+          onSaved={() => { setShowGrantModal(false); toast('Grant recorded.', 'success'); load(); }}
+        />
+      )}
+
+      {releasingGrant && (
+        <ReleaseModal
+          grant={releasingGrant}
+          token={token}
+          onClose={() => setReleasingGrant(null)}
+          onSaved={() => { toast(`${releasingGrant.title} released.`, 'success'); setReleasingGrant(null); load(); }}
         />
       )}
 
@@ -507,7 +533,12 @@ export default function ScholarDetailPage() {
           approve={decision === 'approve'}
           token={token}
           onClose={() => setDecision(null)}
-          onDone={msg => { setDecision(null); toast(msg, 'success'); load(); }}
+          onDone={msg => {
+            setDecision(null);
+            toast(msg, 'success');
+            window.dispatchEvent(new Event('scholar-approvals-changed'));
+            load();
+          }}
         />
       )}
     </Layout>
@@ -732,7 +763,7 @@ function OneTimeGrantsCard({ grants, isAdminOrCoord, onAdd, onRelease }) {
                       <button
                         onClick={() => onRelease(g)}
                         className="text-xs font-bold hover:underline flex items-center gap-1"
-                        style={{ color: '#166534' }}
+                        style={{ color: 'var(--tone-ok-fg)' }}
                       >
                         <BanknoteArrowUp size={11} strokeWidth={2.6} /> Release
                       </button>
@@ -790,6 +821,7 @@ function ApprovalDecisionModal({ profile, approve, token, onClose, onDone }) {
       title={approve ? 'Approve registration' : 'Reject registration'}
       subtitle={`${profile.fullName} · ${profile.email}`}
       onClose={onClose}
+      dismissible={!submitting}
     >
       {error && <ErrorBox>{error}</ErrorBox>}
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -933,7 +965,7 @@ function EditProfileModal({ profile, userId, programs, scholarshipTypes, token, 
   }
 
   return (
-    <ClayModal title={scholarMode ? 'Edit My Info' : 'Edit Scholar Profile'} onClose={onClose} width={520}>
+    <ClayModal title={scholarMode ? 'Edit My Info' : 'Edit Scholar Profile'} onClose={onClose} width={520} dismissible={!submitting}>
       {error && <ErrorBox>{error}</ErrorBox>}
       <form onSubmit={handleSubmit} className="space-y-4">
         <Field label="Student ID">
@@ -1074,7 +1106,8 @@ function GradeModal({ userId, token, grade, onClose, onSaved }) {
     <ClayModal
       title={editing ? 'Correct GWA' : 'Record GWA'}
       subtitle={editing ? `${form.academicYear} · Semester ${form.semester}` : undefined}
-      onClose={onClose}>
+      onClose={onClose}
+      dismissible={!submitting}>
       {error && <ErrorBox>{error}</ErrorBox>}
       <form onSubmit={handleSubmit} className="space-y-4">
         {!editing && (
@@ -1102,31 +1135,6 @@ function GradeModal({ userId, token, grade, onClose, onSaved }) {
   );
 }
 
-function ClayModal({ title, subtitle, onClose, children, width = 460 }) {
-  return (
-    <Modal title={title} subtitle={subtitle} onClose={onClose} width={width}>
-      {children}
-    </Modal>
-  );
-}
-
-function ErrorBox({ children }) {
-  return (
-    <div className="mb-4 p-3 rounded-2xl text-sm font-medium"
-      style={{ background: 'var(--accent-soft-bg)', color: 'var(--accent)', border: '1.5px solid var(--accent-soft-border)' }}>
-      {children}
-    </div>
-  );
-}
-
-function ModalButtons({ onClose, submitting, label, disabled = false }) {
-  const off = submitting || disabled;
-  return (
-    <div className="flex gap-3 pt-2">
-      <button type="button" onClick={onClose} className="clay-btn clay-btn-ghost flex-1 py-2.5 text-sm">Cancel</button>
-      <button type="submit" disabled={off} className="clay-btn clay-btn-primary flex-1 py-2.5 text-sm" style={{ opacity: off ? 0.65 : 1 }}>
-        {submitting ? 'Saving…' : label}
-      </button>
-    </div>
-  );
-}
+/* ClayModal, ErrorBox and ModalButtons used to be private copies here that had drifted from
+   the shared ones in UsersPage: errors rendered in the accent blue, and Cancel stayed
+   clickable while a save was in flight. */

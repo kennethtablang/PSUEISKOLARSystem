@@ -64,6 +64,9 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
             var academicYear = period.AcademicYear;
 
+            if (DueDateProblem(dto.DueDate) is { } dueProblem)
+                return BadRequest(new { message = dueProblem });
+
             var requirement = await db.DocumentRequirements.FindAsync(dto.RequirementId);
             if (requirement is null || !requirement.IsActive)
                 return BadRequest(new { message = "Document requirement not found." });
@@ -111,6 +114,9 @@ namespace PSUEISKOLARSystem.Server.Controllers
             var deadline = await db.SubmissionDeadlines.FindAsync(id);
             if (deadline is null) return NotFound();
 
+            if (DueDateProblem(dto.DueDate) is { } dueProblem)
+                return BadRequest(new { message = dueProblem });
+
             if (deadline.DueDate != dto.DueDate)
             {
                 deadline.RemindersSentAt = null;
@@ -120,6 +126,13 @@ namespace PSUEISKOLARSystem.Server.Controllers
             await db.SaveChangesAsync();
             return NoContent();
         }
+
+        /// <summary>
+        /// A due date outside any plausible academic calendar is a typing slip (a year of 0202),
+        /// not a policy — and it would mark every submission for the period late or never late.
+        /// </summary>
+        private static string? DueDateProblem(DateTime dueDate) =>
+            dueDate.Year is < 2000 or > 2100 ? "The due date must fall between the years 2000 and 2100." : null;
 
         // DELETE /api/deadlines/{id}
         [HttpDelete("{id}")]

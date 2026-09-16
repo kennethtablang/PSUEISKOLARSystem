@@ -210,6 +210,27 @@ namespace PSUEISKOLARSystem.Server
             // would trip script-src 'self'.
             app.UseSecurityHeaders(sendCsp: !app.Environment.IsDevelopment());
 
+            /* Last line of defence for anything a controller did not handle. Without it an
+               unexpected exception produced an empty 500 in production, so the client could only
+               show its generic fallback and the user had no idea whether to retry. The
+               middleware logs the full exception for developers; the response carries only a
+               plain message, never a stack trace or SQL. */
+            app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
+            {
+                var error = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>()?.Error;
+
+                // A database constraint (duplicate key, a row still referenced elsewhere) is a
+                // conflict with existing data, not a server fault — say so.
+                var isConflict = error is DbUpdateException;
+                context.Response.StatusCode = isConflict ? StatusCodes.Status409Conflict : StatusCodes.Status500InternalServerError;
+                await context.Response.WriteAsJsonAsync(new
+                {
+                    message = isConflict
+                        ? "The change conflicts with existing records and was not saved. Refresh the page and try again."
+                        : "An unexpected error occurred. Please try again, and contact the administrator if it keeps happening.",
+                });
+            }));
+
             app.UseDefaultFiles();
             app.MapStaticAssets();
 

@@ -2,8 +2,11 @@ import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
-// Nested modals each add a lock; only the last one to close releases the page scroll.
-let openCount = 0;
+// Open dialogs, oldest first. Nested modals each add a lock; only the last one to close
+// releases the page scroll. The stack also decides who owns the keyboard: every modal listens
+// on `document`, so without it one Escape closed a confirm dialog *and* the form beneath it
+// (losing whatever was typed), and Tab was trapped by two panels at once.
+const stack = [];
 
 // Everything the browser will let Tab reach, minus anything explicitly removed from the
 // order. Kept as one selector so the focus trap and the initial-focus search agree.
@@ -42,16 +45,21 @@ export default function Modal({
   const panelRef = useRef(null);
 
   useEffect(() => {
-    openCount += 1;
+    const entry = panelRef;
+    stack.push(entry);
     document.body.classList.add('modal-open');
     return () => {
-      openCount = Math.max(0, openCount - 1);
-      if (openCount === 0) document.body.classList.remove('modal-open');
+      const i = stack.lastIndexOf(entry);
+      if (i >= 0) stack.splice(i, 1);
+      if (stack.length === 0) document.body.classList.remove('modal-open');
     };
   }, []);
 
   useEffect(() => {
     function onKeyDown(e) {
+      // Only the topmost dialog responds; the ones beneath wait their turn.
+      if (stack[stack.length - 1] !== panelRef) return;
+
       if (e.key === 'Escape' && dismissible) {
         e.stopPropagation();
         onClose?.();

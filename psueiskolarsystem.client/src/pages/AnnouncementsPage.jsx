@@ -10,6 +10,7 @@ import { Users, UserSearch, X, Clock } from 'lucide-react';
 import { getPrograms, getScholarshipTypes, searchScholars } from '../api/lookups';
 import { useTitle } from '../hooks/useTitle';
 import Field from '../components/Field';
+import { ErrorBox } from './UsersPage';
 
 const ROLES = ['', 'Scholar', 'ScholarshipCoordinator'];
 const ROLE_LABELS = { '': 'All Users', Scholar: 'Scholars', ScholarshipCoordinator: 'Coordinators' };
@@ -27,7 +28,10 @@ function fromLocalInput(value) {
 
 export default function AnnouncementsPage() {
   useTitle('Announcements');
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  // Deleting is Administrator-only on the server. Coordinators were shown the button anyway,
+  // and the refused request failed silently.
+  const canDelete = user?.role === 'Administrator';
   const confirm = useConfirm();
   const toast = useToast();
   const [announcements, setAnnouncements] = useState([]);
@@ -36,6 +40,7 @@ export default function AnnouncementsPage() {
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
   const [search, setSearch] = useState('');
+  const [loadError, setLoadError] = useState('');
 
   const displayed = search
     ? announcements.filter(a =>
@@ -50,6 +55,7 @@ export default function AnnouncementsPage() {
 
   async function load() {
     setLoading(true);
+    setLoadError('');
     try {
       const [a, scholarshipTypes, programs] = await Promise.all([
         getAnnouncements(token),
@@ -58,6 +64,8 @@ export default function AnnouncementsPage() {
       ]);
       setAnnouncements(a);
       setLookups({ scholarshipTypes, programs });
+    } catch (e) {
+      setLoadError(e.message);
     } finally {
       setLoading(false);
     }
@@ -67,8 +75,13 @@ export default function AnnouncementsPage() {
 
   async function handleDelete(id) {
     if (!(await confirm({ title: 'Delete announcement', message: 'Delete this announcement?', confirmLabel: 'Delete', danger: true }))) return;
-    await deleteAnnouncement(id, token);
-    setAnnouncements(prev => prev.filter(a => a.id !== id));
+    try {
+      await deleteAnnouncement(id, token);
+      setAnnouncements(prev => prev.filter(a => a.id !== id));
+      toast('Announcement deleted.', 'success');
+    } catch (e) {
+      toast(e.message, 'error');
+    }
   }
 
   async function handlePublishNow(a) {
@@ -122,9 +135,10 @@ export default function AnnouncementsPage() {
 
         <div className="page-split">
           <div>
+            {loadError && <ErrorBox>{loadError}</ErrorBox>}
             {loading ? (
               <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Loading…</p>
-            ) : displayed.length === 0 ? (
+            ) : loadError ? null : displayed.length === 0 ? (
               <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No announcements found.</p>
             ) : (
               <div className="space-y-5">
@@ -134,7 +148,7 @@ export default function AnnouncementsPage() {
                     a={a}
                     variant="manage"
                     onEdit={() => openEdit(a)}
-                    onDelete={() => handleDelete(a.id)}
+                    onDelete={canDelete ? () => handleDelete(a.id) : undefined}
                     onPublishNow={() => handlePublishNow(a)}
                   />
                 ))}
@@ -191,7 +205,15 @@ export default function AnnouncementsPage() {
           lookups={lookups}
           token={token}
           onClose={() => setShowModal(false)}
-          onSaved={() => { setShowModal(false); load(); }}
+          onSaved={imageProblem => {
+            setShowModal(false);
+            if (imageProblem) {
+              toast(`Announcement saved, but the image was not uploaded: ${imageProblem} Edit the announcement to try again.`, 'error');
+            } else {
+              toast(editing ? 'Announcement updated.' : 'Announcement created.', 'success');
+            }
+            load();
+          }}
         />
       )}
     </Layout>
@@ -284,8 +306,15 @@ function AnnouncementModal({ initial, lookups, token, onClose, onSaved }) {
         const res = await createAnnouncement(payload, token);
         id = res.id;
       }
-      if (imageFile && id) await uploadAnnouncementImage(id, imageFile, token);
-      onSaved();
+      /* The announcement is saved (and possibly already sent) by this point. If only the
+         image fails, keeping the form open invited a second Save — which created a duplicate
+         announcement and notified everyone twice. Close, and report the image separately. */
+      let imageProblem = null;
+      if (imageFile && id) {
+        try { await uploadAnnouncementImage(id, imageFile, token); }
+        catch (imgErr) { imageProblem = imgErr.message; }
+      }
+      onSaved(imageProblem);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -300,12 +329,7 @@ function AnnouncementModal({ initial, lookups, token, onClose, onSaved }) {
       width={520}
       dismissible={!submitting}
     >
-        {error && (
-          <div className="mb-4 p-3 rounded-2xl text-sm font-medium"
-            style={{ background: 'var(--accent-soft-bg)', color: 'var(--accent)', border: '1.5px solid var(--accent-soft-border)' }}>
-            {error}
-          </div>
-        )}
+        {error && <ErrorBox>{error}</ErrorBox>}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <Field label="Title">

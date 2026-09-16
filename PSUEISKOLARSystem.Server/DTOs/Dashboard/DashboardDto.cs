@@ -34,7 +34,8 @@ namespace PSUEISKOLARSystem.Server.DTOs.Dashboard
         int PendingCount,
         IReadOnlyList<string> IncompleteItems,
         string? ScholarshipTypeName,
-        string AcademicYear);
+        string AcademicYear,
+        int Semester);
 
     public sealed record ScholarGwaDto(
         decimal LatestGwa,

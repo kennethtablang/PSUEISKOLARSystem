@@ -17,5 +17,11 @@ namespace PSUEISKOLARSystem.Server.Interfaces
         Task VerifyEmailAsync(string email, string token);
         Task<bool> ResendVerificationAsync(string email);
         Task<bool> IsEmailAvailableAsync(string email);
+
+        /// <summary>
+        /// A fresh token for an account that is already signed in, carrying its current
+        /// security stamp. Used after the account's own holder rotates the stamp.
+        /// </summary>
+        Task<AuthResponseDto> IssueSessionAsync(string userId);
     }
 }

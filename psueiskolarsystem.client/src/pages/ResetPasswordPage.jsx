@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { resetPassword } from '../api/auth';
 import { useTitle } from '../hooks/useTitle';
 import { Lock, ShieldCheck, KeyRound, CheckCircle, ArrowLeft, ArrowRight, AlertTriangle } from 'lucide-react';
-import PasswordStrengthMeter from '../components/PasswordStrengthMeter';
+import PasswordStrengthMeter, { getPasswordStrength } from '../components/PasswordStrengthMeter';
 import Logo from '../components/Logo';
 
 const TIPS = [
@@ -32,6 +32,12 @@ export default function ResetPasswordPage() {
     setError('');
     if (newPassword !== confirmPassword) {
       setError('Passwords do not match.');
+      return;
+    }
+    // The same rule as registration, checked here so the reply is instant rather than an
+    // Identity error list from the server.
+    if (getPasswordStrength(newPassword).passed !== 5) {
+      setError('Password does not meet the requirements shown below it.');
       return;
     }
     if (!email || !token) {

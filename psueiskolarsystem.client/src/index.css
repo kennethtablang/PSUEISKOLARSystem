@@ -894,14 +894,48 @@ select.clay-input {
 .tone-attention { --tone-bg: var(--tone-attention-bg); --tone-fg: var(--tone-attention-fg); --tone-border: var(--tone-attention-border); }
 .tone-neutral   { --tone-bg: var(--tone-neutral-bg);   --tone-fg: var(--tone-neutral-fg);   --tone-border: var(--tone-neutral-border); }
 
-.badge-pending    { background: #fef3c7; color: #78450a; }
-.badge-verified   { background: #d1fae5; color: #065f46; }
-.badge-incomplete { background: #fee2e2; color: #991b1b; }
-.badge-active     { background: #d1fae5; color: #065f46; }
-.badge-inactive   { background: #e5e9f2; color: #4a5a7a; }
+/* Top-bar icon buttons (menu, theme, notifications). This inset/outset pair used to be
+   repeated inline in three components with light-only shadows, so in dark mode each button
+   wore a white halo. */
+.topbar-btn {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  color: var(--accent);
+  box-shadow: 4px 4px 10px rgba(163, 177, 198, 0.55), -3px -3px 8px rgba(255, 255, 255, 0.9);
+  transition: box-shadow 0.15s;
+}
+.topbar-btn[aria-expanded="true"] {
+  box-shadow: inset 3px 3px 7px rgba(163, 177, 198, 0.6), inset -3px -3px 7px rgba(255, 255, 255, 0.9);
+}
+.topbar-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+:root[data-theme="dark"] .topbar-btn {
+  box-shadow: 4px 4px 10px rgba(0, 0, 0, 0.45), -2px -2px 6px rgba(255, 255, 255, 0.04);
+}
+:root[data-theme="dark"] .topbar-btn[aria-expanded="true"] {
+  box-shadow: inset 3px 3px 7px rgba(0, 0, 0, 0.5), inset -2px -2px 5px rgba(255, 255, 255, 0.04);
+}
+
+/* Legacy role/state pills (Users, Profile, Deadlines, announcement cards). They carried
+   light-only literals, so in dark mode they rendered as bright pastel chips on a dark card.
+   Routed through the same tone tokens as .status-badge, which already have dark values. */
+.badge-pending    { background: var(--tone-warn-bg);    color: var(--tone-warn-fg); }
+.badge-verified   { background: var(--tone-ok-bg);      color: var(--tone-ok-fg); }
+.badge-incomplete { background: var(--tone-bad-bg);     color: var(--tone-bad-fg); }
+.badge-active     { background: var(--tone-ok-bg);      color: var(--tone-ok-fg); }
+.badge-inactive   { background: var(--tone-neutral-bg); color: var(--tone-neutral-fg); }
 .badge-admin      { background: #ede9fe; color: #4c1d95; }
-.badge-coord      { background: #dbeafe; color: #1e3a8a; }
-.badge-scholar    { background: #fef3c7; color: #78450a; }
+.badge-coord      { background: var(--tone-info-bg);    color: var(--tone-info-fg); }
+.badge-scholar    { background: var(--tone-warn-bg);    color: var(--tone-warn-fg); }
+:root[data-theme="dark"] .badge-admin { background: rgba(139, 92, 246, 0.22); color: #c4b5fd; }
 
 /* Notification dropdown rows. The unread tint and the hover were assigned imperatively and
    hardcoded `rgba(0,48,135,…)` — PSU blue, which is invisible on the dark dropdown. Both now

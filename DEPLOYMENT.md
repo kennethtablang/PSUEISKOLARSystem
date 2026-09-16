@@ -26,7 +26,7 @@ secrets.** In production, override via environment variables or `appsettings.Pro
 
 | Setting | Purpose |
 |---------|---------|
-| `ConnectionStrings:DefaultConnection` | SQL Server connection string |
+| `ConnectionStrings:DefaultConnection` | SQL Server connection string. Leave `MultipleActiveResultSets` off: with it on, concurrent async requests stall for 20+ seconds (dotnet/SqlClient#422) |
 | `JwtSettings:Key` | **Secret** signing key — generate a long random value (≥ 32 bytes) |
 | `JwtSettings:Issuer` / `Audience` | JWT issuer/audience (your domain) |
 | `EmailSettings:SmtpHost` / `SmtpPort` / `Username` / `Password` / `From` / `FromName` | SMTP delivery |

@@ -6,10 +6,11 @@ import { getRequirements } from '../api/documents';
 import { getActiveSemester } from '../api/settings';
 import { getDeadlines, upsertDeadline, deleteDeadline, getDeadlineReport } from '../api/deadlines';
 import { useTitle } from '../hooks/useTitle';
+import { localDateInput } from '../constants/ui';
 import { CalendarClock, AlertTriangle, CheckCircle2, Clock, Users, ChevronDown, ChevronUp } from 'lucide-react';
 
 function toDateInput(iso) {
-  return iso ? iso.slice(0, 10) : '';
+  return iso ? localDateInput(iso) : '';
 }
 
 export default function DeadlinesPage() {
@@ -38,8 +39,11 @@ export default function DeadlinesPage() {
       .finally(() => setReady(true));
   }, []);
 
-  async function loadManage() {
-    setLoading(true); setError('');
+  // A refresh after saving must not swap the table for "Loading…": that unmounted the row
+  // being edited and threw focus out of the date field.
+  async function loadManage({ quiet = false } = {}) {
+    if (!quiet) setLoading(true);
+    setError('');
     try {
       const [reqs, deadlines] = await Promise.all([
         getRequirements(token),
@@ -60,27 +64,46 @@ export default function DeadlinesPage() {
     finally { setLoading(false); }
   }
 
+  // Only a complete YYYY-YYYY is worth asking about; every partial keystroke used to fire a load.
+  const periodComplete = /^\d{4}-\d{4}$/.test(period.academicYear);
+
   useEffect(() => {
-    if (!ready || !period.academicYear) return;
+    if (!ready || !periodComplete) return;
     if (tab === 'manage') loadManage(); else loadReport();
   }, [ready, period.academicYear, period.semester, tab]);
 
-  async function handleSetDeadline(requirementId, dateStr) {
-    if (!dateStr) return;
+  /* Saved when the field is committed (blur or Enter), not on every change. A date input
+     reports each keystroke of the year as a new valid date — 0002, 0020, 0202, 2026 — and each
+     one was saved, resetting the reminder sequence and writing an audit row per digit. */
+  async function handleSetDeadline(requirementId, dateStr, current) {
+    if (!dateStr || dateStr === current) return;
+    const year = Number(dateStr.slice(0, 4));
+    if (year < 2000 || year > 2100) {
+      toast('Enter a due date between the years 2000 and 2100.', 'error');
+      return;
+    }
     try {
       await upsertDeadline({
         requirementId,
         academicYear: period.academicYear,
         semester: period.semester,
-        dueDate: `${dateStr}T23:59:59Z`,
+        // End of the chosen day where the office is. `T23:59:59Z` was midnight UTC — 7:59 AM
+        // the next morning in Manila — so the server kept accepting on-time uploads for eight
+        // hours after the date staff picked, and scholars saw the next day as the due date.
+        dueDate: new Date(`${dateStr}T23:59:59`).toISOString(),
       }, token);
-      await loadManage();
+      toast('Deadline saved.', 'success');
+      await loadManage({ quiet: true });
     } catch (e) { toast(e.message, 'error'); }
   }
 
   async function handleClear(id) {
     if (!(await confirm({ title: 'Remove deadline', message: 'Remove this deadline?', confirmLabel: 'Remove', danger: true }))) return;
-    try { await deleteDeadline(id, token); await loadManage(); }
+    try {
+      await deleteDeadline(id, token);
+      toast('Deadline removed.', 'success');
+      await loadManage({ quiet: true });
+    }
     catch (e) { toast(e.message, 'error'); }
   }
 
@@ -118,9 +141,11 @@ export default function DeadlinesPage() {
           <TabBtn active={tab === 'report'} onClick={() => setTab('report')} icon={AlertTriangle} label="Compliance Report" />
         </div>
 
-        {error && <p className="text-sm mb-4" style={{ color: 'var(--danger)' }}>{error}</p>}
+        {error && <p role="alert" className="text-sm mb-4" style={{ color: 'var(--danger)' }}>{error}</p>}
 
-        {loading ? (
+        {!periodComplete ? (
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Enter an academic year as YYYY-YYYY (e.g. 2025-2026).</p>
+        ) : loading ? (
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Loading…</p>
         ) : tab === 'manage' ? (
           <ManageTab
@@ -190,9 +215,14 @@ function ManageTab({ requirements, deadlineByReq, onSet, onClear }) {
                 </td>
                 <td className="px-5 py-3.5">
                   <input
+                    // Keyed on the saved value so the field shows what the server holds after a
+                    // save or a clear — defaultValue is otherwise only read on first mount.
+                    key={dl?.dueDate ?? 'none'}
                     type="date"
+                    aria-label={`Due date for ${req.name}`}
                     defaultValue={toDateInput(dl?.dueDate)}
-                    onChange={e => onSet(req.id, e.target.value)}
+                    onBlur={e => onSet(req.id, e.target.value, toDateInput(dl?.dueDate))}
+                    onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
                     className="clay-input"
                     style={{ width: 'auto' }}
                   />

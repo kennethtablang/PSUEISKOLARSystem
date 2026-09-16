@@ -11,7 +11,9 @@ namespace PSUEISKOLARSystem.Server.Controllers
     [Authorize]
     public class LookupsController(ApplicationDbContext db) : ControllerBase
     {
+        // Anonymous so the scholar sign-up form can offer the program and scholarship pickers.
         [HttpGet("programs")]
+        [AllowAnonymous]
         public async Task<IActionResult> GetPrograms()
         {
             var programs = await db.AcademicPrograms
@@ -71,6 +73,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
         }
 
         [HttpGet("scholarship-types")]
+        [AllowAnonymous]
         public async Task<IActionResult> GetScholarshipTypes()
         {
             var types = await db.ScholarshipTypes

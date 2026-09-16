@@ -257,6 +257,13 @@ namespace PSUEISKOLARSystem.Server.Controllers
             if (await db.ScholarshipAssignments.AnyAsync(a => a.ScholarshipTypeId == id))
                 return BadRequest(new { message = "This scholarship type appears in a scholar's assignment history and must be kept for auditing. Deactivate it instead." });
 
+            // Money recorded against the type restricts the delete in the database. Checked
+            // here so the admin gets the reason, not an unexplained failure on the foreign key
+            // (a one-time grant can name a type its scholar was never assigned to).
+            if (await db.ScholarshipReleases.AnyAsync(r => r.ScholarshipTypeId == id) ||
+                await db.OneTimeGrants.AnyAsync(g => g.ScholarshipTypeId == id))
+                return BadRequest(new { message = "Scholarship releases or grants have been recorded under this type, so it must be kept for the disbursement record. Deactivate it instead." });
+
             // Retire its type-specific documents alongside it.
             await db.DocumentRequirements
                 .Where(dr => dr.ScholarshipTypeId == id)

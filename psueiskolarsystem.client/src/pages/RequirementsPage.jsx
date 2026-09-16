@@ -105,6 +105,8 @@ export default function RequirementsPage() {
     try {
       // Documents owned by a single scholarship type are managed there, not here.
       setRequirements(await getRequirements(token, { sharedOnly: true }));
+    } catch (e) {
+      toast(e.message, 'error');
     } finally {
       setLoading(false);
     }
@@ -117,6 +119,7 @@ export default function RequirementsPage() {
     try {
       await deleteRequirement(id, token);
       setRequirements(prev => prev.filter(r => r.id !== id));
+      toast('Requirement removed.', 'success');
     } catch (e) {
       toast(e.message, 'error');
     }
@@ -283,7 +286,7 @@ export default function RequirementsPage() {
           initial={editing}
           token={token}
           onClose={() => setShowModal(false)}
-          onSaved={() => { setShowModal(false); load(); }}
+          onSaved={() => { toast(editing ? 'Requirement updated.' : 'Requirement created.', 'success'); setShowModal(false); load(); }}
         />
       )}
 
@@ -293,7 +296,7 @@ export default function RequirementsPage() {
           scholarshipTypes={scholarshipTypes}
           token={token}
           onClose={() => setAssigning(null)}
-          onSaved={() => setAssigning(null)}
+          onSaved={() => { toast('Scholarship types updated.', 'success'); setAssigning(null); }}
         />
       )}
 
@@ -444,10 +447,14 @@ function AssignTypesModal({ requirement, scholarshipTypes, token, onClose, onSav
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  /* If the current links cannot be read, the form must not pretend there are none. It used to
+     fall back to an empty selection, so pressing Save after a failed load unlinked the
+     requirement from every scholarship type. */
+  const [loadFailed, setLoadFailed] = useState(false);
   useEffect(() => {
     getRequirementScholarshipTypes(requirement.id, token)
       .then(ids => setSelected(new Set(ids)))
-      .catch(() => setSelected(new Set()));
+      .catch(e => { setLoadFailed(true); setError(`${e.message} Close this window and try again.`); });
   }, [requirement.id, token]);
 
   function toggle(id) {
@@ -460,6 +467,7 @@ function AssignTypesModal({ requirement, scholarshipTypes, token, onClose, onSav
 
   async function handleSubmit(e) {
     e.preventDefault();
+    if (loadFailed || selected === null) return;
     setError('');
     setSubmitting(true);
     try {
@@ -480,7 +488,7 @@ function AssignTypesModal({ requirement, scholarshipTypes, token, onClose, onSav
         require it. A type with <em>no</em> requirements configured sees all requirements by default.
       </p>
       {selected === null ? (
-        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Loading…</p>
+        !loadFailed && <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Loading…</p>
       ) : scholarshipTypes.length === 0 ? (
         <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No scholarship types exist yet.</p>
       ) : (

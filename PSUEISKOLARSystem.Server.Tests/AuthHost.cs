@@ -52,6 +52,7 @@ public sealed class AuthHost : IDisposable
 
         services.AddAutoMapper(_ => { }, typeof(AuthMappingProfile));
         services.AddSingleton<IEmailService>(Email);
+        services.AddSingleton<BackgroundEmailer>();
         services.AddSingleton(Options.Create(new JwtSettings
         {
             Key = "test-key-that-is-comfortably-longer-than-thirty-two-characters",

@@ -10,7 +10,11 @@ namespace PSUEISKOLARSystem.Server.Controllers
     [ApiController]
     [Route("api/admin")]
     [Authorize(Roles = UserRoles.Administrator)]
-    public class AdminController(ApplicationDbContext db, IServiceProvider services, DatabaseExporter exporter) : ControllerBase
+    public class AdminController(
+        ApplicationDbContext db,
+        IServiceProvider services,
+        DatabaseExporter exporter,
+        IWebHostEnvironment environment) : ControllerBase
     {
         // GET /api/admin/backup — one-click snapshot of every table as a ZIP of CSVs.
         [HttpGet("backup")]
@@ -29,6 +33,16 @@ namespace PSUEISKOLARSystem.Server.Controllers
         [HttpPost("seed-sample-data")]
         public async Task<IActionResult> SeedSampleData()
         {
+            /* The sample coordinators and scholars all share a password that is written in the
+               source code. On a live deployment one click would have created staff accounts
+               anyone who had read the repository could sign in to — with access to every
+               scholar's personal record. Sample data is for development databases only. */
+            if (!environment.IsDevelopment())
+                return StatusCode(StatusCodes.Status403Forbidden, new
+                {
+                    message = "Sample data can only be added on a development server. It is disabled here because the sample accounts use a publicly known password.",
+                });
+
             var result = await SampleDataSeeder.SeedAsync(services);
             if (!result.AlreadySeeded)
             {

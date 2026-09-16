@@ -8,7 +8,7 @@ import { exportScholarData } from '../api/scholars';
 import { useTutorial } from '../context/TutorialContext';
 import { User, Mail, Shield, Lock, KeyRound, CheckCircle, AlertCircle, ShieldCheck, ShieldOff, Bell, Download, Sparkles, Camera, Trash2 } from 'lucide-react';
 import { useTitle } from '../hooks/useTitle';
-import PasswordStrengthMeter from '../components/PasswordStrengthMeter';
+import PasswordStrengthMeter, { getPasswordStrength } from '../components/PasswordStrengthMeter';
 import Modal from '../components/Modal';
 import Avatar from '../components/Avatar';
 import { MUTABLE_IN_APP_CATEGORIES } from '../constants/notifications';
@@ -24,7 +24,7 @@ const ROLE_BADGE = {
 
 export default function ProfilePage() {
   useTitle('Profile');
-  const { user, token, refreshUser } = useAuth();
+  const { user, token, refreshUser, renewSession } = useAuth();
   const { openTutorial } = useTutorial();
   const toast = useToast();
 
@@ -160,14 +160,20 @@ export default function ProfilePage() {
       setPwMsg({ ok: false, text: 'New passwords do not match.' });
       return;
     }
-    if (newPw.length < 8) {
-      setPwMsg({ ok: false, text: 'Password must be at least 8 characters.' });
+    // The server requires all five rules (length, upper, lower, digit, symbol); checking only
+    // the length here let a weak password through to a raw Identity error.
+    if (getPasswordStrength(newPw).passed !== 5) {
+      setPwMsg({ ok: false, text: 'Use at least 8 characters with an uppercase letter, a lowercase letter, a number, and a symbol.' });
       return;
     }
     setSavingPw(true);
     try {
-      await updateProfile({ firstName: user?.firstName ?? '', middleName: user?.middleName ?? null, lastName: user?.lastName ?? '', currentPassword: currentPw, newPassword: newPw }, token);
-      setPwMsg({ ok: true, text: 'Password changed successfully.' });
+      const session = await updateProfile({ firstName: user?.firstName ?? '', middleName: user?.middleName ?? null, lastName: user?.lastName ?? '', currentPassword: currentPw, newPassword: newPw }, token);
+      // The change signs out every other session, including the token this tab was using;
+      // the server hands back a replacement so this tab stays signed in.
+      renewSession(session);
+      setPwMsg({ ok: true, text: 'Password changed successfully. Any other devices signed in to this account have been signed out.' });
+      toast('Password changed.', 'success');
       setCurrentPw(''); setNewPw(''); setConfirmPw('');
     } catch (err) {
       setPwMsg({ ok: false, text: err.message });
@@ -180,8 +186,9 @@ export default function ProfilePage() {
     setEnabling2fa(true);
     setTwoFaMsg(null);
     try {
-      await enable2fa(token);
-      await refreshUser();
+      // renewSession also carries the updated user; refreshUser here would still hold the
+      // replaced token and be refused.
+      renewSession(await enable2fa(token));
       setTwoFaMsg({ ok: true, text: 'Two-factor authentication enabled. A code will be sent to your email each time you sign in.' });
     } catch (err) {
       setTwoFaMsg({ ok: false, text: err.message });
@@ -559,9 +566,9 @@ export default function ProfilePage() {
         <Disable2faModal
           token={token}
           onClose={() => setShowDisable2fa(false)}
-          onDisabled={async () => {
+          onDisabled={session => {
             setShowDisable2fa(false);
-            await refreshUser();
+            renewSession(session);
             setTwoFaMsg({ ok: true, text: 'Two-factor authentication has been disabled.' });
           }}
         />
@@ -580,8 +587,7 @@ function Disable2faModal({ token, onClose, onDisabled }) {
     setError('');
     setSaving(true);
     try {
-      await disable2fa(password, token);
-      onDisabled();
+      onDisabled(await disable2fa(password, token));
     } catch (err) {
       setError(err.message);
     } finally {

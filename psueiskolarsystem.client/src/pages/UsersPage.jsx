@@ -22,6 +22,12 @@ function FieldError({ children }) {
 
 const ROLES = ['Administrator', 'ScholarshipCoordinator', 'Scholar'];
 
+const ROLE_LABEL = {
+  Administrator: 'Administrator',
+  ScholarshipCoordinator: 'Coordinator',
+  Scholar: 'Scholar',
+};
+
 const ROLE_BADGE_CLASS = {
   Administrator: 'badge-admin',
   ScholarshipCoordinator: 'badge-coord',
@@ -30,7 +36,7 @@ const ROLE_BADGE_CLASS = {
 
 export default function UsersPage() {
   useTitle('User Management');
-  const { token } = useAuth();
+  const { token, user: me } = useAuth();
   const toast = useToast();
   const confirm = useConfirm();
   const [users, setUsers]           = useState([]);
@@ -90,19 +96,45 @@ export default function UsersPage() {
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
+  // Id of the row with a status change or delete in flight, so a double click cannot send
+  // the request twice (archive then immediately restore, or a second delete that 404s).
+  const [busyId, setBusyId] = useState(null);
+
   async function handleToggleStatus(user) {
+    const archiving = user.isActive;
+    if (archiving && !(await confirm({
+      title: 'Archive user',
+      message: `Archive ${user.fullName}? They will be signed out and unable to sign in until the account is restored.`,
+      confirmLabel: 'Archive',
+      danger: true,
+    }))) return;
+
+    setBusyId(user.id);
     try {
-      await setUserStatus(user.id, !user.isActive, token);
-      setUsers(prev => prev.map(u => u.id === user.id ? { ...u, isActive: !u.isActive } : u));
-    } catch (e) { toast(e.message, 'error'); }
+      await setUserStatus(user.id, !archiving, token);
+      toast(archiving ? `${user.fullName} was archived.` : `${user.fullName} was restored.`, 'success');
+      // Reload rather than patch the row: with a status filter applied the row no longer
+      // belongs on this page, and the total has changed.
+      load();
+    } catch (e) {
+      toast(e.message, 'error');
+    } finally {
+      setBusyId(null);
+    }
   }
 
   async function handleDelete(user) {
     if (!(await confirm({ title: 'Delete user', message: `Delete ${user.fullName}? This cannot be undone.`, confirmLabel: 'Delete', danger: true }))) return;
+    setBusyId(user.id);
     try {
       await deleteUser(user.id, token);
+      toast(`${user.fullName} was deleted.`, 'success');
       load(); // reload so totals/paging stay correct
-    } catch (e) { toast(e.message, 'error'); }
+    } catch (e) {
+      toast(e.message, 'error');
+    } finally {
+      setBusyId(null);
+    }
   }
 
   const [resetting, setResetting] = useState(null);
@@ -151,7 +183,7 @@ export default function UsersPage() {
           />
           <select value={filterRole} onChange={e => changeRole(e.target.value)} className="clay-input" style={{ ...ctlStyle, width: 'auto' }}>
             <option value="">All Roles</option>
-            {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+            {ROLES.map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
           </select>
           <select value={filterStatus} onChange={e => changeStatus(e.target.value)} className="clay-input" style={{ ...ctlStyle, width: 'auto' }}>
             <option value="">All Statuses</option>
@@ -160,7 +192,7 @@ export default function UsersPage() {
           </select>
         </div>
 
-        {error && <p className="text-sm mb-4" style={{ color: 'var(--accent)' }}>{error}</p>}
+        {error && <ErrorBox>{error}</ErrorBox>}
 
         <div className="clay-card overflow-hidden">
           {loading ? (
@@ -177,17 +209,21 @@ export default function UsersPage() {
                 </tr>
               </thead>
               <tbody>
-                {users.map(u => (
+                {users.map(u => {
+                  const isSelf = u.id === me?.id;
+                  const rowBusy = busyId === u.id;
+                  return (
                   <tr key={u.id} className="clay-table-row">
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-2.5">
                         <Avatar userId={u.id} name={u.fullName} hasAvatar={u.hasAvatar} size={32} />
                         <span className="font-semibold" style={{ color: 'var(--text-strong)' }}>{u.fullName}</span>
+                        {isSelf && <span className="text-xs" style={{ color: 'var(--text-muted)' }}>(you)</span>}
                       </div>
                     </td>
                     <td className="px-5 py-3.5" style={{ color: 'var(--text)' }}>{u.email}</td>
                     <td className="px-5 py-3.5">
-                      <span className={`clay-badge ${ROLE_BADGE_CLASS[u.role] ?? ''}`}>{u.role}</span>
+                      <span className={`clay-badge ${ROLE_BADGE_CLASS[u.role] ?? ''}`}>{ROLE_LABEL[u.role] ?? u.role}</span>
                     </td>
                     <td className="px-5 py-3.5">
                       <span className={`clay-badge ${u.isActive ? 'badge-active' : 'badge-inactive'}`}>
@@ -199,19 +235,27 @@ export default function UsersPage() {
                         <button onClick={() => openEdit(u)} className="text-xs font-medium hover:underline" style={{ color: 'var(--accent)' }}>
                           Edit
                         </button>
-                        <button onClick={() => handleToggleStatus(u)} className="text-xs font-medium hover:underline" style={{ color: u.isActive ? '#1a3a7a' : '#0a7d43' }}>
-                          {u.isActive ? 'Archive' : 'Restore'}
-                        </button>
-                        <button onClick={() => handleSendReset(u)} disabled={resetting === u.id} className="text-xs font-medium hover:underline" style={{ color: '#8a5a00', opacity: resetting === u.id ? 0.6 : 1 }}>
+                        {/* Archiving or deleting yourself is refused by the server (it would end
+                            this session, or leave the system without an administrator), so the
+                            controls are not offered on your own row. */}
+                        {!isSelf && (
+                          <button onClick={() => handleToggleStatus(u)} disabled={rowBusy} className="text-xs font-medium hover:underline" style={{ color: u.isActive ? 'var(--text)' : 'var(--tone-ok-fg)', opacity: rowBusy ? 0.6 : 1 }}>
+                            {u.isActive ? 'Archive' : 'Restore'}
+                          </button>
+                        )}
+                        <button onClick={() => handleSendReset(u)} disabled={resetting === u.id} className="text-xs font-medium hover:underline" style={{ color: 'var(--tone-warn-fg)', opacity: resetting === u.id ? 0.6 : 1 }}>
                           {resetting === u.id ? 'Sending…' : 'Reset Password'}
                         </button>
-                        <button onClick={() => handleDelete(u)} className="text-xs font-medium hover:underline" style={{ color: 'var(--danger)' }}>
-                          Delete
-                        </button>
+                        {!isSelf && (
+                          <button onClick={() => handleDelete(u)} disabled={rowBusy} className="text-xs font-medium hover:underline" style={{ color: 'var(--danger)', opacity: rowBusy ? 0.6 : 1 }}>
+                            Delete
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table></div>
           )}
@@ -236,13 +280,14 @@ export default function UsersPage() {
             user={editing}
             token={token}
             onClose={() => setShowModal(false)}
-            onSaved={() => { setShowModal(false); load(); }}
+            isSelf={editing.id === me?.id}
+            onSaved={() => { setShowModal(false); toast('User updated.', 'success'); load(); }}
           />
         ) : (
           <CreateUserModal
             token={token}
             onClose={() => setShowModal(false)}
-            onCreated={() => { setShowModal(false); load(); }}
+            onCreated={() => { setShowModal(false); toast('User created.', 'success'); load(); }}
           />
         )
       )}
@@ -336,8 +381,8 @@ function ImportScholarsModal({ token, onClose, onDone }) {
           <>
             <div className="flex gap-3 mb-4">
               <SummaryStat label="Total rows" value={result.total} color="var(--accent)" />
-              <SummaryStat label="Created" value={result.created} color="#0a7d43" />
-              <SummaryStat label="Failed" value={result.failed} color="#c0342c" />
+              <SummaryStat label="Created" value={result.created} color="var(--tone-ok-fg)" />
+              <SummaryStat label="Failed" value={result.failed} color="var(--danger)" />
             </div>
 
             <div className="clay-card overflow-hidden mb-4" style={{ maxHeight: 300, overflowY: 'auto' }}>
@@ -355,7 +400,7 @@ function ImportScholarsModal({ token, onClose, onDone }) {
                       <td className="px-3 py-2" style={{ color: 'var(--text-muted)' }}>{r.row}</td>
                       <td className="px-3 py-2" style={{ color: 'var(--text-strong)' }}>{r.email || '—'}</td>
                       <td className="px-3 py-2">
-                        <span className="inline-flex items-center gap-1.5" style={{ color: r.success ? '#0a7d43' : '#c0342c' }}>
+                        <span className="inline-flex items-center gap-1.5" style={{ color: r.success ? 'var(--tone-ok-fg)' : 'var(--danger)' }}>
                           {r.success ? <CheckCircle2 size={13} /> : <XCircle size={13} />}
                           {r.message}
                         </span>
@@ -424,7 +469,7 @@ function CreateUserModal({ token, onClose, onCreated }) {
   }
 
   return (
-    <ClayModal title="Add New User" onClose={onClose}>
+    <ClayModal title="Add New User" onClose={onClose} dismissible={!submitting}>
       {error && <ErrorBox>{error}</ErrorBox>}
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
@@ -448,7 +493,7 @@ function CreateUserModal({ token, onClose, onCreated }) {
         </Field>
         <Field label="Role">
           <select required value={form.role} onChange={e => set('role', e.target.value)} className="clay-input">
-            {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+            {ROLES.map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
           </select>
         </Field>
         <ModalButtons onClose={onClose} submitting={submitting} disabled={!canSubmit} label="Create User" />
@@ -458,7 +503,7 @@ function CreateUserModal({ token, onClose, onCreated }) {
 }
 
 /* ── Edit User Modal ───────────────────────────────── */
-function EditUserModal({ user, token, onClose, onSaved }) {
+function EditUserModal({ user, token, isSelf, onClose, onSaved }) {
   const [form, setForm] = useState({
     firstName:  user.firstName  ?? '',
     middleName: user.middleName ?? '',
@@ -496,7 +541,7 @@ function EditUserModal({ user, token, onClose, onSaved }) {
   }
 
   return (
-    <ClayModal title={`Edit — ${user.fullName}`} onClose={onClose}>
+    <ClayModal title={`Edit — ${user.fullName}`} onClose={onClose} dismissible={!submitting}>
       {error && <ErrorBox>{error}</ErrorBox>}
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
@@ -515,10 +560,15 @@ function EditUserModal({ user, token, onClose, onSaved }) {
           <FieldError>{emailError}</FieldError>
         </Field>
         <Field label="Role">
-          <select required value={form.role} onChange={e => set('role', e.target.value)} className="clay-input">
-            {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+          <select required value={form.role} onChange={e => set('role', e.target.value)} className="clay-input" disabled={isSelf}>
+            {ROLES.map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
           </select>
         </Field>
+        {isSelf && (
+          <p className="text-xs -mt-2" style={{ color: 'var(--text-muted)' }}>
+            You cannot change your own role. Another administrator has to do it.
+          </p>
+        )}
         <ModalButtons onClose={onClose} submitting={submitting} disabled={!canSubmit} label="Save Changes" />
       </form>
     </ClayModal>
@@ -538,8 +588,8 @@ export function ClayModal({ title, subtitle, onClose, children, width = 460, dis
 
 export function ErrorBox({ children }) {
   return (
-    <div className="mb-4 p-3 rounded-2xl text-sm font-medium"
-      style={{ background: 'var(--accent-soft-bg)', color: 'var(--accent)', border: '1.5px solid var(--accent-soft-border)' }}>
+    <div role="alert" className="mb-4 p-3 rounded-2xl text-sm font-medium"
+      style={{ background: 'var(--danger-bg)', color: 'var(--danger)', border: '1.5px solid var(--danger-border)' }}>
       {children}
     </div>
   );
@@ -549,7 +599,7 @@ export function ModalButtons({ onClose, submitting, label, disabled = false }) {
   const off = submitting || disabled;
   return (
     <div className="flex gap-3 pt-2">
-      <button type="button" onClick={onClose} className="clay-btn clay-btn-ghost flex-1 py-2.5 text-sm">Cancel</button>
+      <button type="button" onClick={onClose} disabled={submitting} className="clay-btn clay-btn-ghost flex-1 py-2.5 text-sm">Cancel</button>
       <button type="submit" disabled={off} className="clay-btn clay-btn-primary flex-1 py-2.5 text-sm" style={{ opacity: off ? 0.65 : 1 }}>
         {submitting ? 'Saving…' : label}
       </button>

@@ -26,6 +26,9 @@ export default function DashboardPage() {
   const [activity, setActivity] = useState([]);            // recent audit-log activity (staff)
   const [pendingApprovals, setPendingApprovals] = useState(0);
   const [grantSummary, setGrantSummary] = useState(null);  // one-time grant totals (staff)
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
 
   // Deadline countdowns are rendered against this rather than a Date.now() in the loop, so
   // they stay pure and a dashboard left open still counts down.
@@ -47,6 +50,7 @@ export default function DashboardPage() {
     getDashboard(token)
       .then(data => {
         if (cancelled) return;
+        setLoadError('');
         setAnnouncements(data.announcements ?? []);
 
         if (data.scholar) {
@@ -71,10 +75,20 @@ export default function DashboardPage() {
           setActivity(log ?? []);
         }
       })
-      .catch(() => { /* the empty states below already read as "nothing to show" */ });
+      /* This used to be swallowed on the grounds that the empty states read as "nothing to
+         show" — which is exactly the problem: a failed load told the user there were no
+         announcements, no pending reviews and no deadlines, when the truth was unknown. */
+      .catch(e => { if (!cancelled) setLoadError(e.message); })
+      .finally(() => { if (!cancelled) setLoading(false); });
 
     return () => { cancelled = true; };
-  }, [token]);
+  }, [token, reloadKey]);
+
+  function retry() {
+    setLoading(true);
+    setLoadError('');
+    setReloadKey(k => k + 1);
+  }
 
   const isStaff = user?.role !== 'Scholar';
 
@@ -96,6 +110,22 @@ export default function DashboardPage() {
             <span className="page-title-bar" />
           </div>
         </div>
+
+        {loadError && (
+          <div role="alert" className="mb-6 p-4 rounded-2xl flex items-center gap-3 flex-wrap"
+            style={{ background: 'var(--danger-bg)', border: '1.5px solid var(--danger-border)', color: 'var(--danger)' }}>
+            <AlertTriangle size={18} strokeWidth={2.4} className="shrink-0" />
+            <p className="text-sm font-medium flex-1 min-w-0">
+              The dashboard could not be loaded, so the figures below may be missing. {loadError}
+            </p>
+            <button onClick={retry} className="clay-btn clay-btn-ghost px-3 py-1.5 text-xs flex items-center gap-1.5">
+              <RefreshCw size={12} strokeWidth={2.5} /> Try again
+            </button>
+          </div>
+        )}
+        {loading && !loadError && (
+          <p className="text-sm mb-6" style={{ color: 'var(--text-muted)' }} aria-live="polite">Loading your dashboard…</p>
+        )}
 
         <div className="page-split">
         <div className="min-w-0">
@@ -134,8 +164,12 @@ export default function DashboardPage() {
 
         {/* Scholar: prominent next-action nudge when documents need attention */}
         {user?.role === 'Scholar' && compliance && (() => {
-          const missing = Math.max(0, (compliance.totalRequired ?? 0) - (compliance.verifiedCount ?? 0));
+          // Submitted-and-waiting documents are not something the scholar can act on. Counting
+          // them as "still to submit" raised an "Action needed" banner for a scholar who had
+          // handed everything in and was simply waiting for review.
           const incomplete = compliance.incompleteItems?.length ?? 0;
+          const missing = Math.max(0,
+            (compliance.totalRequired ?? 0) - (compliance.verifiedCount ?? 0) - (compliance.pendingCount ?? 0) - incomplete);
           if (missing === 0 && incomplete === 0) return null;
           const primary = incomplete > 0
             ? `${incomplete} document${incomplete !== 1 ? 's' : ''} need${incomplete === 1 ? 's' : ''} resubmission`
@@ -247,33 +281,29 @@ export default function DashboardPage() {
         {/* Scholar GWA status card */}
         {user?.role === 'Scholar' && scholarGwa && (
           <div className="mb-6">
-            <div className="rounded-3xl p-5 flex items-center gap-4"
-              style={{
-                background: scholarGwa.meetsRequirement === false ? '#fff2ec' : '#d4f5e2',
-                boxShadow: '6px 6px 16px rgba(163,177,198,0.5), -4px -4px 12px rgba(255,255,255,0.85)',
-              }}>
+            {/* Tone tokens, so the card follows dark mode instead of staying a pale slab. */}
+            <div className={`rounded-3xl p-5 flex items-center gap-4 tone-${scholarGwa.meetsRequirement === false ? 'attention' : 'ok'}`}
+              style={{ background: 'var(--tone-bg)', border: '1.5px solid var(--tone-border)' }}>
               <div className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0"
-                style={{
-                  background: 'rgba(255,255,255,0.55)',
-                  boxShadow: '3px 3px 8px rgba(163,177,198,0.35), -2px -2px 5px rgba(255,255,255,0.9)',
-                }}>
+                style={{ background: 'var(--surface-2)' }}>
                 {scholarGwa.meetsRequirement === false
-                  ? <AlertTriangle size={22} strokeWidth={2} style={{ color: '#c05000' }} />
-                  : <FileCheck size={22} strokeWidth={2} style={{ color: '#108050' }} />
+                  ? <AlertTriangle size={22} strokeWidth={2} style={{ color: 'var(--tone-fg)' }} />
+                  : <FileCheck size={22} strokeWidth={2} style={{ color: 'var(--tone-fg)' }} />
                 }
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-bold uppercase tracking-wider mb-0.5"
-                  style={{ color: scholarGwa.meetsRequirement === false ? 'rgba(192,80,0,0.6)' : 'rgba(16,128,80,0.6)' }}>
+                <p className="text-xs font-bold uppercase tracking-wider mb-0.5" style={{ color: 'var(--tone-fg)' }}>
                   GWA Status · {scholarGwa.scholarshipTypeName ?? 'Scholarship'}
                 </p>
-                <p className="text-3xl font-black" style={{ color: '#0d1a33' }}>
+                <p className="text-3xl font-black" style={{ color: 'var(--text-strong)' }}>
                   {scholarGwa.latestGwa.toFixed(2)}
                 </p>
-                <p className="text-xs mt-0.5"
-                  style={{ color: scholarGwa.meetsRequirement === false ? '#7a3010' : '#0a5a3a' }}>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--text)' }}>
+                  {/* GWA runs 1.00 (best) to 5.00, and the rule is "at or under the limit".
+                      "Below threshold — minimum required: 2.50" told a scholar with 2.75 they
+                      needed a *higher* number. */}
                   {scholarGwa.meetsRequirement === false
-                    ? `Below threshold — minimum required: ${scholarGwa.minimumGwa?.toFixed(2)}`
+                    ? `Not meeting the requirement — your GWA needs to be ${scholarGwa.minimumGwa?.toFixed(2)} or better (lower is better).`
                     : 'Meeting scholarship GWA requirement'}
                 </p>
               </div>
@@ -282,7 +312,14 @@ export default function DashboardPage() {
         )}
 
         {/* Scholar compliance section */}
-        {user?.role === 'Scholar' && compliance && (
+        {user?.role === 'Scholar' && compliance && (() => {
+          // Capped at 100%: verified can never usefully exceed required, and a stale count
+          // once rendered "4 of 2 verified · 200%".
+          const verified = Math.min(compliance.verifiedCount ?? 0, compliance.totalRequired ?? 0);
+          const pct = compliance.totalRequired > 0
+            ? Math.min(100, Math.round((verified / compliance.totalRequired) * 100))
+            : 0;
+          return (
           <div className="mb-8 space-y-4">
             <h2 className="text-base font-black" style={{ color: 'var(--text-strong)' }}>Document Compliance</h2>
 
@@ -292,23 +329,19 @@ export default function DashboardPage() {
                 <div>
                   <p className="text-sm font-bold" style={{ color: 'var(--text-strong)' }}>
                     {compliance.scholarshipTypeName ?? 'Required Documents'} · {compliance.academicYear ?? ''}
+                    {compliance.semester ? ` · Sem ${compliance.semester}` : ''}
                   </p>
                   <p className="text-xs mt-0.5" style={{ color: 'var(--text)' }}>
-                    {compliance.verifiedCount} of {compliance.totalRequired} required documents verified
+                    {verified} of {compliance.totalRequired} required documents verified
                   </p>
                 </div>
                 <span className="text-2xl font-black" style={{ color: 'var(--accent)' }}>
-                  {compliance.totalRequired > 0
-                    ? `${Math.round((compliance.verifiedCount / compliance.totalRequired) * 100)}%`
-                    : '—'}
+                  {compliance.totalRequired > 0 ? `${pct}%` : '—'}
                 </span>
               </div>
 
               {/* Progress bar */}
               {(() => {
-                const pct = compliance.totalRequired > 0
-                  ? Math.round((compliance.verifiedCount / compliance.totalRequired) * 100)
-                  : 0;
                 const isComplete = pct === 100;
                 return (
                   <div className="clay-progress-track w-full h-3 mt-3">
@@ -324,25 +357,25 @@ export default function DashboardPage() {
 
               {/* Status pills */}
               <div className="flex gap-3 mt-4 flex-wrap">
-                <Pill label={`${compliance.verifiedCount} Verified`}  bg="#d4f5e2" color="#0a5a3a" Icon={FileCheck} />
+                <Pill label={`${verified} Verified`} tone="ok" Icon={FileCheck} />
                 {compliance.pendingCount > 0 && (
-                  <Pill label={`${compliance.pendingCount} Pending`} bg="#fff3cd" color="#7d5a00" Icon={Clock} />
+                  <Pill label={`${compliance.pendingCount} Pending`} tone="warn" Icon={Clock} />
                 )}
                 {compliance.incompleteItems.length > 0 && (
-                  <Pill label={`${compliance.incompleteItems.length} Incomplete`} bg="#ffe8d6" color="#c05000" Icon={AlertTriangle} />
+                  <Pill label={`${compliance.incompleteItems.length} Incomplete`} tone="attention" Icon={AlertTriangle} />
                 )}
               </div>
             </div>
 
             {/* Incomplete items list */}
             {compliance.incompleteItems.length > 0 && (
-              <div className="clay-card p-5" style={{ background: 'rgba(245,200,60,0.13)', border: '1.5px solid rgba(245,200,60,0.4)' }}>
-                <p className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: '#b58600' }}>
+              <div className="clay-card p-5 tone-warn" style={{ background: 'var(--tone-bg)', border: '1.5px solid var(--tone-border)' }}>
+                <p className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: 'var(--tone-fg)' }}>
                   Needs Resubmission
                 </p>
                 <ul className="space-y-1.5">
                   {compliance.incompleteItems.map(name => (
-                    <li key={name} className="flex items-center gap-2 text-sm" style={{ color: '#b58600' }}>
+                    <li key={name} className="flex items-center gap-2 text-sm" style={{ color: 'var(--tone-fg)' }}>
                       <AlertTriangle size={13} strokeWidth={2.5} />
                       {name}
                     </li>
@@ -352,7 +385,7 @@ export default function DashboardPage() {
             )}
 
             {/* CTA to My Documents */}
-            {(compliance.pendingCount > 0 || compliance.incompleteItems.length > 0 || compliance.verifiedCount < compliance.totalRequired) && (
+            {(compliance.pendingCount > 0 || compliance.incompleteItems.length > 0 || verified < compliance.totalRequired) && (
               <Link to="/my-documents"
                 className="flex items-center justify-between p-4 rounded-2xl"
                 style={{ background: '#002570', color: '#ffffff', textDecoration: 'none' }}>
@@ -361,14 +394,15 @@ export default function DashboardPage() {
                   <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.65)' }}>
                     {compliance.incompleteItems.length > 0
                       ? `${compliance.incompleteItems.length} document${compliance.incompleteItems.length !== 1 ? 's' : ''} need resubmission`
-                      : `${compliance.totalRequired - compliance.verifiedCount} document${compliance.totalRequired - compliance.verifiedCount !== 1 ? 's' : ''} still to verify`}
+                      : `${compliance.totalRequired - verified} document${compliance.totalRequired - verified !== 1 ? 's' : ''} still to verify`}
                   </p>
                 </div>
                 <ArrowRight size={20} strokeWidth={2} />
               </Link>
             )}
           </div>
-        )}
+          );
+        })()}
 
         {/* Quick actions (scholar) */}
         {user?.role === 'Scholar' && (
@@ -467,7 +501,7 @@ export default function DashboardPage() {
                         <span className="font-semibold">{a.userName}</span>{' '}
                         <span style={{ color: 'var(--text)' }}>{a.details || a.action}</span>
                       </p>
-                      <p className="text-xs mt-0.5" style={{ color: '#9aa6bc' }}>{relativeTime(a.timestampUtc)}</p>
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--text-faint)' }}>{relativeTime(a.timestampUtc)}</p>
                     </div>
                   </div>
                 ))}
@@ -522,10 +556,10 @@ function StatCard({ label, value, Icon, color, iconColor, info }) {
   );
 }
 
-function Pill({ label, bg, color, Icon }) {
+function Pill({ label, tone, Icon }) {
   return (
-    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-2xl text-xs font-bold"
-      style={{ background: bg, color, border: '1.5px solid rgba(0,0,0,0.06)' }}>
+    <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-2xl text-xs font-bold tone-${tone}`}
+      style={{ background: 'var(--tone-bg)', color: 'var(--tone-fg)', border: '1.5px solid var(--tone-border)' }}>
       <Icon size={11} strokeWidth={2.5} />
       {label}
     </span>

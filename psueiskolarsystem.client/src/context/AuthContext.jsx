@@ -71,7 +71,10 @@ export function AuthProvider({ children }) {
      tab still looked signed in, and every subsequent call would fail with a generic toast.
      apiFetch calls us on any 401 that carried a token. */
   useEffect(() => {
-    setUnauthorizedHandler(() => endSession('expired'));
+    setUnauthorizedHandler(failedToken => {
+      if (failedToken && failedToken !== localStorage.getItem('token')) return;
+      endSession('expired');
+    });
     return () => setUnauthorizedHandler(null);
   }, [endSession]);
 
@@ -105,6 +108,16 @@ export function AuthProvider({ children }) {
     endSession(null);
   }
 
+  /* Swap in a token the server re-issued for this same session (after a password or 2FA
+     change rotated the account's security stamp). Unlike signIn it leaves the Session
+     Expired state alone and is a no-op for a response without a token. */
+  function renewSession(authResponse) {
+    if (!authResponse?.token) return;
+    localStorage.setItem('token', authResponse.token);
+    setToken(authResponse.token);
+    if (authResponse.user) setUser(authResponse.user);
+  }
+
   async function refreshUser() {
     if (!token) return;
     try {
@@ -114,7 +127,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, signIn, signOut, refreshUser, sessionExpired, setSessionExpired, inactivityMin, setInactivityMin }}>
+    <AuthContext.Provider value={{ user, token, loading, signIn, signOut, renewSession, refreshUser, sessionExpired, setSessionExpired, inactivityMin, setInactivityMin }}>
       {children}
     </AuthContext.Provider>
   );

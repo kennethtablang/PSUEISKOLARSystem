@@ -22,7 +22,7 @@ function yearOptions() {
 
 export default function SettingsPage() {
   useTitle('System Settings');
-  const { token, inactivityMin, setInactivityMin } = useAuth();
+  const { token, user, inactivityMin, setInactivityMin } = useAuth();
   const confirm = useConfirm();
   const toast = useToast();
   const { theme, setTheme } = useTheme();
@@ -90,13 +90,26 @@ export default function SettingsPage() {
     e.preventDefault();
     setError('');
     setSaved(false);
+
+    /* The active period is what every scholar's uploads, every deadline and every compliance
+       figure is filed against, and it switched on the first click. */
+    const label = `${form.academicYear} · ${semOrdinal(Number(form.semester))}`;
+    const ok = await confirm({
+      title: 'Change the active period?',
+      message: `From now on scholars submit documents for ${label}, and dashboards and reminders follow it. Documents already filed stay under their own period.`,
+      confirmLabel: 'Change period',
+    });
+    if (!ok) return;
+
     setSaving(true);
     try {
       const updated = await setActiveSemester(
         { academicYear: form.academicYear, semester: Number(form.semester) },
         token
       );
-      setCurrent(updated);
+      // The update response carries no editor name; keep the card's "Last updated by" line
+      // from disappearing until the next reload.
+      setCurrent({ ...updated, updatedByName: user?.fullName });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
@@ -219,8 +232,8 @@ export default function SettingsPage() {
               )}
 
               {saved && (
-                <div className="mb-5 flex items-center gap-2.5 p-3.5 rounded-2xl text-sm"
-                  style={{ background: '#f0fdf4', color: '#166534', border: '1.5px solid #bbf7d0' }}>
+                <div role="status" className="mb-5 flex items-center gap-2.5 p-3.5 rounded-2xl text-sm"
+                  style={{ background: 'var(--tone-ok-bg)', color: 'var(--tone-ok-fg)', border: '1.5px solid var(--tone-ok-border)' }}>
                   <CheckCircle size={15} strokeWidth={2.5} />
                   Active period updated successfully.
                 </div>
@@ -355,7 +368,7 @@ export default function SettingsPage() {
 
               {archiveResult && !archiveResult.error && (
                 <div className="mt-4 flex items-start gap-2 p-3.5 rounded-2xl text-sm"
-                  style={{ background: '#f0fdf4', color: '#166534', border: '1.5px solid #bbf7d0' }}>
+                  style={{ background: 'var(--tone-ok-bg)', color: 'var(--tone-ok-fg)', border: '1.5px solid var(--tone-ok-border)' }}>
                   <CheckCircle size={15} strokeWidth={2.5} className="mt-px shrink-0" />
                   <span>
                     {archiveResult.archived === 0
@@ -429,7 +442,7 @@ export default function SettingsPage() {
 
               {seedResult && !seedResult.error && (
                 <div className="mt-4 flex items-start gap-2 p-3.5 rounded-2xl text-sm"
-                  style={{ background: '#f0fdf4', color: '#166534', border: '1.5px solid #bbf7d0' }}>
+                  style={{ background: 'var(--tone-ok-bg)', color: 'var(--tone-ok-fg)', border: '1.5px solid var(--tone-ok-border)' }}>
                   <CheckCircle size={15} strokeWidth={2.5} className="mt-px shrink-0" />
                   <span>
                     {seedResult.alreadySeeded

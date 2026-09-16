@@ -36,8 +36,11 @@ export default function OnboardingGate() {
       ].filter(Boolean);
       setState({ checked: true, incomplete: missing.length > 0, missing });
     } catch {
-      // No profile row at all — the usual case for a brand-new scholar.
-      setState({ checked: true, incomplete: true, missing: ['studentId', 'programId', 'scholarshipTypeId'] });
+      /* A missing profile is not an error — getScholarProfile returns null for it, handled
+         above. What lands here is a failed request (offline, server error), and treating that
+         as "incomplete" locked a fully onboarded scholar onto the profile page. The API
+         enforces onboarding itself, so a check that could not run leaves the app usable. */
+      setState({ checked: true, incomplete: false, missing: [] });
     }
   }, [user, token]);
 

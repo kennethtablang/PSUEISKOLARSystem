@@ -254,6 +254,10 @@ namespace PSUEISKOLARSystem.Server.Controllers
             var releasedAt = dto.ReleasedAt ?? DateTime.UtcNow;
             if (releasedAt > DateTime.UtcNow.AddDays(1))
                 return BadRequest(new { message = "Release date cannot be in the future." });
+            // A typing slip in the year (0202) would otherwise enter the disbursement record,
+            // which cannot be edited once released.
+            if (releasedAt < new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc))
+                return BadRequest(new { message = "Release date must be in the year 2000 or later." });
 
             grant.ReleaseStatus = GrantReleaseStatuses.Released;
             grant.ReleasedAt = releasedAt;

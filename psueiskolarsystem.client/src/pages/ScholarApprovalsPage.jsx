@@ -29,6 +29,7 @@ export default function ScholarApprovalsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [deciding, setDeciding] = useState(null);   // { scholar, approved }
+  const [approvingId, setApprovingId] = useState(null);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 350);
@@ -59,13 +60,26 @@ export default function ScholarApprovalsPage() {
   async function handleApproveDirect(scholar) {
     // Approving needs no reason, so skip the modal unless something looks off.
     if (scholar.warnings.length > 0) { setDeciding({ scholar, approved: true }); return; }
+    if (approvingId) return;
+    setApprovingId(scholar.id);
     try {
       await approveScholar(scholar.id, null, token);
       toast(`${scholar.fullName}'s registration is approved.`, 'success');
-      load(paging.page);
+      afterDecision();
     } catch (e) {
       toast(e.message, 'error');
+    } finally {
+      setApprovingId(null);
     }
+  }
+
+  /* Deciding the last row on a later page used to reload that page, which no longer exists,
+     and showed an empty queue while items remained on earlier pages. The sidebar badge also
+     only refreshed on navigation, so it kept counting the scholar just approved. */
+  function afterDecision() {
+    const stepBack = status === 'Pending' && items.length === 1 && paging.page > 1;
+    load(stepBack ? paging.page - 1 : paging.page);
+    window.dispatchEvent(new Event('scholar-approvals-changed'));
   }
 
   const pendingOnly = status === 'Pending';
@@ -77,8 +91,8 @@ export default function ScholarApprovalsPage() {
           <div>
             <h1 className="page-title">Scholar Approvals</h1>
             <p className="page-subtitle">
-              Verify scholars who registered themselves. Until approved they can sign in and
-              complete their profile, but cannot submit documents.
+              Review the profiles scholars filled in when they signed up. Approving one also
+              verifies their email, so they can sign in and submit documents.
             </p>
             <span className="page-title-bar" />
           </div>
@@ -198,8 +212,9 @@ export default function ScholarApprovalsPage() {
                         {s.approvalStatus !== 'Approved' && (
                           <button
                             onClick={() => handleApproveDirect(s)}
+                            disabled={approvingId === s.id}
                             className="text-xs font-bold hover:underline flex items-center gap-1"
-                            style={{ color: '#166534' }}
+                            style={{ color: 'var(--tone-ok-fg)', opacity: approvingId === s.id ? 0.6 : 1 }}
                           >
                             <ShieldCheck size={12} strokeWidth={2.6} /> Approve
                           </button>
@@ -241,7 +256,7 @@ export default function ScholarApprovalsPage() {
           approved={deciding.approved}
           token={token}
           onClose={() => setDeciding(null)}
-          onDone={msg => { setDeciding(null); toast(msg, 'success'); load(paging.page); }}
+          onDone={msg => { setDeciding(null); toast(msg, 'success'); afterDecision(); }}
         />
       )}
     </Layout>

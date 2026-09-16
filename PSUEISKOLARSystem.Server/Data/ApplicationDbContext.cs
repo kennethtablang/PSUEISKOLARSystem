@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using PSUEISKOLARSystem.Server.Models;
 using PSUEISKOLARSystem.Server.Models.Enums;
 
@@ -373,6 +374,46 @@ namespace PSUEISKOLARSystem.Server.Data
                 .WithMany()
                 .HasForeignKey(s => s.UpdatedById)
                 .OnDelete(DeleteBehavior.SetNull);
+
+            MarkDateTimesAsUtc(builder);
+        }
+
+        /// <summary>
+        /// Every timestamp this system writes is UTC (<c>DateTime.UtcNow</c>, or an ISO string
+        /// with a <c>Z</c> from the client), but SQL Server's <c>datetime2</c> keeps no kind, so
+        /// values came back as <see cref="DateTimeKind.Unspecified"/> and were serialised with
+        /// no offset — <c>"2026-01-15T00:00:00"</c>. Browsers read that as <i>local</i> time, so
+        /// in Manila every stored timestamp displayed eight hours early: a notification from a
+        /// minute ago read "8h ago", and a freshly created record showed a different time from
+        /// the same record reloaded. Stamping the kind on read makes the API emit the <c>Z</c>.
+        /// <para>
+        /// <c>ScholarProfile.BirthDate</c> is excluded: it is a calendar date, not an instant,
+        /// and must not move with the viewer's time zone.
+        /// </para>
+        /// </summary>
+        private static void MarkDateTimesAsUtc(ModelBuilder builder)
+        {
+            var utc = new ValueConverter<DateTime, DateTime>(
+                v => v.Kind == DateTimeKind.Local ? v.ToUniversalTime() : v,
+                v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
+
+            var utcNullable = new ValueConverter<DateTime?, DateTime?>(
+                v => v.HasValue && v.Value.Kind == DateTimeKind.Local ? v.Value.ToUniversalTime() : v,
+                v => v.HasValue ? DateTime.SpecifyKind(v.Value, DateTimeKind.Utc) : v);
+
+            foreach (var entity in builder.Model.GetEntityTypes())
+            {
+                foreach (var property in entity.GetProperties())
+                {
+                    if (entity.ClrType == typeof(ScholarProfile) && property.Name == nameof(ScholarProfile.BirthDate))
+                        continue;
+
+                    if (property.ClrType == typeof(DateTime))
+                        property.SetValueConverter(utc);
+                    else if (property.ClrType == typeof(DateTime?))
+                        property.SetValueConverter(utcNullable);
+                }
+            }
         }
     }
 }

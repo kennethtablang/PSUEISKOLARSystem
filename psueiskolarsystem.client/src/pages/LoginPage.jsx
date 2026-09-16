@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { login, forgotPassword, verifyTwoFactorLogin, resendVerification } from '../api/auth';
 import { useTitle } from '../hooks/useTitle';
@@ -36,8 +36,12 @@ export default function LoginPage() {
   }
 
   useTitle('Sign In');
-  const { signIn } = useAuth();
+  const { signIn, user, loading } = useAuth();
   const navigate = useNavigate();
+
+  // Someone already signed in (a bookmark, the back button) belongs on their dashboard, not
+  // on a sign-in form that implies their session has ended.
+  if (!loading && user) return <Navigate to="/dashboard" replace />;
 
   async function handleSubmit(e) {
     e.preventDefault();

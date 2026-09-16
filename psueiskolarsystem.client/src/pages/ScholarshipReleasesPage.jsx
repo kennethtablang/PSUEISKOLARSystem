@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { useToast, useConfirm } from '../context/UIContext';
@@ -12,7 +12,7 @@ import { ErrorBox, ModalButtons } from './UsersPage';
 import Field from '../components/Field';
 import { TableSkeleton, EmptyState } from '../components/ListState';
 import { useTitle } from '../hooks/useTitle';
-import { ctlStyle } from '../constants/ui';
+import { ctlStyle, localDateInput } from '../constants/ui';
 import {
   peso, isRecurring, semestersFor, semesterLabel,
   currentAcademicYear, WHOLE_YEAR_SEMESTER, FREQUENCY_LABELS,
@@ -86,19 +86,28 @@ export default function ScholarshipReleasesPage() {
     if (!allowed.includes(semester)) setSemester(allowed[0]);
   }, [selectedType, semester]);
 
+  // Only the latest request may fill the table, and only a complete YYYY-YYYY is worth
+  // requesting: the year box used to fire per keystroke, flashing "invalid academic year"
+  // errors while typing and letting a slow earlier response overwrite the current one.
+  const requestSeq = useRef(0);
+  const yearComplete = /^\d{4}-\d{4}$/.test(academicYear.trim());
+
   const load = useCallback(async () => {
-    if (!typeId) { setMonitor(null); return; }
+    const seq = ++requestSeq.current;
+    if (!typeId || !yearComplete) { setMonitor(null); setLoading(false); return; }
     setLoading(true);
     setError('');
     try {
-      setMonitor(await getReleaseMonitor(token, { scholarshipTypeId: typeId, academicYear, semester }));
+      const data = await getReleaseMonitor(token, { scholarshipTypeId: typeId, academicYear: academicYear.trim(), semester });
+      if (seq === requestSeq.current) setMonitor(data);
     } catch (e) {
+      if (seq !== requestSeq.current) return;
       setError(e.message);
       setMonitor(null);
     } finally {
-      setLoading(false);
+      if (seq === requestSeq.current) setLoading(false);
     }
-  }, [token, typeId, academicYear, semester]);
+  }, [token, typeId, academicYear, semester, yearComplete]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -134,7 +143,10 @@ export default function ScholarshipReleasesPage() {
     }
   }
 
+  const [cancellingId, setCancellingId] = useState(null);
+
   async function handleCancel(row) {
+    if (cancellingId) return;
     const ok = await confirm({
       title: 'Cancel this release',
       message: `Cancel the ${selectedType?.name} payout for ${row.scholarName} this period? `
@@ -143,12 +155,15 @@ export default function ScholarshipReleasesPage() {
       danger: true,
     });
     if (!ok) return;
+    setCancellingId(row.releaseId);
     try {
       await cancelScholarshipRelease(row.releaseId, 'Cancelled by staff from the release monitor.', token);
       toast('Release cancelled.', 'success');
       await load();
     } catch (e) {
       toast(e.message, 'error');
+    } finally {
+      setCancellingId(null);
     }
   }
 
@@ -182,7 +197,7 @@ export default function ScholarshipReleasesPage() {
           {selectedType && (
             <button
               onClick={handleGenerate}
-              disabled={generating}
+              disabled={generating || !yearComplete}
               className="clay-btn clay-btn-primary px-4 py-2.5 text-sm flex items-center gap-1.5"
             >
               <ListPlus size={15} strokeWidth={2.6} />
@@ -287,7 +302,11 @@ export default function ScholarshipReleasesPage() {
               {loading ? (
                 <TableSkeleton />
               ) : !monitor ? (
-                <EmptyState title="Pick a scholarship" message="Choose a scholarship and period above to see who has been paid." />
+                <EmptyState
+                title={typeId && !yearComplete ? 'Enter the academic year' : 'Pick a scholarship'}
+                message={typeId && !yearComplete
+                  ? 'Type the academic year as YYYY-YYYY (e.g. 2025-2026) to see who has been paid.'
+                  : 'Choose a scholarship and period above to see who has been paid.'} />
               ) : rows.length === 0 ? (
                 <EmptyState
                   title={monitor.totalScholars === 0 ? 'Nobody holds this scholarship' : 'No scholars match'}
@@ -347,7 +366,7 @@ export default function ScholarshipReleasesPage() {
                                 <button
                                   onClick={() => setReleasing(s)}
                                   className="text-xs font-bold hover:underline flex items-center gap-1"
-                                  style={{ color: '#166534' }}
+                                  style={{ color: 'var(--tone-ok-fg)' }}
                                 >
                                   <BanknoteArrowUp size={12} strokeWidth={2.6} /> Release
                                 </button>
@@ -360,8 +379,9 @@ export default function ScholarshipReleasesPage() {
                                 </button>
                                 <button
                                   onClick={() => handleCancel(s)}
+                                  disabled={cancellingId === s.releaseId}
                                   className="text-xs font-medium hover:underline"
-                                  style={{ color: '#b45309' }}
+                                  style={{ color: 'var(--tone-attention-fg)', opacity: cancellingId === s.releaseId ? 0.6 : 1 }}
                                 >
                                   Cancel
                                 </button>
@@ -527,7 +547,7 @@ function RecordReleaseModal({ scholar, type, academicYear, semester, token, onCl
 /* Mark a scheduled payout as actually handed over. */
 function ReleasePayoutModal({ row, typeName, token, onClose, onSaved }) {
   const [referenceNo, setReferenceNo] = useState('');
-  const [releasedAt, setReleasedAt] = useState(new Date().toISOString().split('T')[0]);
+  const [releasedAt, setReleasedAt] = useState(localDateInput);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 

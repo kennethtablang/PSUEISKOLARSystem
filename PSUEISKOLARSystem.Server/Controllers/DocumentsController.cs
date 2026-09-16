@@ -369,6 +369,15 @@ namespace PSUEISKOLARSystem.Server.Controllers
             }
         }
 
+        // GET /api/documents/pending-count  — sidebar badge for the Document Review queue
+        [HttpGet("pending-count")]
+        [Authorize(Roles = $"{UserRoles.Administrator},{UserRoles.ScholarshipCoordinator}")]
+        public async Task<IActionResult> PendingCount()
+        {
+            var count = await db.DocumentSubmissions.CountAsync(ds => ds.Status == DocumentStatus.Pending);
+            return Ok(new { count });
+        }
+
         // GET /api/documents/{id}/preview  — serves inline (no download prompt)
         [HttpGet("{id}/preview")]
         public async Task<IActionResult> Preview(int id)
@@ -432,8 +441,8 @@ namespace PSUEISKOLARSystem.Server.Controllers
         [Authorize(Roles = $"{UserRoles.Administrator},{UserRoles.ScholarshipCoordinator}")]
         public async Task<IActionResult> Review(int id, ReviewRequest dto)
         {
-            if (!Enum.TryParse<DocumentStatus>(dto.Status, out var status) || status == DocumentStatus.Pending)
-                return BadRequest(new { message = "Status must be 'Verified' or 'Incomplete'." });
+            if (ValidateReview(dto.Status, dto.FeedbackNote, out var status, out var feedback) is { } invalid)
+                return invalid;
 
             var submission = await db.DocumentSubmissions
                 .Include(s => s.Scholar)
@@ -443,7 +452,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
             var reviewerId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
             submission.Status = status;
-            submission.FeedbackNote = dto.FeedbackNote;
+            submission.FeedbackNote = feedback;
             submission.ReviewedById = reviewerId;
             submission.ReviewedAt = DateTime.UtcNow;
 
@@ -451,7 +460,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             {
                 SubmissionId = id,
                 Status = status.ToString(),
-                Note = dto.FeedbackNote,
+                Note = feedback,
                 ChangedById = reviewerId,
                 ChangedAt = DateTime.UtcNow,
             });
@@ -466,7 +475,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 submission.ScholarId,
                 $"Document {status}",
                 $"Your \"{requirementName}\" submission was marked {status}." +
-                    (string.IsNullOrWhiteSpace(dto.FeedbackNote) ? "" : $" Note: {dto.FeedbackNote}"),
+                    (feedback is null ? "" : $" Note: {feedback}"),
                 NotificationCategories.DocumentStatus,
                 "/my-documents");
 
@@ -482,7 +491,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                         scholar.FullName,
                         requirementName,
                         status.ToString(),
-                        dto.FeedbackNote));
+                        feedback));
             }
 
             return NoContent();
@@ -493,8 +502,8 @@ namespace PSUEISKOLARSystem.Server.Controllers
         [Authorize(Roles = $"{UserRoles.Administrator},{UserRoles.ScholarshipCoordinator}")]
         public async Task<IActionResult> BatchReview(BatchReviewRequest dto)
         {
-            if (!Enum.TryParse<DocumentStatus>(dto.Status, out var status) || status == DocumentStatus.Pending)
-                return BadRequest(new { message = "Status must be 'Verified' or 'Incomplete'." });
+            if (ValidateReview(dto.Status, dto.FeedbackNote, out var status, out var feedback) is { } invalid)
+                return invalid;
             if (dto.Ids is null || dto.Ids.Count == 0)
                 return BadRequest(new { message = "No submissions selected." });
 
@@ -510,14 +519,14 @@ namespace PSUEISKOLARSystem.Server.Controllers
             foreach (var submission in submissions)
             {
                 submission.Status = status;
-                submission.FeedbackNote = dto.FeedbackNote;
+                submission.FeedbackNote = feedback;
                 submission.ReviewedById = reviewerId;
                 submission.ReviewedAt = now;
                 db.DocumentStatusHistories.Add(new DocumentStatusHistory
                 {
                     SubmissionId = submission.Id,
                     Status = status.ToString(),
-                    Note = dto.FeedbackNote,
+                    Note = feedback,
                     ChangedById = reviewerId,
                     ChangedAt = now,
                 });
@@ -532,7 +541,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     submission.ScholarId,
                     $"Document {status}",
                     $"Your \"{requirementName}\" submission was marked {status}." +
-                        (string.IsNullOrWhiteSpace(dto.FeedbackNote) ? "" : $" Note: {dto.FeedbackNote}"),
+                        (feedback is null ? "" : $" Note: {feedback}"),
                     NotificationCategories.DocumentStatus,
                     "/my-documents");
 
@@ -542,12 +551,31 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     mail.Queue($"document status to {scholar.Email}", email =>
                         email.SendDocumentStatusEmailAsync(
                             scholar.Email!, scholar.FullName,
-                            requirementName, status.ToString(), dto.FeedbackNote));
+                            requirementName, status.ToString(), feedback));
                 }
             }
 
             _ = notifications.BroadcastAsync("AnalyticsChanged");
             return Ok(new { reviewed = submissions.Count });
+        }
+
+        /// <summary>
+        /// Shared rules for a review decision. Marking a document Incomplete without saying
+        /// what is wrong leaves the scholar unable to fix it, and that rule was only enforced
+        /// by the review form — the API accepted a blank note. The note is also bounded to the
+        /// 1000-character column, which otherwise failed at SaveChanges.
+        /// </summary>
+        private BadRequestObjectResult? ValidateReview(string? rawStatus, string? rawFeedback, out DocumentStatus status, out string? feedback)
+        {
+            feedback = string.IsNullOrWhiteSpace(rawFeedback) ? null : rawFeedback.Trim();
+
+            if (!Enum.TryParse(rawStatus, out status) || status == DocumentStatus.Pending)
+                return BadRequest(new { message = "Status must be 'Verified' or 'Incomplete'." });
+            if (status == DocumentStatus.Incomplete && feedback is null)
+                return BadRequest(new { message = "Add feedback explaining what needs to be corrected before marking a document incomplete." });
+            if (feedback?.Length > 1000)
+                return BadRequest(new { message = "Feedback must be 1000 characters or fewer." });
+            return null;
         }
 
         // GET /api/documents/{id}/history

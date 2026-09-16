@@ -75,7 +75,9 @@ export async function apiFetch(url, {
   // A 401 without a token is an ordinary credential failure (a bad password on the login
   // form). With a token it means the token is gone, expired, or revoked — end the session.
   const expired = res.status === 401 && Boolean(token);
-  if (expired) unauthorizedHandler?.();
+  // Passes the token that failed, so a request still carrying a token the session has since
+  // replaced (after a password or 2FA change) is not mistaken for the session ending.
+  if (expired) unauthorizedHandler?.(token);
 
   const parsed = isJson(res) ? await res.json().catch(() => null) : null;
   throw new ApiError(errorMessage(parsed, expired ? SESSION_EXPIRED : fallback), res.status, parsed);
