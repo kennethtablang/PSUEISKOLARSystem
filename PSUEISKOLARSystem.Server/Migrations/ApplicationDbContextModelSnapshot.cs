@@ -487,6 +487,50 @@ namespace PSUEISKOLARSystem.Server.Migrations
                     b.ToTable("AuditLogs");
                 });
 
+            modelBuilder.Entity("PSUEISKOLARSystem.Server.Models.Campus", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.ToTable("Campuses");
+                });
+
+            modelBuilder.Entity("PSUEISKOLARSystem.Server.Models.CampusProgram", b =>
+                {
+                    b.Property<int>("CampusId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ProgramId")
+                        .HasColumnType("int");
+
+                    b.HasKey("CampusId", "ProgramId");
+
+                    b.HasIndex("ProgramId");
+
+                    b.ToTable("CampusPrograms");
+                });
+
             modelBuilder.Entity("PSUEISKOLARSystem.Server.Models.DocumentRequirement", b =>
                 {
                     b.Property<int>("Id")
@@ -641,6 +685,180 @@ namespace PSUEISKOLARSystem.Server.Migrations
                     b.ToTable("DocumentSubmissions");
                 });
 
+            modelBuilder.Entity("PSUEISKOLARSystem.Server.Models.EligibilityRecord", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("CampusId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ClaimedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ClaimedByUserId")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedById")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("FirstName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<decimal?>("GrantAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("decimal(12,2)");
+
+                    b.Property<int?>("GrantTypeId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("LastName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("MiddleName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<int?>("ScholarshipTypeId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("StudentId")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CampusId");
+
+                    b.HasIndex("ClaimedByUserId");
+
+                    b.HasIndex("GrantTypeId");
+
+                    b.HasIndex("ScholarshipTypeId");
+
+                    b.HasIndex("StudentId");
+
+                    b.HasIndex("Kind", "StudentId", "GrantTypeId")
+                        .IsUnique()
+                        .HasFilter("[GrantTypeId] IS NOT NULL");
+
+                    b.ToTable("EligibilityRecords");
+                });
+
+            modelBuilder.Entity("PSUEISKOLARSystem.Server.Models.GrantType", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DeactivatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal?>("DefaultAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("decimal(12,2)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("Sponsor")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("GrantTypes");
+                });
+
+            modelBuilder.Entity("PSUEISKOLARSystem.Server.Models.GranteeProfile", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("BirthDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("CampusId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ContactNumber")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("ProgramId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("StudentId")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("YearLevel")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CampusId");
+
+                    b.HasIndex("ProgramId");
+
+                    b.HasIndex("StudentId")
+                        .IsUnique();
+
+                    b.HasIndex("UserId")
+                        .IsUnique();
+
+                    b.ToTable("GranteeProfiles");
+                });
+
             modelBuilder.Entity("PSUEISKOLARSystem.Server.Models.Message", b =>
                 {
                     b.Property<int>("Id")
@@ -782,6 +1000,9 @@ namespace PSUEISKOLARSystem.Server.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<int?>("GrantTypeId")
+                        .HasColumnType("int");
+
                     b.Property<string>("Notes")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
@@ -823,6 +1044,8 @@ namespace PSUEISKOLARSystem.Server.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("GrantTypeId");
+
                     b.HasIndex("RecordedById");
 
                     b.HasIndex("ScholarshipTypeId");
@@ -846,6 +1069,9 @@ namespace PSUEISKOLARSystem.Server.Migrations
 
                     b.Property<DateTime?>("BirthDate")
                         .HasColumnType("datetime2");
+
+                    b.Property<int?>("CampusId")
+                        .HasColumnType("int");
 
                     b.Property<string>("ContactNumber")
                         .HasMaxLength(20)
@@ -878,6 +1104,8 @@ namespace PSUEISKOLARSystem.Server.Migrations
                         .HasColumnType("int");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CampusId");
 
                     b.HasIndex("ProgramId");
 
@@ -957,6 +1185,9 @@ namespace PSUEISKOLARSystem.Server.Migrations
                         .HasPrecision(12, 2)
                         .HasColumnType("decimal(12,2)");
 
+                    b.Property<int?>("CampusId")
+                        .HasColumnType("int");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -974,6 +1205,9 @@ namespace PSUEISKOLARSystem.Server.Migrations
                     b.Property<DateTime?>("ReleasedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime?>("ScheduledDate")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("ScholarId")
                         .IsRequired()
                         .HasColumnType("nvarchar(450)");
@@ -989,7 +1223,12 @@ namespace PSUEISKOLARSystem.Server.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
+                    b.Property<int?>("YearLevel")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("CampusId");
 
                     b.HasIndex("RecordedById");
 
@@ -1301,6 +1540,25 @@ namespace PSUEISKOLARSystem.Server.Migrations
                     b.Navigation("Scholar");
                 });
 
+            modelBuilder.Entity("PSUEISKOLARSystem.Server.Models.CampusProgram", b =>
+                {
+                    b.HasOne("PSUEISKOLARSystem.Server.Models.Campus", "Campus")
+                        .WithMany("Programs")
+                        .HasForeignKey("CampusId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("PSUEISKOLARSystem.Server.Models.AcademicProgram", "Program")
+                        .WithMany("Campuses")
+                        .HasForeignKey("ProgramId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Campus");
+
+                    b.Navigation("Program");
+                });
+
             modelBuilder.Entity("PSUEISKOLARSystem.Server.Models.DocumentRequirement", b =>
                 {
                     b.HasOne("PSUEISKOLARSystem.Server.Models.ScholarshipType", "ScholarshipType")
@@ -1355,6 +1613,155 @@ namespace PSUEISKOLARSystem.Server.Migrations
                     b.Navigation("Scholar");
                 });
 
+            modelBuilder.Entity("PSUEISKOLARSystem.Server.Models.EligibilityRecord", b =>
+                {
+                    b.HasOne("PSUEISKOLARSystem.Server.Models.Campus", "Campus")
+                        .WithMany()
+                        .HasForeignKey("CampusId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("PSUEISKOLARSystem.Server.Models.ApplicationUser", "ClaimedBy")
+                        .WithMany()
+                        .HasForeignKey("ClaimedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("PSUEISKOLARSystem.Server.Models.GrantType", "GrantType")
+                        .WithMany()
+                        .HasForeignKey("GrantTypeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("PSUEISKOLARSystem.Server.Models.ScholarshipType", "ScholarshipType")
+                        .WithMany()
+                        .HasForeignKey("ScholarshipTypeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Campus");
+
+                    b.Navigation("ClaimedBy");
+
+                    b.Navigation("GrantType");
+
+                    b.Navigation("ScholarshipType");
+                });
+
+            modelBuilder.Entity("PSUEISKOLARSystem.Server.Models.GranteeProfile", b =>
+                {
+                    b.HasOne("PSUEISKOLARSystem.Server.Models.Campus", "Campus")
+                        .WithMany()
+                        .HasForeignKey("CampusId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("PSUEISKOLARSystem.Server.Models.AcademicProgram", "Program")
+                        .WithMany()
+                        .HasForeignKey("ProgramId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("PSUEISKOLARSystem.Server.Models.ApplicationUser", "User")
+                        .WithOne()
+                        .HasForeignKey("PSUEISKOLARSystem.Server.Models.GranteeProfile", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.OwnsOne("PSUEISKOLARSystem.Server.Models.PersonalDetails", "Personal", b1 =>
+                        {
+                            b1.Property<int>("GranteeProfileId")
+                                .HasColumnType("int");
+
+                            b1.Property<string>("CivilStatus")
+                                .HasMaxLength(20)
+                                .HasColumnType("nvarchar(20)");
+
+                            b1.Property<int?>("FamilyMembers")
+                                .HasColumnType("int");
+
+                            b1.Property<string>("FatherEducation")
+                                .HasMaxLength(30)
+                                .HasColumnType("nvarchar(30)");
+
+                            b1.Property<bool?>("FatherLiving")
+                                .HasColumnType("bit");
+
+                            b1.Property<decimal?>("FatherMonthlyIncome")
+                                .HasPrecision(12, 2)
+                                .HasColumnType("decimal(12,2)");
+
+                            b1.Property<string>("FatherName")
+                                .HasMaxLength(150)
+                                .HasColumnType("nvarchar(150)");
+
+                            b1.Property<string>("FatherOccupation")
+                                .HasMaxLength(100)
+                                .HasColumnType("nvarchar(100)");
+
+                            b1.Property<bool>("Is4PsBeneficiary")
+                                .HasColumnType("bit");
+
+                            b1.Property<bool>("IsFirstGenerationStudent")
+                                .HasColumnType("bit");
+
+                            b1.Property<bool>("IsIndigenousPeople")
+                                .HasColumnType("bit");
+
+                            b1.Property<bool>("IsPwd")
+                                .HasColumnType("bit");
+
+                            b1.Property<bool>("IsSoloParent")
+                                .HasColumnType("bit");
+
+                            b1.Property<bool>("IsWorkingStudent")
+                                .HasColumnType("bit");
+
+                            b1.Property<string>("MainSupportSource")
+                                .HasMaxLength(20)
+                                .HasColumnType("nvarchar(20)");
+
+                            b1.Property<string>("MotherEducation")
+                                .HasMaxLength(30)
+                                .HasColumnType("nvarchar(30)");
+
+                            b1.Property<bool?>("MotherLiving")
+                                .HasColumnType("bit");
+
+                            b1.Property<decimal?>("MotherMonthlyIncome")
+                                .HasPrecision(12, 2)
+                                .HasColumnType("decimal(12,2)");
+
+                            b1.Property<string>("MotherName")
+                                .HasMaxLength(150)
+                                .HasColumnType("nvarchar(150)");
+
+                            b1.Property<string>("MotherOccupation")
+                                .HasMaxLength(100)
+                                .HasColumnType("nvarchar(100)");
+
+                            b1.Property<string>("Sex")
+                                .HasMaxLength(10)
+                                .HasColumnType("nvarchar(10)");
+
+                            b1.Property<int?>("Siblings")
+                                .HasColumnType("int");
+
+                            b1.Property<int?>("SiblingsStudying")
+                                .HasColumnType("int");
+
+                            b1.HasKey("GranteeProfileId");
+
+                            b1.ToTable("GranteeProfiles");
+
+                            b1.WithOwner()
+                                .HasForeignKey("GranteeProfileId");
+                        });
+
+                    b.Navigation("Campus");
+
+                    b.Navigation("Personal")
+                        .IsRequired();
+
+                    b.Navigation("Program");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("PSUEISKOLARSystem.Server.Models.Message", b =>
                 {
                     b.HasOne("PSUEISKOLARSystem.Server.Models.DocumentRequirement", "Requirement")
@@ -1404,6 +1811,11 @@ namespace PSUEISKOLARSystem.Server.Migrations
 
             modelBuilder.Entity("PSUEISKOLARSystem.Server.Models.OneTimeGrant", b =>
                 {
+                    b.HasOne("PSUEISKOLARSystem.Server.Models.GrantType", "GrantType")
+                        .WithMany()
+                        .HasForeignKey("GrantTypeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("PSUEISKOLARSystem.Server.Models.ApplicationUser", "RecordedBy")
                         .WithMany()
                         .HasForeignKey("RecordedById");
@@ -1419,6 +1831,8 @@ namespace PSUEISKOLARSystem.Server.Migrations
                         .HasForeignKey("ScholarshipTypeId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.Navigation("GrantType");
+
                     b.Navigation("RecordedBy");
 
                     b.Navigation("Scholar");
@@ -1428,6 +1842,11 @@ namespace PSUEISKOLARSystem.Server.Migrations
 
             modelBuilder.Entity("PSUEISKOLARSystem.Server.Models.ScholarProfile", b =>
                 {
+                    b.HasOne("PSUEISKOLARSystem.Server.Models.Campus", "Campus")
+                        .WithMany()
+                        .HasForeignKey("CampusId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("PSUEISKOLARSystem.Server.Models.AcademicProgram", "Program")
                         .WithMany("Scholars")
                         .HasForeignKey("ProgramId")
@@ -1442,6 +1861,101 @@ namespace PSUEISKOLARSystem.Server.Migrations
                         .WithOne()
                         .HasForeignKey("PSUEISKOLARSystem.Server.Models.ScholarProfile", "UserId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.OwnsOne("PSUEISKOLARSystem.Server.Models.PersonalDetails", "Personal", b1 =>
+                        {
+                            b1.Property<int>("ScholarProfileId")
+                                .HasColumnType("int");
+
+                            b1.Property<string>("CivilStatus")
+                                .HasMaxLength(20)
+                                .HasColumnType("nvarchar(20)");
+
+                            b1.Property<int?>("FamilyMembers")
+                                .HasColumnType("int");
+
+                            b1.Property<string>("FatherEducation")
+                                .HasMaxLength(30)
+                                .HasColumnType("nvarchar(30)");
+
+                            b1.Property<bool?>("FatherLiving")
+                                .HasColumnType("bit");
+
+                            b1.Property<decimal?>("FatherMonthlyIncome")
+                                .HasPrecision(12, 2)
+                                .HasColumnType("decimal(12,2)");
+
+                            b1.Property<string>("FatherName")
+                                .HasMaxLength(150)
+                                .HasColumnType("nvarchar(150)");
+
+                            b1.Property<string>("FatherOccupation")
+                                .HasMaxLength(100)
+                                .HasColumnType("nvarchar(100)");
+
+                            b1.Property<bool>("Is4PsBeneficiary")
+                                .HasColumnType("bit");
+
+                            b1.Property<bool>("IsFirstGenerationStudent")
+                                .HasColumnType("bit");
+
+                            b1.Property<bool>("IsIndigenousPeople")
+                                .HasColumnType("bit");
+
+                            b1.Property<bool>("IsPwd")
+                                .HasColumnType("bit");
+
+                            b1.Property<bool>("IsSoloParent")
+                                .HasColumnType("bit");
+
+                            b1.Property<bool>("IsWorkingStudent")
+                                .HasColumnType("bit");
+
+                            b1.Property<string>("MainSupportSource")
+                                .HasMaxLength(20)
+                                .HasColumnType("nvarchar(20)");
+
+                            b1.Property<string>("MotherEducation")
+                                .HasMaxLength(30)
+                                .HasColumnType("nvarchar(30)");
+
+                            b1.Property<bool?>("MotherLiving")
+                                .HasColumnType("bit");
+
+                            b1.Property<decimal?>("MotherMonthlyIncome")
+                                .HasPrecision(12, 2)
+                                .HasColumnType("decimal(12,2)");
+
+                            b1.Property<string>("MotherName")
+                                .HasMaxLength(150)
+                                .HasColumnType("nvarchar(150)");
+
+                            b1.Property<string>("MotherOccupation")
+                                .HasMaxLength(100)
+                                .HasColumnType("nvarchar(100)");
+
+                            b1.Property<string>("Sex")
+                                .HasMaxLength(10)
+                                .HasColumnType("nvarchar(10)");
+
+                            b1.Property<int?>("Siblings")
+                                .HasColumnType("int");
+
+                            b1.Property<int?>("SiblingsStudying")
+                                .HasColumnType("int");
+
+                            b1.HasKey("ScholarProfileId");
+
+                            b1.ToTable("ScholarProfiles");
+
+                            b1.WithOwner()
+                                .HasForeignKey("ScholarProfileId");
+                        });
+
+                    b.Navigation("Campus");
+
+                    b.Navigation("Personal")
                         .IsRequired();
 
                     b.Navigation("Program");
@@ -1478,6 +1992,11 @@ namespace PSUEISKOLARSystem.Server.Migrations
 
             modelBuilder.Entity("PSUEISKOLARSystem.Server.Models.ScholarshipRelease", b =>
                 {
+                    b.HasOne("PSUEISKOLARSystem.Server.Models.Campus", "Campus")
+                        .WithMany()
+                        .HasForeignKey("CampusId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("PSUEISKOLARSystem.Server.Models.ApplicationUser", "RecordedBy")
                         .WithMany()
                         .HasForeignKey("RecordedById");
@@ -1493,6 +2012,8 @@ namespace PSUEISKOLARSystem.Server.Migrations
                         .HasForeignKey("ScholarshipTypeId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("Campus");
 
                     b.Navigation("RecordedBy");
 
@@ -1550,12 +2071,19 @@ namespace PSUEISKOLARSystem.Server.Migrations
 
             modelBuilder.Entity("PSUEISKOLARSystem.Server.Models.AcademicProgram", b =>
                 {
+                    b.Navigation("Campuses");
+
                     b.Navigation("Scholars");
                 });
 
             modelBuilder.Entity("PSUEISKOLARSystem.Server.Models.Announcement", b =>
                 {
                     b.Navigation("Recipients");
+                });
+
+            modelBuilder.Entity("PSUEISKOLARSystem.Server.Models.Campus", b =>
+                {
+                    b.Navigation("Programs");
                 });
 
             modelBuilder.Entity("PSUEISKOLARSystem.Server.Models.DocumentRequirement", b =>

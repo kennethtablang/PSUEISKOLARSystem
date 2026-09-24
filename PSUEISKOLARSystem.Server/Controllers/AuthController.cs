@@ -43,7 +43,16 @@ namespace PSUEISKOLARSystem.Server.Controllers
             }
         }
 
+        // POST /api/auth/check-eligibility — master-list pre-check for the sign-up form.
+        // Rate-limited like the other anonymous lookups: it confirms a student number and
+        // name pair, so it must not be usable to sweep the list.
+        [HttpPost("check-eligibility")]
+        [EnableRateLimiting("emailcheck")]
+        public async Task<ActionResult<EligibilityCheckResultDto>> CheckEligibility(EligibilityCheckRequestDto request) =>
+            Ok(await authService.CheckEligibilityAsync(request));
+
         [HttpPost("register-scholar")]
+        [EnableRateLimiting("auth")]
         public async Task<ActionResult<UserDto>> RegisterScholar(RegisterScholarRequestDto request)
         {
             try

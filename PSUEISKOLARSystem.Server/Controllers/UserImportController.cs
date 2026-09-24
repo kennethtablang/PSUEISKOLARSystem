@@ -310,7 +310,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
         }
 
         // ── Parsing helpers ──────────────────────────────────────────────
-        private static List<Dictionary<string, string>> ParseXlsx(IFormFile file)
+        internal static List<Dictionary<string, string>> ParseXlsx(IFormFile file)
         {
             using var stream = file.OpenReadStream();
             using var wb = new XLWorkbook(stream);
@@ -340,7 +340,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             return rows;
         }
 
-        private static List<Dictionary<string, string>> ParseCsv(IFormFile file)
+        internal static List<Dictionary<string, string>> ParseCsv(IFormFile file)
         {
             using var reader = new StreamReader(file.OpenReadStream(), Encoding.UTF8);
             var text = reader.ReadToEnd();

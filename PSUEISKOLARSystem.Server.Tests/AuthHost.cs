@@ -71,7 +71,7 @@ public sealed class AuthHost : IDisposable
         Auth = _scope.ServiceProvider.GetRequiredService<IAuthService>();
 
         var roles = _scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
-        foreach (var name in new[] { UserRoles.Administrator, UserRoles.ScholarshipCoordinator, UserRoles.Scholar })
+        foreach (var name in UserRoles.All)
             roles.CreateAsync(new IdentityRole(name)).GetAwaiter().GetResult();
     }
 

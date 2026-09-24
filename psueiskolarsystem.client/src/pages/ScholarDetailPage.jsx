@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { AlertTriangle, Printer, Award, ShieldCheck, ShieldX, Plus, BanknoteArrowUp, History, Camera, Wallet } from 'lucide-react';
+import { AlertTriangle, Printer, Award, Plus, BanknoteArrowUp, History, Camera, Wallet, FileCheck, Eye, Download } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
@@ -9,7 +9,8 @@ import { getScholarProfile, upsertScholarProfile, getGrades, addGrade, updateGra
 import { getPrograms, getScholarshipTypes } from '../api/lookups';
 import { getOneTimeGrants } from '../api/oneTimeGrants';
 import { getScholarReleases } from '../api/scholarshipReleases';
-import { approveScholar, rejectScholar } from '../api/scholarApprovals';
+import { getCampuses } from '../api/campuses';
+import { getSubmissions, previewFile, downloadFile } from '../api/documents';
 import { uploadAvatarFor, clearAvatarCache } from '../api/avatars';
 import { useTitle } from '../hooks/useTitle';
 import { useTheme } from '../context/ThemeContext';
@@ -21,6 +22,12 @@ import { GrantModal, ReleaseModal } from './OneTimeGrantsPage';
 import { ClayModal, ErrorBox, ModalButtons } from './UsersPage';
 import { peso } from '../constants/grants';
 import Field from '../components/Field';
+import Modal from '../components/Modal';
+import DocumentPreview from '../components/DocumentPreview';
+import {
+  PersonalDetailsView, ContactInput, BirthDateAge, PersonalQuestions, FamilyQuestions, SectionTitle,
+} from '../components/PersonalDetailsFields';
+import { ageFrom, localMobile, personalFromApi, personalToApi } from '../constants/personal';
 
 export default function ScholarDetailPage() {
   useTitle('Scholar Profile');
@@ -44,7 +51,8 @@ export default function ScholarDetailPage() {
   const [grants, setGrants] = useState(null);         // { items, totalAmount, … }
   const [releases, setReleases] = useState([]);       // recurring per-period payouts
   const [showGrantModal, setShowGrantModal] = useState(false);
-  const [decision, setDecision] = useState(null);      // 'approve' | 'reject'
+  const [campuses, setCampuses] = useState([]);
+  const [showDocuments, setShowDocuments] = useState(false);
   const [releasingGrant, setReleasingGrant] = useState(null);
 
   // Graduated, Lapsed and Suspended take a scholar out of releases, reminders and slot counts,
@@ -153,7 +161,7 @@ export default function ScholarDetailPage() {
     if (!profile) setLoading(true);
     setError('');
     try {
-      const [p, prog, st, g, hist, gr, rel] = await Promise.all([
+      const [p, prog, st, g, hist, gr, rel, camp] = await Promise.all([
         getScholarProfile(targetUserId, token),
         getPrograms(token),
         getScholarshipTypes(token),
@@ -161,6 +169,7 @@ export default function ScholarDetailPage() {
         getScholarshipHistory(targetUserId, token).catch(() => []),
         getOneTimeGrants(token, { scholarId: targetUserId, pageSize: 50 }).catch(() => null),
         getScholarReleases(targetUserId, token).catch(() => []),
+        getCampuses(token).catch(() => []),
       ]);
       setProfile(p);
       setPrograms(prog);
@@ -169,6 +178,7 @@ export default function ScholarDetailPage() {
       setScholarshipHistory(hist);
       setGrants(gr);
       setReleases(rel ?? []);
+      setCampuses(camp ?? []);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -270,6 +280,11 @@ export default function ScholarDetailPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {profile && isAdminOrCoord && (
+              <button onClick={() => setShowDocuments(true)} className="clay-btn clay-btn-ghost px-4 py-2 text-sm flex items-center gap-1.5">
+                <FileCheck size={14} strokeWidth={2.4} /> View Documents
+              </button>
+            )}
             {profile && (
               <button onClick={handlePrint} className="clay-btn clay-btn-ghost px-4 py-2 text-sm flex items-center gap-1.5">
                 <Printer size={14} strokeWidth={2.4} /> Print Summary
@@ -277,7 +292,7 @@ export default function ScholarDetailPage() {
             )}
             {(isAdminOrCoord || isOwnProfile) && (
               <button onClick={() => setEditing(true)} className="clay-btn clay-btn-ghost px-4 py-2 text-sm">
-                {isOwnProfile ? 'Edit My Info' : 'Edit Profile'}
+                {isOwnProfile ? 'Edit Contact Info' : 'Edit Profile'}
               </button>
             )}
           </div>
@@ -335,21 +350,6 @@ export default function ScholarDetailPage() {
                     <p className="text-xs mt-1.5 italic" style={{ color: 'var(--text)' }}>“{profile.approvalNote}”</p>
                   )}
                 </div>
-                {isAdminOrCoord && (
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => setDecision('approve')}
-                      className="clay-btn clay-btn-primary px-3.5 py-2 text-xs flex items-center gap-1.5">
-                      <ShieldCheck size={13} strokeWidth={2.6} /> Approve
-                    </button>
-                    {profile.approvalStatus !== 'Rejected' && (
-                      <button onClick={() => setDecision('reject')}
-                        className="clay-btn clay-btn-ghost px-3.5 py-2 text-xs flex items-center gap-1.5"
-                        style={{ color: 'var(--danger)' }}>
-                        <ShieldX size={13} strokeWidth={2.6} /> Reject
-                      </button>
-                    )}
-                  </div>
-                )}
               </div>
             )}
 
@@ -381,12 +381,14 @@ export default function ScholarDetailPage() {
                 <dl className="grid grid-cols-2 gap-x-8 gap-y-4">
                   <Detail label="Student ID" value={profile.studentId} />
                   <Detail label="Year Level" value={`Year ${profile.yearLevel}`} />
+                  <Detail label="Campus" value={profile.campusName ?? '—'} />
                   <Detail label="Program" value={profile.programName ?? '—'} />
                   <Detail label="Scholarship Type" value={profile.scholarshipTypeName ?? '—'} />
                   <Detail label="Type Category" value={profile.scholarshipTypeCategory ?? '—'} />
                   <Detail label="Min. GWA Required" value={profile.minimumGwa?.toFixed(2) ?? '—'} />
                   <Detail label="Contact Number" value={profile.contactNumber ?? '—'} />
                   <Detail label="Birth Date" value={profile.birthDate ? new Date(profile.birthDate).toLocaleDateString('en-PH') : '—'} />
+                  <Detail label="Age" value={ageFrom(profile.birthDate) ?? '—'} />
                   {profile.address && <Detail label="Address" value={profile.address} />}
                 </dl>
               </div>
@@ -398,6 +400,12 @@ export default function ScholarDetailPage() {
                 isAdminOrCoord={isAdminOrCoord}
                 onChange={() => setEditing(true)}
               />
+            </div>
+
+            {/* The Scholar's Data sheet collected at sign-up. */}
+            <div className="clay-card p-6 mb-5">
+              <h2 className="text-xs font-bold uppercase tracking-wider mb-4" style={{ color: 'var(--text-muted)' }}>Personal &amp; Family Information</h2>
+              <PersonalDetailsView personal={profile.personal} birthDate={profile.birthDate} />
             </div>
 
             {/* Recurring per-period payouts. A scholar is told "Your scholarship has been
@@ -484,6 +492,7 @@ export default function ScholarDetailPage() {
           profile={profile}
           userId={targetUserId}
           programs={programs}
+          campuses={campuses}
           scholarshipTypes={scholarshipTypes}
           token={token}
           scholarMode={isOwnProfile}
@@ -527,19 +536,8 @@ export default function ScholarDetailPage() {
         />
       )}
 
-      {decision && profile && (
-        <ApprovalDecisionModal
-          profile={profile}
-          approve={decision === 'approve'}
-          token={token}
-          onClose={() => setDecision(null)}
-          onDone={msg => {
-            setDecision(null);
-            toast(msg, 'success');
-            window.dispatchEvent(new Event('scholar-approvals-changed'));
-            load();
-          }}
-        />
+      {showDocuments && profile && (
+        <ScholarDocumentsModal scholarId={targetUserId} name={profile.fullName} token={token} onClose={() => setShowDocuments(false)} />
       )}
     </Layout>
   );
@@ -692,11 +690,17 @@ function ScholarshipReleasesCard({ releases, isAdminOrCoord }) {
                     <p className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>
                       {r.scholarshipTypeName}
                     </p>
-                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{r.periodLabel}</p>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                      {r.periodLabel}
+                      {r.yearLevel ? ` · Year ${r.yearLevel}` : ''}
+                      {r.campusName ? ` · ${r.campusName}` : ''}
+                    </p>
                     <p className="text-xs mt-0.5" style={{ color: 'var(--text-faint)' }}>
                       {r.releasedAt
-                        ? `Released ${new Date(r.releasedAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}`
-                        : 'Not yet released'}
+                        ? `Received ${new Date(r.releasedAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}`
+                        : r.scheduledDate
+                          ? `Scheduled for ${new Date(String(r.scheduledDate).slice(0, 10) + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}`
+                          : 'Not yet released'}
                       {r.referenceNo ? ` · ref ${r.referenceNo}` : ''}
                     </p>
                   </div>
@@ -789,68 +793,6 @@ function MiniStat({ label, value, color }) {
 }
 
 /* ── Approve / reject a registration straight from the profile ── */
-function ApprovalDecisionModal({ profile, approve, token, onClose, onDone }) {
-  const [note, setNote] = useState('');
-  const [error, setError] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-
-  const canSubmit = approve || note.trim().length >= 5;
-
-  async function handleSubmit(e) {
-    e.preventDefault();
-    setError('');
-    if (!canSubmit) return;
-    setSubmitting(true);
-    try {
-      if (approve) {
-        await approveScholar(profile.userId, note.trim() || null, token);
-        onDone(`${profile.fullName}'s registration is approved.`);
-      } else {
-        await rejectScholar(profile.userId, note.trim(), token);
-        onDone(`${profile.fullName}'s registration was rejected.`);
-      }
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <ClayModal
-      title={approve ? 'Approve registration' : 'Reject registration'}
-      subtitle={`${profile.fullName} · ${profile.email}`}
-      onClose={onClose}
-      dismissible={!submitting}
-    >
-      {error && <ErrorBox>{error}</ErrorBox>}
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <Field label={approve ? 'Note (optional)' : 'Reason (sent to the scholar)'}>
-          <textarea
-            rows={3}
-            required={!approve}
-            value={note}
-            onChange={e => setNote(e.target.value)}
-            className="clay-input"
-            placeholder={approve ? 'Anything the scholar should know…' : 'Explain what needs fixing…'}
-          />
-        </Field>
-        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-          {approve
-            ? 'The scholar is notified and can start submitting documents immediately.'
-            : 'Document submission stays locked until the registration is approved.'}
-        </p>
-        <ModalButtons
-          onClose={onClose}
-          submitting={submitting}
-          disabled={!canSubmit}
-          label={approve ? 'Approve' : 'Reject'}
-        />
-      </form>
-    </ClayModal>
-  );
-}
-
 function GradeTrendChart({ grades, minimumGwa }) {
   const { resolved } = useTheme();
   const t = vizTokens(resolved);
@@ -894,16 +836,18 @@ function Detail({ label, value }) {
   );
 }
 
-function EditProfileModal({ profile, userId, programs, scholarshipTypes, token, scholarMode, onClose, onSaved }) {
+function EditProfileModal({ profile, userId, programs, campuses, scholarshipTypes, token, scholarMode, onClose, onSaved }) {
   const [form, setForm] = useState({
     studentId: profile?.studentId ?? '',
+    campusId: profile?.campusId ?? '',
     programId: profile?.programId ?? '',
     scholarshipTypeId: profile?.scholarshipTypeId ?? '',
     yearLevel: profile?.yearLevel ?? 1,
-    contactNumber: profile?.contactNumber ?? '',
+    contactLocal: localMobile(profile?.contactNumber),
     birthDate: profile?.birthDate ? profile.birthDate.split('T')[0] : '',
     address: profile?.address ?? '',
     scholarshipChangeReason: '',
+    personal: personalFromApi(profile?.personal),
   });
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -917,26 +861,22 @@ function EditProfileModal({ profile, userId, programs, scholarshipTypes, token, 
     && originalTypeId !== ''
     && String(form.scholarshipTypeId) !== String(originalTypeId);
 
-  /* Mirrors the rule in ScholarProfilesController.Upsert: once the office has approved a
-     scholar against a student number and programme, only staff may change them. Shown
-     read-only rather than hidden, so the scholar can still see what is on file and reads
-     the explanation here instead of meeting a 400 on save. */
-  const identityLocked = scholarMode
-    && profile?.approvalStatus === 'Approved'
-    && Boolean(profile?.studentId);
+  // With a campus chosen, only the courses that campus offers.
+  const campusPrograms = form.campusId
+    ? programs.filter(p => p.campusIds?.includes(Number(form.campusId)) || String(p.id) === String(form.programId))
+    : programs;
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
 
-    // Client-side validation for immediate feedback.
     const sid = form.studentId.trim();
-    if (!/^[A-Za-z0-9-]{3,30}$/.test(sid)) {
+    if (!scholarMode && !/^[A-Za-z0-9-]{3,30}$/.test(sid)) {
       setError('Student ID may only contain letters, numbers, and hyphens (3–30 characters).');
       return;
     }
-    if (form.contactNumber && !/^(09\d{9}|\+639\d{9})$/.test(form.contactNumber.trim())) {
-      setError('Contact number must be a valid PH mobile number (e.g. 09171234567).');
+    if (form.contactLocal && !/^9\d{9}$/.test(form.contactLocal)) {
+      setError('Enter a valid mobile number: +63 followed by 10 digits starting with 9.');
       return;
     }
     if (form.birthDate && new Date(form.birthDate) > new Date()) {
@@ -946,15 +886,20 @@ function EditProfileModal({ profile, userId, programs, scholarshipTypes, token, 
 
     setSubmitting(true);
     try {
+      /* A scholar may change only their contact number and address — everything else was
+         matched against the Master List or is office data. The server enforces the same
+         rule; the other fields are sent unchanged so the request stays well-formed. */
       await upsertScholarProfile(userId, {
-        studentId: form.studentId,
+        studentId: sid,
+        campusId: form.campusId ? parseInt(form.campusId) : null,
         programId: form.programId ? parseInt(form.programId) : null,
         scholarshipTypeId: form.scholarshipTypeId ? parseInt(form.scholarshipTypeId) : null,
         yearLevel: parseInt(form.yearLevel),
-        contactNumber: form.contactNumber || null,
+        contactNumber: form.contactLocal ? `+63${form.contactLocal}` : null,
         birthDate: form.birthDate || null,
-        address: form.address || null,
+        address: form.address.trim() || null,
         scholarshipChangeReason: isTransfer ? (form.scholarshipChangeReason.trim() || null) : null,
+        personal: scholarMode ? null : personalToApi(form.personal),
       }, token);
       onSaved();
     } catch (err) {
@@ -964,65 +909,65 @@ function EditProfileModal({ profile, userId, programs, scholarshipTypes, token, 
     }
   }
 
+  if (scholarMode) {
+    return (
+      <ClayModal title="Edit Contact Info" onClose={onClose} width={480} dismissible={!submitting}>
+        {error && <ErrorBox>{error}</ErrorBox>}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <p className="text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+            You can keep your contact number and address up to date here. Your student number, name,
+            campus, course, year level and scholarship were verified by the scholarship office — ask your
+            coordinator if any of them need correcting.
+          </p>
+          <Field label="Contact Number">
+            <ContactInput value={form.contactLocal} onChange={v => set('contactLocal', v)} />
+          </Field>
+          <Field label="Complete Address">
+            <textarea value={form.address} onChange={e => set('address', e.target.value)} rows={3} maxLength={500} className="clay-input" />
+          </Field>
+          <ModalButtons onClose={onClose} submitting={submitting} label="Save" />
+        </form>
+      </ClayModal>
+    );
+  }
+
   return (
-    <ClayModal title={scholarMode ? 'Edit My Info' : 'Edit Scholar Profile'} onClose={onClose} width={520} dismissible={!submitting}>
+    <ClayModal title="Edit Scholar Profile" onClose={onClose} width={680} dismissible={!submitting}>
       {error && <ErrorBox>{error}</ErrorBox>}
       <form onSubmit={handleSubmit} className="space-y-4">
-        <Field label="Student ID">
-          <input
-            required
-            disabled={identityLocked}
-            value={form.studentId}
-            onChange={e => set('studentId', e.target.value)}
-            className="clay-input"
-            style={{ opacity: identityLocked ? 0.6 : 1 }}
-          />
-        </Field>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid sm:grid-cols-2 gap-4">
+          <Field label="Student ID">
+            <input required value={form.studentId} onChange={e => set('studentId', e.target.value.toUpperCase())} className="clay-input" />
+          </Field>
           <Field label="Year Level">
             <select value={form.yearLevel} onChange={e => set('yearLevel', e.target.value)} className="clay-input">
-              {[1,2,3,4,5].map(y => <option key={y} value={y}>Year {y}</option>)}
+              {[1, 2, 3, 4, 5, 6].map(y => <option key={y} value={y}>Year {y}</option>)}
             </select>
           </Field>
-          <Field label="Contact Number">
-            <input value={form.contactNumber} onChange={e => set('contactNumber', e.target.value)} className="clay-input" placeholder="09xx" />
+        </div>
+        <div className="grid sm:grid-cols-2 gap-4">
+          <Field label="Campus">
+            <select value={form.campusId} onChange={e => setForm(f => ({ ...f, campusId: e.target.value }))} className="clay-input">
+              <option value="">— Select Campus —</option>
+              {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </Field>
+          <Field label="Program">
+            <select value={form.programId} onChange={e => set('programId', e.target.value)} className="clay-input">
+              <option value="">— Select Program —</option>
+              {campusPrograms.map(p => <option key={p.id} value={p.id}>{p.name} ({p.code})</option>)}
+            </select>
           </Field>
         </div>
-        <Field label="Program">
-          <select
-            disabled={identityLocked}
-            value={form.programId}
-            onChange={e => set('programId', e.target.value)}
-            className="clay-input"
-            style={{ opacity: identityLocked ? 0.6 : 1 }}
-          >
-            <option value="">— Select Program —</option>
-            {programs.map(p => <option key={p.id} value={p.id}>{p.name} ({p.code})</option>)}
-          </select>
-          {identityLocked && (
-            <p className="text-xs mt-1.5" style={{ color: 'var(--text-muted)' }}>
-              Your student number and program were verified when your scholarship was approved.
-              Ask your scholarship coordinator if either needs correcting.
-            </p>
-          )}
-        </Field>
         <Field label="Scholarship Type">
           <select value={form.scholarshipTypeId} onChange={e => set('scholarshipTypeId', e.target.value)} className="clay-input">
             <option value="">— Select Scholarship Type —</option>
             {scholarshipTypes.map(st => <option key={st.id} value={st.id}>{st.name}</option>)}
           </select>
-          {scholarMode ? (
-            <p className="text-xs mt-1.5" style={{ color: 'var(--text-muted)' }}>
-              Choose the scholarship you are enrolled in — this sets which documents you need to
-              submit. You may hold only one scholarship, and only your coordinator can change it
-              once it is set.
-            </p>
-          ) : (
-            <p className="text-xs mt-1.5" style={{ color: 'var(--text-muted)' }}>
-              A student may hold only one scholarship at a time. Choosing a different one closes the
-              current assignment and records the transfer.
-            </p>
-          )}
+          <p className="text-xs mt-1.5" style={{ color: 'var(--text-muted)' }}>
+            Only the office can change this. A student may hold only one scholarship at a time — choosing
+            a different one closes the current assignment and records the transfer.
+          </p>
         </Field>
 
         {isTransfer && (
@@ -1039,15 +984,107 @@ function EditProfileModal({ profile, userId, programs, scholarshipTypes, token, 
             </p>
           </Field>
         )}
-        <Field label="Birth Date">
-          <input type="date" value={form.birthDate} onChange={e => set('birthDate', e.target.value)} className="clay-input" />
+        <div className="grid sm:grid-cols-2 gap-4">
+          <Field label="Contact Number">
+            <ContactInput value={form.contactLocal} onChange={v => set('contactLocal', v)} />
+          </Field>
+          <BirthDateAge value={form.birthDate} onChange={v => set('birthDate', v)} />
+        </div>
+        <Field label="Complete Address">
+          <textarea value={form.address} onChange={e => set('address', e.target.value)} rows={2} maxLength={500} className="clay-input" />
         </Field>
-        <Field label="Address">
-          <textarea value={form.address} onChange={e => set('address', e.target.value)} rows={2} className="clay-input" />
-        </Field>
+
+        <SectionTitle>Personal Information</SectionTitle>
+        <PersonalQuestions value={form.personal} onChange={v => set('personal', v)} />
+        <SectionTitle>Family Information</SectionTitle>
+        <FamilyQuestions value={form.personal} onChange={v => set('personal', v)} />
+
         <ModalButtons onClose={onClose} submitting={submitting} label="Save" />
       </form>
     </ClayModal>
+  );
+}
+
+/* The documents a scholar has submitted, for the office to look over from the profile —
+   verified ones first, since those are the approved record. */
+function ScholarDocumentsModal({ scholarId, name, token, onClose }) {
+  const [docs, setDocs] = useState(null);
+  const [error, setError] = useState('');
+  const [status, setStatus] = useState('Verified');
+  const [preview, setPreview] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getSubmissions(token, { scholarId, status: status || undefined })
+      .then(d => { if (!cancelled) { setDocs(d); setError(''); } })
+      .catch(e => { if (!cancelled) setError(e.message); });
+    return () => { cancelled = true; };
+  }, [scholarId, status, token]);
+
+  useEffect(() => () => { if (preview?.url) URL.revokeObjectURL(preview.url); }, [preview]);
+
+  async function open(d) {
+    try {
+      const p = await previewFile(d.id, token);
+      setPreview({ ...p, fileName: d.fileName, title: d.requirementName });
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  return (
+    <Modal title="Submitted Documents" subtitle={name} onClose={onClose} width={preview ? 960 : 640}>
+      {preview ? (
+        <div>
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <button onClick={() => setPreview(null)} className="text-sm font-semibold" style={{ color: 'var(--accent)' }}>← Back to list</button>
+            <span className="text-sm font-semibold truncate" style={{ color: 'var(--text-strong)' }}>{preview.title}</span>
+          </div>
+          <div style={{ height: '65vh' }} className="rounded-2xl overflow-hidden" >
+            <DocumentPreview preview={preview} />
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="flex gap-1.5 mb-4">
+            {[['Verified', 'Approved'], ['Pending', 'Pending'], ['Incomplete', 'Returned'], ['', 'All']].map(([v, label]) => (
+              <button key={label} onClick={() => setStatus(v)} className="px-3 py-1.5 rounded-xl text-xs font-bold"
+                style={status === v ? { background: '#002570', color: '#fff' } : { background: 'var(--surface-inset)', color: 'var(--text)' }}>
+                {label}
+              </button>
+            ))}
+          </div>
+          {error && <p className="text-sm mb-3" style={{ color: 'var(--danger)' }}>{error}</p>}
+          {!docs ? (
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Loading…</p>
+          ) : docs.length === 0 ? (
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No documents in this list.</p>
+          ) : (
+            <ul className="space-y-2 max-h-[60vh] overflow-y-auto">
+              {docs.map(d => (
+                <li key={d.id} className="clay-card-inner px-3.5 py-3 flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-strong)' }}>{d.requirementName}</p>
+                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                      {d.academicYear} · Sem {d.semester} · {d.fileName}
+                      {d.reviewedBy ? ` · reviewed by ${d.reviewedBy}` : ''}
+                    </p>
+                  </div>
+                  <StatusBadge status={d.status} icon={false} />
+                  <button onClick={() => open(d)} className="p-2 rounded-lg" title="Preview" aria-label={`Preview ${d.requirementName}`}>
+                    <Eye size={15} style={{ color: 'var(--accent)' }} />
+                  </button>
+                  <button onClick={() => downloadFile(d.id, d.fileName, token).catch(e => setError(e.message))}
+                    className="p-2 rounded-lg" title="Download" aria-label={`Download ${d.requirementName}`}>
+                    <Download size={15} style={{ color: 'var(--accent)' }} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </Modal>
   );
 }
 

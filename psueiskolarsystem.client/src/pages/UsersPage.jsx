@@ -21,17 +21,22 @@ function FieldError({ children }) {
 }
 
 const ROLES = ['Administrator', 'ScholarshipCoordinator', 'Scholar'];
+// Grantee accounts are only ever created by signing up against the Master List (they need a
+// grantee profile), so they can be filtered on here but not created or assigned.
+const FILTER_ROLES = [...ROLES, 'Grantee'];
 
 const ROLE_LABEL = {
   Administrator: 'Administrator',
   ScholarshipCoordinator: 'Coordinator',
   Scholar: 'Scholar',
+  Grantee: 'Grantee',
 };
 
 const ROLE_BADGE_CLASS = {
   Administrator: 'badge-admin',
   ScholarshipCoordinator: 'badge-coord',
   Scholar: 'badge-scholar',
+  Grantee: 'badge-scholar',
 };
 
 export default function UsersPage() {
@@ -183,7 +188,7 @@ export default function UsersPage() {
           />
           <select value={filterRole} onChange={e => changeRole(e.target.value)} className="clay-input" style={{ ...ctlStyle, width: 'auto' }}>
             <option value="">All Roles</option>
-            {ROLES.map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
+            {FILTER_ROLES.map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
           </select>
           <select value={filterStatus} onChange={e => changeStatus(e.target.value)} className="clay-input" style={{ ...ctlStyle, width: 'auto' }}>
             <option value="">All Statuses</option>

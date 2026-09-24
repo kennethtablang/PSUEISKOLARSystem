@@ -3,9 +3,10 @@ import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { useToast, useConfirm } from '../context/UIContext';
 import { getScholarshipTypes } from '../api/lookups';
+import { getCampuses } from '../api/campuses';
 import {
   getReleaseMonitor, getReleasePeriods, recordScholarshipRelease,
-  generateScholarshipReleases, releaseScholarship, cancelScholarshipRelease,
+  scheduleScholarshipReleases, releaseScholarshipBatch, releaseScholarship, cancelScholarshipRelease,
 } from '../api/scholarshipReleases';
 import Modal from '../components/Modal';
 import { ErrorBox, ModalButtons } from './UsersPage';
@@ -19,9 +20,13 @@ import {
 } from '../constants/grants';
 import {
   BanknoteArrowUp, CircleCheckBig, Clock, CircleAlert,
-  Users, ListPlus, Search,
+  Users, CalendarPlus, Search, Check,
 } from 'lucide-react';
 import StatusBadge from '../components/StatusBadge';
+
+const fmtDay = d => (d
+  ? new Date(String(d).slice(0, 10) + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
+  : '—');
 
 const STATUS_LABEL = {
   Released: 'Received',
@@ -54,9 +59,15 @@ export default function ScholarshipReleasesPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [search, setSearch] = useState('');
 
+  const [campuses, setCampuses] = useState([]);
+  const [campusId, setCampusId] = useState('');
+  const [yearLevel, setYearLevel] = useState('');
+
   const [recording, setRecording] = useState(null);   // scholar row being scheduled
   const [releasing, setReleasing] = useState(null);   // row being marked released
-  const [generating, setGenerating] = useState(false);
+  const [scheduling, setScheduling] = useState(false);
+  const [selected, setSelected] = useState(new Set()); // releaseIds ticked for bulk release
+  const [batchReleasing, setBatchReleasing] = useState(false);
 
   const recurringTypes = useMemo(() => types.filter(t => isRecurring(t.frequency)), [types]);
   const selectedType = recurringTypes.find(t => String(t.id) === String(typeId));
@@ -64,10 +75,11 @@ export default function ScholarshipReleasesPage() {
   // Load the scholarship list and the periods the system already knows about.
   useEffect(() => {
     let cancelled = false;
-    Promise.all([getScholarshipTypes(token), getReleasePeriods(token).catch(() => null)])
-      .then(([allTypes, periodData]) => {
+    Promise.all([getScholarshipTypes(token), getReleasePeriods(token).catch(() => null), getCampuses(token).catch(() => [])])
+      .then(([allTypes, periodData, campusList]) => {
         if (cancelled) return;
         setTypes(allTypes);
+        setCampuses(campusList);
         const recurring = allTypes.filter(t => isRecurring(t.frequency));
         if (recurring.length > 0) setTypeId(String(recurring[0].id));
         if (periodData?.activeAcademicYear) {
@@ -98,8 +110,11 @@ export default function ScholarshipReleasesPage() {
     setLoading(true);
     setError('');
     try {
-      const data = await getReleaseMonitor(token, { scholarshipTypeId: typeId, academicYear: academicYear.trim(), semester });
-      if (seq === requestSeq.current) setMonitor(data);
+      const data = await getReleaseMonitor(token, {
+        scholarshipTypeId: typeId, academicYear: academicYear.trim(), semester,
+        campusId: campusId || undefined, yearLevel: yearLevel || undefined,
+      });
+      if (seq === requestSeq.current) { setMonitor(data); setSelected(new Set()); }
     } catch (e) {
       if (seq !== requestSeq.current) return;
       setError(e.message);
@@ -107,41 +122,9 @@ export default function ScholarshipReleasesPage() {
     } finally {
       if (seq === requestSeq.current) setLoading(false);
     }
-  }, [token, typeId, academicYear, semester, yearComplete]);
+  }, [token, typeId, academicYear, semester, yearComplete, campusId, yearLevel]);
 
   useEffect(() => { load(); }, [load]);
-
-  async function handleGenerate() {
-    if (!selectedType) return;
-    const ok = await confirm({
-      title: 'Open this period’s releases',
-      message: `Every scholar under ${selectedType.name} who has no release recorded for `
-        + `${academicYear} will get one, marked awaiting release`
-        + `${selectedType.amount != null ? ` at ${peso(selectedType.amount)} each` : ''}. `
-        + 'Scholars already recorded are left untouched.',
-      confirmLabel: 'Open releases',
-    });
-    if (!ok) return;
-
-    setGenerating(true);
-    try {
-      const res = await generateScholarshipReleases({
-        scholarshipTypeId: parseInt(typeId, 10),
-        academicYear,
-        semester,
-        amount: selectedType.amount ?? null,
-      }, token);
-      toast(res.created === 0
-        ? 'Every scholar already has a release for this period.'
-        : `Opened ${res.created} release${res.created === 1 ? '' : 's'} at ${peso(res.amount)} each.`,
-        res.created === 0 ? 'info' : 'success');
-      await load();
-    } catch (e) {
-      toast(e.message, 'error');
-    } finally {
-      setGenerating(false);
-    }
-  }
 
   const [cancellingId, setCancellingId] = useState(null);
 
@@ -182,6 +165,21 @@ export default function ScholarshipReleasesPage() {
 
   const allowedSemesters = selectedType ? semestersFor(selectedType.frequency) : [1, 2];
 
+  const pendingRows = rows.filter(r => r.status === 'Pending');
+  const allPendingSelected = pendingRows.length > 0 && pendingRows.every(r => selected.has(r.releaseId));
+
+  function toggleRow(id) {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAllPending() {
+    setSelected(allPendingSelected ? new Set() : new Set(pendingRows.map(r => r.releaseId)));
+  }
+
   return (
     <Layout>
       <div className="page-shell">
@@ -189,19 +187,19 @@ export default function ScholarshipReleasesPage() {
           <div>
             <h1 className="page-title">Scholarship Releases</h1>
             <p className="page-subtitle">
-              Track, per academic period, which scholars have actually received the scholarship
-              they hold — and which are still waiting.
+              Schedule each scholarship&apos;s release once per period, campus by campus, then mark who
+              has received it. Every release is saved to the scholar&apos;s profile with its date and amount.
             </p>
             <span className="page-title-bar" />
           </div>
           {selectedType && (
             <button
-              onClick={handleGenerate}
-              disabled={generating || !yearComplete}
+              onClick={() => setScheduling(true)}
+              disabled={!yearComplete}
               className="clay-btn clay-btn-primary px-4 py-2.5 text-sm flex items-center gap-1.5"
             >
-              <ListPlus size={15} strokeWidth={2.6} />
-              {generating ? 'Opening…' : 'Open this period'}
+              <CalendarPlus size={15} strokeWidth={2.6} />
+              Schedule Release
             </button>
           )}
         </div>
@@ -253,6 +251,28 @@ export default function ScholarshipReleasesPage() {
                 ))}
               </select>
 
+              <select
+                value={campusId}
+                onChange={e => setCampusId(e.target.value)}
+                className="clay-input"
+                style={{ ...ctlStyle, width: 'auto' }}
+                aria-label="Campus"
+              >
+                <option value="">All campuses</option>
+                {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+
+              <select
+                value={yearLevel}
+                onChange={e => setYearLevel(e.target.value)}
+                className="clay-input"
+                style={{ ...ctlStyle, width: 'auto' }}
+                aria-label="Year level"
+              >
+                <option value="">All year levels</option>
+                {[1, 2, 3, 4, 5].map(y => <option key={y} value={y}>Year {y}</option>)}
+              </select>
+
               <span style={{ flex: 1 }} />
 
               <div style={{ position: 'relative' }}>
@@ -298,6 +318,21 @@ export default function ScholarshipReleasesPage() {
               </div>
             )}
 
+            {selected.size > 0 && (
+              <div className="clay-card px-4 py-3 mb-3 flex items-center gap-3 flex-wrap">
+                <span className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>
+                  {selected.size} release{selected.size === 1 ? '' : 's'} selected
+                </span>
+                <button onClick={() => setBatchReleasing(true)}
+                  className="clay-btn clay-btn-primary text-xs px-4 flex items-center gap-1.5">
+                  <BanknoteArrowUp size={13} strokeWidth={2.6} /> Mark as released
+                </button>
+                <button onClick={() => setSelected(new Set())} className="text-xs font-medium hover:underline" style={{ color: 'var(--text-muted)' }}>
+                  Clear
+                </button>
+              </div>
+            )}
+
             <div className="clay-card overflow-hidden">
               {loading ? (
                 <TableSkeleton />
@@ -315,10 +350,14 @@ export default function ScholarshipReleasesPage() {
                     : 'Clear the search or status filter to see the full roster.'}
                 />
               ) : (
-                <div className="overflow-x-auto"><table className="w-full min-w-[900px] text-sm">
+                <div className="overflow-x-auto"><table className="w-full min-w-[1100px] text-sm">
                   <thead className="clay-table-head">
                     <tr>
-                      {['Scholar', 'Student ID', 'Amount', 'Status', 'Released', 'Reference', ''].map(h => (
+                      <th className="pl-5 py-3 w-8">
+                        <input type="checkbox" aria-label="Select all awaiting release" disabled={pendingRows.length === 0}
+                          checked={allPendingSelected} onChange={toggleAllPending} />
+                      </th>
+                      {['Scholar', 'Campus', 'Year', 'Amount', 'Status', 'Scheduled', 'Received', 'Reference', ''].map(h => (
                         <th key={h} className="text-left px-5 py-3 text-xs font-bold uppercase tracking-wider"
                           style={{ color: 'var(--text-muted)' }}>{h}</th>
                       ))}
@@ -327,12 +366,19 @@ export default function ScholarshipReleasesPage() {
                   <tbody>
                     {rows.map(s => (
                       <tr key={s.scholarId} className="clay-table-row">
+                        <td className="pl-5 py-3.5">
+                          {s.status === 'Pending' && (
+                            <input type="checkbox" aria-label={`Select ${s.scholarName}`}
+                              checked={selected.has(s.releaseId)} onChange={() => toggleRow(s.releaseId)} />
+                          )}
+                        </td>
                         <td className="px-5 py-3.5">
                           <p className="font-semibold" style={{ color: 'var(--text-strong)' }}>{s.scholarName}</p>
-                          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{s.scholarEmail}</p>
+                          <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{s.studentId || s.scholarEmail}</p>
                         </td>
-                        <td className="px-5 py-3.5 font-mono text-xs" style={{ color: 'var(--text)' }}>
-                          {s.studentId || '—'}
+                        <td className="px-5 py-3.5 text-xs" style={{ color: 'var(--text)' }}>{s.campusName ?? '—'}</td>
+                        <td className="px-5 py-3.5 text-xs" style={{ color: 'var(--text)' }}>
+                          {s.releaseYearLevel ?? s.profileYearLevel ? `Year ${s.releaseYearLevel ?? s.profileYearLevel}` : '—'}
                         </td>
                         <td className="px-5 py-3.5 font-mono font-bold" style={{ color: 'var(--text-strong)' }}>
                           {s.amount != null ? peso(s.amount) : '—'}
@@ -342,6 +388,7 @@ export default function ScholarshipReleasesPage() {
                               grantee received it?" — so it passes a label but keeps the tone. */}
                           <StatusBadge status={s.status} label={STATUS_LABEL[s.status]} />
                         </td>
+                        <td className="px-5 py-3.5 text-xs" style={{ color: 'var(--text)' }}>{fmtDay(s.scheduledDate)}</td>
                         <td className="px-5 py-3.5 text-xs" style={{ color: 'var(--text)' }}>
                           {s.releasedAt
                             ? new Date(s.releasedAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -400,8 +447,8 @@ export default function ScholarshipReleasesPage() {
               <p className="text-xs mt-3 flex items-start gap-1.5" style={{ color: 'var(--text-muted)' }}>
                 <CircleAlert size={12} strokeWidth={2.4} className="mt-0.5 shrink-0" />
                 {monitor.notRecorded} scholar{monitor.notRecorded === 1 ? ' has' : 's have'} no payout
-                scheduled for {monitor.periodLabel}. “Open this period” creates one for each of them
-                in a single step.
+                scheduled for {monitor.periodLabel}. Use “Schedule Release” to set the date for a campus
+                (or several) in a single step.
               </p>
             )}
           </>
@@ -419,6 +466,39 @@ export default function ScholarshipReleasesPage() {
           onSaved={() => {
             setRecording(null);
             toast('Release saved.', 'success');
+            load();
+          }}
+        />
+      )}
+
+      {scheduling && selectedType && (
+        <ScheduleReleaseModal
+          type={selectedType}
+          academicYear={academicYear.trim()}
+          semester={semester}
+          campuses={campuses}
+          initialCampusId={campusId}
+          token={token}
+          onClose={() => setScheduling(false)}
+          onSaved={res => {
+            setScheduling(false);
+            toast(`Scheduled ${res.created + res.rescheduled} release${res.created + res.rescheduled === 1 ? '' : 's'}` +
+              (res.rescheduled ? ` (${res.rescheduled} rescheduled)` : '') + ' — scholars have been notified.', 'success');
+            load();
+          }}
+        />
+      )}
+
+      {batchReleasing && (
+        <BatchReleaseModal
+          count={selected.size}
+          typeName={selectedType?.name ?? 'Scholarship'}
+          ids={[...selected]}
+          token={token}
+          onClose={() => setBatchReleasing(false)}
+          onSaved={res => {
+            setBatchReleasing(false);
+            toast(`${res.released} release${res.released === 1 ? '' : 's'} marked as received.`, 'success');
             load();
           }}
         />
@@ -594,6 +674,235 @@ function ReleasePayoutModal({ row, typeName, token, onClose, onSaved }) {
           longer be edited or cancelled. The scholar is notified.
         </p>
         <ModalButtons onClose={onClose} submitting={submitting} label="Mark as released" />
+      </form>
+    </Modal>
+  );
+}
+
+/**
+ * Schedules one scholarship type's release for the period in a single step. The campuses do
+ * not all receive on the same day, so the office picks the campuses receiving on this date;
+ * every holder there is included unless the office narrows the list by hand.
+ */
+function ScheduleReleaseModal({ type, academicYear, semester, campuses, initialCampusId, token, onClose, onSaved }) {
+  const [campusIds, setCampusIds] = useState(() => new Set(initialCampusId ? [Number(initialCampusId)] : []));
+  const [scheduledDate, setScheduledDate] = useState(localDateInput);
+  const [amount, setAmount] = useState(type.amount != null ? String(type.amount) : '');
+  const [filterYear, setFilterYear] = useState('');
+  const [recordYear, setRecordYear] = useState('');
+  const [notes, setNotes] = useState('');
+  const [roster, setRoster] = useState(null);
+  const [picked, setPicked] = useState(null); // null = everyone listed
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  // Everyone holding the scholarship this period; narrowed below by campus and year level.
+  useEffect(() => {
+    let cancelled = false;
+    getReleaseMonitor(token, { scholarshipTypeId: type.id, academicYear, semester })
+      .then(d => { if (!cancelled) setRoster(d.scholars); })
+      .catch(e => { if (!cancelled) setError(e.message); });
+    return () => { cancelled = true; };
+  }, [token, type.id, academicYear, semester]);
+
+  const eligible = (roster ?? []).filter(s =>
+    s.status !== 'Released' && s.status !== 'Cancelled' &&
+    ['Active', 'Renewed', null, undefined, ''].includes(s.lifecycleStatus) &&
+    s.campusId != null && campusIds.has(s.campusId) &&
+    (!filterYear || String(s.profileYearLevel) === filterYear));
+
+  const chosen = picked ? eligible.filter(s => picked.has(s.scholarId)) : eligible;
+
+  function toggleCampus(id) {
+    setCampusIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+    setPicked(null);
+  }
+
+  function togglePick(id) {
+    setPicked(prev => {
+      const next = new Set(prev ?? eligible.map(s => s.scholarId));
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  const amountVal = parseFloat(amount);
+  const canSubmit = campusIds.size > 0 && scheduledDate && amountVal > 0 && chosen.length > 0;
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError('');
+    if (!canSubmit) return;
+    setSubmitting(true);
+    try {
+      const res = await scheduleScholarshipReleases({
+        scholarshipTypeId: type.id,
+        academicYear,
+        semester,
+        scheduledDate,
+        amount: amountVal,
+        campusIds: [...campusIds],
+        filterYearLevel: filterYear ? Number(filterYear) : null,
+        yearLevel: recordYear ? Number(recordYear) : null,
+        scholarIds: picked ? chosen.map(s => s.scholarId) : null,
+        notes: notes.trim() || null,
+      }, token);
+      onSaved(res);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal
+      title="Schedule release"
+      subtitle={`${type.name} · ${academicYear} ${semester === WHOLE_YEAR_SEMESTER ? '(whole year)' : `Sem ${semester}`}`}
+      onClose={onClose}
+      width={720}
+      dismissible={!submitting}
+    >
+      {error && <ErrorBox>{error}</ErrorBox>}
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <p className="block text-xs font-bold mb-1.5 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
+            Campuses receiving on this date
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {campuses.map(c => {
+              const on = campusIds.has(c.id);
+              return (
+                <button key={c.id} type="button" onClick={() => toggleCampus(c.id)}
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1"
+                  style={on ? { background: '#002570', color: '#fff' } : { background: 'var(--surface-inset)', color: 'var(--text)' }}
+                  aria-pressed={on}>
+                  {on && <Check size={11} strokeWidth={3} />}{c.name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="grid sm:grid-cols-2 gap-4">
+          <Field label="Release date">
+            <input required type="date" value={scheduledDate} onChange={e => setScheduledDate(e.target.value)} className="clay-input" />
+          </Field>
+          <Field label="Amount per scholar (PHP)">
+            <input required type="number" step="0.01" min="0.01" value={amount}
+              onChange={e => setAmount(e.target.value)} className="clay-input" placeholder="10000.00" />
+          </Field>
+        </div>
+
+        <div className="grid sm:grid-cols-2 gap-4">
+          <Field label="Include year level">
+            <select value={filterYear} onChange={e => { setFilterYear(e.target.value); setPicked(null); }} className="clay-input">
+              <option value="">All year levels</option>
+              {[1, 2, 3, 4, 5].map(y => <option key={y} value={y}>Year {y} only</option>)}
+            </select>
+          </Field>
+          <Field label="Year level paid for">
+            <select value={recordYear} onChange={e => setRecordYear(e.target.value)} className="clay-input">
+              <option value="">Each scholar&apos;s current year level</option>
+              {[1, 2, 3, 4, 5].map(y => <option key={y} value={y}>Year {y}</option>)}
+            </select>
+          </Field>
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <p className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text)' }}>
+              Scholars ({chosen.length} of {eligible.length})
+            </p>
+            {eligible.length > 0 && (
+              <div className="flex gap-3">
+                <button type="button" className="text-xs font-semibold hover:underline" style={{ color: 'var(--accent)' }} onClick={() => setPicked(null)}>Select all</button>
+                <button type="button" className="text-xs font-semibold hover:underline" style={{ color: 'var(--text-muted)' }} onClick={() => setPicked(new Set())}>Select none</button>
+              </div>
+            )}
+          </div>
+          <div className="rounded-2xl p-2 max-h-56 overflow-y-auto" style={{ background: 'var(--surface-inset)' }}>
+            {!roster ? (
+              <p className="text-xs p-2" style={{ color: 'var(--text-muted)' }}>Loading scholars…</p>
+            ) : campusIds.size === 0 ? (
+              <p className="text-xs p-2" style={{ color: 'var(--text-muted)' }}>Choose at least one campus.</p>
+            ) : eligible.length === 0 ? (
+              <p className="text-xs p-2" style={{ color: 'var(--text-muted)' }}>No scholars awaiting this release at the selected campuses.</p>
+            ) : eligible.map(s => {
+              const on = !picked || picked.has(s.scholarId);
+              return (
+                <label key={s.scholarId} className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg cursor-pointer text-sm">
+                  <input type="checkbox" checked={on} onChange={() => togglePick(s.scholarId)} />
+                  <span className="flex-1 min-w-0 truncate" style={{ color: 'var(--text-strong)' }}>{s.scholarName}</span>
+                  <span className="text-xs shrink-0" style={{ color: 'var(--text-muted)' }}>
+                    {s.campusName} · Year {s.profileYearLevel}{s.status === 'Pending' ? ' · rescheduling' : ''}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+
+        <Field label="Notes (optional)">
+          <input value={notes} onChange={e => setNotes(e.target.value)} className="clay-input" placeholder="e.g. Payout at the Cashier's Office, 9 AM" />
+        </Field>
+
+        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+          Each scholar is notified of the date. Mark them released once they have received it — the date
+          and amount are then saved to their profile.
+        </p>
+
+        <ModalButtons onClose={onClose} submitting={submitting} disabled={!canSubmit}
+          label={`Schedule ${chosen.length} release${chosen.length === 1 ? '' : 's'}`} />
+      </form>
+    </Modal>
+  );
+}
+
+/* Marks every ticked release as received in one go. */
+function BatchReleaseModal({ count, typeName, ids, token, onClose, onSaved }) {
+  const [referenceNo, setReferenceNo] = useState('');
+  const [releasedAt, setReleasedAt] = useState(localDateInput);
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError('');
+    setSubmitting(true);
+    try {
+      const res = await releaseScholarshipBatch({
+        releaseIds: ids,
+        referenceNo: referenceNo.trim() || null,
+        releasedAt: releasedAt ? new Date(releasedAt).toISOString() : null,
+      }, token);
+      onSaved(res);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal title="Mark as released" subtitle={`${typeName} · ${count} scholar${count === 1 ? '' : 's'}`}
+      onClose={onClose} width={440} dismissible={!submitting}>
+      {error && <ErrorBox>{error}</ErrorBox>}
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <Field label="Date received">
+          <input required type="date" value={releasedAt} onChange={e => setReleasedAt(e.target.value)} className="clay-input" />
+        </Field>
+        <Field label="Reference number (optional)">
+          <input value={referenceNo} onChange={e => setReferenceNo(e.target.value)} className="clay-input" placeholder="Payroll / disbursement no." />
+        </Field>
+        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+          Releasing is final. Each scholar is notified, and the date and amount are saved to their profile.
+        </p>
+        <ModalButtons onClose={onClose} submitting={submitting} label={`Release ${count}`} />
       </form>
     </Modal>
   );

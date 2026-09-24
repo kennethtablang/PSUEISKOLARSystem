@@ -36,6 +36,19 @@ namespace PSUEISKOLARSystem.Server.Models
 
         public decimal Amount { get; set; }
 
+        /// <summary>
+        /// The day this payout is scheduled to be handed out. A calendar date, not an instant —
+        /// campuses receive on different days, so it is set per campus batch.
+        /// </summary>
+        public DateTime? ScheduledDate { get; set; }
+
+        /// <summary>Campus the scholar was at when the release was scheduled (a snapshot).</summary>
+        public int? CampusId { get; set; }
+        public Campus? Campus { get; set; }
+
+        /// <summary>Year level the release was paid for, as set by the office when scheduling.</summary>
+        public int? YearLevel { get; set; }
+
         [MaxLength(20)]
         public string Status { get; set; } = GrantReleaseStatuses.Pending;
 

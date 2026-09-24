@@ -4,6 +4,7 @@ import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { getScholars } from '../api/scholars';
 import { getPrograms, getScholarshipTypes } from '../api/lookups';
+import { getCampuses } from '../api/campuses';
 import Pagination from '../components/Pagination';
 import { TableSkeleton, EmptyState } from '../components/ListState';
 import { useTitle } from '../hooks/useTitle';
@@ -30,6 +31,7 @@ export default function ScholarsPage() {
 
   const [scholars, setScholars] = useState([]);
   const [programs, setPrograms] = useState([]);
+  const [campuses, setCampuses] = useState([]);
   const [scholarshipTypes, setScholarshipTypes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -37,6 +39,7 @@ export default function ScholarsPage() {
 
   const [filters, setFilters] = useState({
     search: initialSearch,
+    campusId: '',
     programId: '',
     scholarshipTypeId: '',
     meetsRequirement: '',
@@ -56,6 +59,7 @@ export default function ScholarsPage() {
     try {
       const data = await getScholars(token, {
         search: f.search || undefined,
+        campusId: f.campusId || undefined,
         programId: f.programId || undefined,
         scholarshipTypeId: f.scholarshipTypeId || undefined,
         meetsRequirement: f.meetsRequirement !== '' ? f.meetsRequirement : undefined,
@@ -75,8 +79,8 @@ export default function ScholarsPage() {
   }
 
   useEffect(() => {
-    Promise.all([getPrograms(token), getScholarshipTypes(token)])
-      .then(([p, st]) => { setPrograms(p); setScholarshipTypes(st); })
+    Promise.all([getPrograms(token), getScholarshipTypes(token), getCampuses(token)])
+      .then(([p, st, c]) => { setPrograms(p); setScholarshipTypes(st); setCampuses(c); })
       .catch(e => setError(e.message));
     loadScholars();
     return () => clearTimeout(searchTimer.current);
@@ -98,8 +102,16 @@ export default function ScholarsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlSearch]);
 
+  // With a campus chosen, the program filter offers only the courses that campus runs.
+  const campusPrograms = filters.campusId
+    ? programs.filter(p => p.campusIds?.includes(Number(filters.campusId)))
+    : programs;
+
   function setFilter(key, value) {
     const next = { ...filters, [key]: value };
+    if (key === 'campusId' && value && next.programId &&
+        !programs.find(p => String(p.id) === String(next.programId))?.campusIds?.includes(Number(value)))
+      next.programId = '';
     setFilters(next);
     clearTimeout(searchTimer.current);
     // Dropdowns apply at once; the text box waits for a pause in typing.
@@ -117,7 +129,8 @@ export default function ScholarsPage() {
     loadScholars(filters, 1, n);
   }
 
-  const subtitle = `${paging.total} scholar${paging.total !== 1 ? 's' : ''} · PSU Lingayen Campus`;
+  const campusName = campuses.find(c => String(c.id) === String(filters.campusId))?.name;
+  const subtitle = `${paging.total} scholar${paging.total !== 1 ? 's' : ''} · ${campusName ?? 'All campuses'}`;
 
   return (
     <Layout>
@@ -140,9 +153,15 @@ export default function ScholarsPage() {
             className={inputCls}
             style={{ ...ctlStyle, width: 220 }}
           />
-          <select value={filters.programId} onChange={e => setFilter('programId', e.target.value)} className={inputCls} style={{ ...ctlStyle, width: 'auto' }}>
-            <option value="">All Programs</option>
-            {programs.map(p => <option key={p.id} value={p.id}>{p.code}</option>)}
+          <select value={filters.campusId} onChange={e => setFilter('campusId', e.target.value)} className={inputCls} style={{ ...ctlStyle, width: 'auto' }}
+            aria-label="Filter by campus">
+            <option value="">All Campuses</option>
+            {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <select value={filters.programId} onChange={e => setFilter('programId', e.target.value)} className={inputCls} style={{ ...ctlStyle, width: 'auto' }}
+            aria-label="Filter by program">
+            <option value="">{filters.campusId ? 'All Programs (this campus)' : 'All Programs'}</option>
+            {campusPrograms.map(p => <option key={p.id} value={p.id}>{p.code}</option>)}
           </select>
           <select value={filters.scholarshipTypeId} onChange={e => setFilter('scholarshipTypeId', e.target.value)} className={inputCls} style={{ ...ctlStyle, width: 'auto' }}>
             <option value="">All Scholarships</option>
@@ -171,10 +190,10 @@ export default function ScholarsPage() {
           ) : scholars.length === 0 ? (
             <EmptyState title="No scholars found" message="Try adjusting your filters." />
           ) : (
-            <div className="overflow-x-auto"><table className="w-full min-w-[940px] text-sm">
+            <div className="overflow-x-auto"><table className="w-full min-w-[1040px] text-sm">
               <thead className="clay-table-head">
                 <tr>
-                  {['Scholar', 'Student ID', 'Program', 'Scholarship', 'GWA', 'Status', 'Verified', ''].map(h => (
+                  {['Scholar', 'Student ID', 'Campus', 'Program', 'Scholarship', 'GWA', 'Status', 'Verified', ''].map(h => (
                     <th key={h} className="text-left px-5 py-3 text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{h}</th>
                   ))}
                 </tr>
@@ -192,6 +211,7 @@ export default function ScholarsPage() {
                       </div>
                     </td>
                     <td className="px-5 py-3.5 font-mono" style={{ color: 'var(--text)' }}>{s.studentId}</td>
+                    <td className="px-5 py-3.5 text-xs" style={{ color: 'var(--text)' }}>{s.campusName ?? '—'}</td>
                     <td className="px-5 py-3.5" style={{ color: 'var(--text)' }}>{s.programCode ?? '—'}</td>
                     {/* The scholarship a student holds — one only, so it gets its own block
                         with category and assignment date rather than a bare cell. */}

@@ -2,10 +2,12 @@ import { apiGet, apiSend, apiDelete } from './_client';
 
 const API = '/api/one-time-grants';
 
-export async function getOneTimeGrants(token, { scholarId, scholarshipTypeId, status, search, page = 1, pageSize = 20 } = {}) {
+export async function getOneTimeGrants(token, { scholarId, scholarshipTypeId, grantTypeId, recipient, status, search, page = 1, pageSize = 20 } = {}) {
   const params = new URLSearchParams({ page, pageSize });
   if (scholarId) params.set('scholarId', scholarId);
   if (scholarshipTypeId) params.set('scholarshipTypeId', scholarshipTypeId);
+  if (grantTypeId) params.set('grantTypeId', grantTypeId);
+  if (recipient) params.set('recipient', recipient);
   if (status) params.set('status', status);
   if (search) params.set('search', search);
   // { total, totalAmount, releasedAmount, pendingAmount, items, … }

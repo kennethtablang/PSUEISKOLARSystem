@@ -26,6 +26,13 @@ namespace PSUEISKOLARSystem.Server.Models
         public int? ScholarshipTypeId { get; set; }
         public ScholarshipType? ScholarshipType { get; set; }
 
+        /// <summary>
+        /// The grant type this award belongs to. Deactivating the type after release closes
+        /// the grantee accounts under it. Null for grants recorded before types existed.
+        /// </summary>
+        public int? GrantTypeId { get; set; }
+        public GrantType? GrantType { get; set; }
+
         [Required, MaxLength(150)]
         public string Title { get; set; } = string.Empty;
 

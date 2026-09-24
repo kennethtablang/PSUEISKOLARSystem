@@ -27,6 +27,8 @@ namespace PSUEISKOLARSystem.Server.Controllers
         public async Task<IActionResult> GetAll(
             [FromQuery] string? scholarId,
             [FromQuery] int? scholarshipTypeId,
+            [FromQuery] int? grantTypeId,
+            [FromQuery] string? recipient,
             [FromQuery] string? status,
             [FromQuery] string? search,
             [FromQuery] int page = 1,
@@ -48,6 +50,16 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
             if (scholarshipTypeId is int typeFilter)
                 query = query.Where(g => g.ScholarshipTypeId == typeFilter);
+
+            if (grantTypeId is int grantFilter)
+                query = query.Where(g => g.GrantTypeId == grantFilter);
+
+            // recipient=scholar|grantee — a scholar can also be a grantee, so this splits the
+            // list by the kind of account the grant was paid to.
+            if (recipient is "grantee")
+                query = query.Where(g => db.GranteeProfiles.Any(gp => gp.UserId == g.ScholarId));
+            else if (recipient is "scholar")
+                query = query.Where(g => db.ScholarProfiles.Any(sp => sp.UserId == g.ScholarId));
 
             if (!string.IsNullOrWhiteSpace(status))
             {
@@ -85,6 +97,11 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     ScholarEmail = g.Scholar.Email,
                     g.ScholarshipTypeId,
                     ScholarshipTypeName = g.ScholarshipType != null ? g.ScholarshipType.Name : null,
+                    g.GrantTypeId,
+                    GrantTypeName = g.GrantType != null ? g.GrantType.Name : null,
+                    GrantTypeActive = g.GrantType == null || g.GrantType.IsActive,
+                    IsGrantee = db.GranteeProfiles.Any(gp => gp.UserId == g.ScholarId),
+                    RecipientActive = g.Scholar.IsActive,
                     g.Title,
                     g.Purpose,
                     g.Amount,
@@ -171,19 +188,23 @@ namespace PSUEISKOLARSystem.Server.Controllers
             var scholar = await db.Users.FirstOrDefaultAsync(u => u.Id == dto.ScholarId);
             if (scholar is null) return BadRequest(new { message = "Scholar not found." });
 
-            var isScholar = await db.UserRoles.AnyAsync(ur =>
+            var isRecipient = await db.UserRoles.AnyAsync(ur =>
                 ur.UserId == dto.ScholarId &&
-                db.Roles.Any(r => r.Id == ur.RoleId && r.Name == UserRoles.Scholar));
-            if (!isScholar) return BadRequest(new { message = "One-time grants can only be awarded to scholar accounts." });
+                db.Roles.Any(r => r.Id == ur.RoleId && (r.Name == UserRoles.Scholar || r.Name == UserRoles.Grantee)));
+            if (!isRecipient) return BadRequest(new { message = "One-time grants can only be awarded to scholar or grantee accounts." });
 
             if (dto.ScholarshipTypeId is int newTypeId &&
                 !await db.ScholarshipTypes.AnyAsync(t => t.Id == newTypeId))
                 return BadRequest(new { message = "Scholarship type not found." });
 
+            var grantTypeError = await CheckGrantTypeAsync(dto.GrantTypeId);
+            if (grantTypeError is not null) return BadRequest(new { message = grantTypeError });
+
             var grant = new OneTimeGrant
             {
                 ScholarId = dto.ScholarId,
                 ScholarshipTypeId = dto.ScholarshipTypeId,
+                GrantTypeId = dto.GrantTypeId,
                 Title = dto.Title.Trim(),
                 Purpose = Trim(dto.Purpose),
                 Amount = dto.Amount,
@@ -227,7 +248,14 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 !await db.ScholarshipTypes.AnyAsync(t => t.Id == editTypeId))
                 return BadRequest(new { message = "Scholarship type not found." });
 
+            if (dto.GrantTypeId != grant.GrantTypeId)
+            {
+                var grantTypeError = await CheckGrantTypeAsync(dto.GrantTypeId);
+                if (grantTypeError is not null) return BadRequest(new { message = grantTypeError });
+            }
+
             grant.ScholarshipTypeId = dto.ScholarshipTypeId;
+            grant.GrantTypeId = dto.GrantTypeId;
             grant.Title = dto.Title.Trim();
             grant.Purpose = Trim(dto.Purpose);
             grant.Amount = dto.Amount;
@@ -323,6 +351,15 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
         private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
+        private async Task<string?> CheckGrantTypeAsync(int? grantTypeId)
+        {
+            if (grantTypeId is not int id) return null;
+            var type = await db.GrantTypes.FindAsync(id);
+            if (type is null) return "Grant type not found.";
+            if (!type.IsActive) return $"'{type.Name}' is deactivated and no longer takes new grants.";
+            return null;
+        }
+
         private static string? Validate(OneTimeGrantRequest dto)
         {
             if (string.IsNullOrWhiteSpace(dto.Title))
@@ -350,7 +387,8 @@ namespace PSUEISKOLARSystem.Server.Controllers
         decimal Amount,
         string? Source,
         DateTime AwardedOn,
-        string? Notes);
+        string? Notes,
+        int? GrantTypeId = null);
 
     public record ReleaseGrantRequest(string? ReferenceNo, DateTime? ReleasedAt);
     public record CancelGrantRequest(string Reason);

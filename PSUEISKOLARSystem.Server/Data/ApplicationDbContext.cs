@@ -29,6 +29,11 @@ namespace PSUEISKOLARSystem.Server.Data
         public DbSet<AnnouncementRecipient> AnnouncementRecipients => Set<AnnouncementRecipient>();
         public DbSet<MessagingSettings> MessagingSettings => Set<MessagingSettings>();
         public DbSet<SystemSettings> SystemSettings => Set<SystemSettings>();
+        public DbSet<Campus> Campuses => Set<Campus>();
+        public DbSet<CampusProgram> CampusPrograms => Set<CampusProgram>();
+        public DbSet<GranteeProfile> GranteeProfiles => Set<GranteeProfile>();
+        public DbSet<GrantType> GrantTypes => Set<GrantType>();
+        public DbSet<EligibilityRecord> EligibilityRecords => Set<EligibilityRecord>();
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -375,7 +380,130 @@ namespace PSUEISKOLARSystem.Server.Data
                 .HasForeignKey(s => s.UpdatedById)
                 .OnDelete(DeleteBehavior.SetNull);
 
+            /* ── Campuses and the programmes each offers ── */
+
+            builder.Entity<Campus>()
+                .HasIndex(c => c.Code)
+                .IsUnique();
+
+            builder.Entity<CampusProgram>()
+                .HasKey(cp => new { cp.CampusId, cp.ProgramId });
+
+            builder.Entity<CampusProgram>()
+                .HasOne(cp => cp.Campus)
+                .WithMany(c => c.Programs)
+                .HasForeignKey(cp => cp.CampusId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Entity<CampusProgram>()
+                .HasOne(cp => cp.Program)
+                .WithMany(p => p.Campuses)
+                .HasForeignKey(cp => cp.ProgramId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Entity<ScholarProfile>()
+                .HasOne(sp => sp.Campus)
+                .WithMany()
+                .HasForeignKey(sp => sp.CampusId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            ConfigurePersonalDetails(builder.Entity<ScholarProfile>().OwnsOne(sp => sp.Personal));
+            builder.Entity<ScholarProfile>().Navigation(sp => sp.Personal).IsRequired();
+
+            /* ── Grantees ── */
+
+            builder.Entity<GranteeProfile>()
+                .HasOne(gp => gp.User)
+                .WithOne()
+                .HasForeignKey<GranteeProfile>(gp => gp.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Entity<GranteeProfile>()
+                .HasOne(gp => gp.Campus)
+                .WithMany()
+                .HasForeignKey(gp => gp.CampusId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            builder.Entity<GranteeProfile>()
+                .HasOne(gp => gp.Program)
+                .WithMany()
+                .HasForeignKey(gp => gp.ProgramId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            builder.Entity<GranteeProfile>()
+                .HasIndex(gp => gp.StudentId)
+                .IsUnique();
+
+            ConfigurePersonalDetails(builder.Entity<GranteeProfile>().OwnsOne(gp => gp.Personal));
+            builder.Entity<GranteeProfile>().Navigation(gp => gp.Personal).IsRequired();
+
+            builder.Entity<GrantType>()
+                .Property(t => t.DefaultAmount)
+                .HasPrecision(12, 2);
+
+            // Restrict: a type that has paid out grants is part of the disbursement record.
+            builder.Entity<OneTimeGrant>()
+                .HasOne(g => g.GrantType)
+                .WithMany()
+                .HasForeignKey(g => g.GrantTypeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            /* ── Master list used to cross-match sign-ups ── */
+
+            builder.Entity<EligibilityRecord>()
+                .HasOne(e => e.Campus)
+                .WithMany()
+                .HasForeignKey(e => e.CampusId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            builder.Entity<EligibilityRecord>()
+                .HasOne(e => e.ScholarshipType)
+                .WithMany()
+                .HasForeignKey(e => e.ScholarshipTypeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            builder.Entity<EligibilityRecord>()
+                .HasOne(e => e.GrantType)
+                .WithMany()
+                .HasForeignKey(e => e.GrantTypeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Deleting the account frees the line again, so the student can sign up anew.
+            builder.Entity<EligibilityRecord>()
+                .HasOne(e => e.ClaimedBy)
+                .WithMany()
+                .HasForeignKey(e => e.ClaimedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            builder.Entity<EligibilityRecord>()
+                .Property(e => e.GrantAmount)
+                .HasPrecision(12, 2);
+
+            // One scholar line per student; one grantee line per student per grant type.
+            builder.Entity<EligibilityRecord>()
+                .HasIndex(e => new { e.Kind, e.StudentId, e.GrantTypeId })
+                .IsUnique();
+
+            builder.Entity<EligibilityRecord>()
+                .HasIndex(e => e.StudentId);
+
+            /* ── Release scheduling snapshot ── */
+
+            builder.Entity<ScholarshipRelease>()
+                .HasOne(r => r.Campus)
+                .WithMany()
+                .HasForeignKey(r => r.CampusId)
+                .OnDelete(DeleteBehavior.SetNull);
+
             MarkDateTimesAsUtc(builder);
+        }
+
+        private static void ConfigurePersonalDetails<TOwner>(
+            Microsoft.EntityFrameworkCore.Metadata.Builders.OwnedNavigationBuilder<TOwner, PersonalDetails> owned)
+            where TOwner : class
+        {
+            owned.Property(p => p.FatherMonthlyIncome).HasPrecision(12, 2);
+            owned.Property(p => p.MotherMonthlyIncome).HasPrecision(12, 2);
         }
 
         /// <summary>
@@ -387,8 +515,8 @@ namespace PSUEISKOLARSystem.Server.Data
         /// minute ago read "8h ago", and a freshly created record showed a different time from
         /// the same record reloaded. Stamping the kind on read makes the API emit the <c>Z</c>.
         /// <para>
-        /// <c>ScholarProfile.BirthDate</c> is excluded: it is a calendar date, not an instant,
-        /// and must not move with the viewer's time zone.
+        /// Birth dates and scheduled release dates are excluded: they are calendar dates, not
+        /// instants, and must not move with the viewer's time zone.
         /// </para>
         /// </summary>
         private static void MarkDateTimesAsUtc(ModelBuilder builder)
@@ -405,7 +533,7 @@ namespace PSUEISKOLARSystem.Server.Data
             {
                 foreach (var property in entity.GetProperties())
                 {
-                    if (entity.ClrType == typeof(ScholarProfile) && property.Name == nameof(ScholarProfile.BirthDate))
+                    if (property.Name is nameof(ScholarProfile.BirthDate) or nameof(ScholarshipRelease.ScheduledDate))
                         continue;
 
                     if (property.ClrType == typeof(DateTime))

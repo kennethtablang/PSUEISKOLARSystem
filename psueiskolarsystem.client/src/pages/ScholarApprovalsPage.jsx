@@ -2,34 +2,35 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
-import { useToast } from '../context/UIContext';
-import { getScholarApprovals, approveScholar, rejectScholar } from '../api/scholarApprovals';
+import { useToast, useConfirm } from '../context/UIContext';
+import { getScholarApprovals } from '../api/scholarApprovals';
+import { deleteUser } from '../api/users';
 import Pagination from '../components/Pagination';
 import { TableSkeleton, EmptyState } from '../components/ListState';
-import Modal from '../components/Modal';
-import { ErrorBox } from './UsersPage';
-import Field from '../components/Field';
 import { useTitle } from '../hooks/useTitle';
 import { ctlStyle } from '../constants/ui';
-import { ShieldCheck, ShieldX, AlertTriangle, MailCheck, MailWarning, UserCheck } from 'lucide-react';
-import StatusBadge from '../components/StatusBadge';
+import { ShieldCheck, AlertTriangle, MailCheck, MailWarning, Trash2 } from 'lucide-react';
 
+/* Registrations are no longer approved by hand: sign-up is cross-matched against the Master
+   List, so an account only exists if the student was on it. This page is what remains of the
+   old approval queue — a log of who signed up, with the profile one click away and the
+   option to delete an account that should not be there. */
 export default function ScholarApprovalsPage() {
-  useTitle('Scholar Approvals');
-  const { token } = useAuth();
+  useTitle('Scholar Registrations');
+  const { token, user } = useAuth();
   const toast = useToast();
+  const confirm = useConfirm();
   const navigate = useNavigate();
+  const isAdmin = user?.role === 'Administrator';
 
   const [items, setItems] = useState([]);
   const [paging, setPaging] = useState({ page: 1, totalPages: 1, total: 0 });
   const [pageSize, setPageSize] = useState(20);
-  const [status, setStatus] = useState('Pending');
+  const status = '';
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [deciding, setDeciding] = useState(null);   // { scholar, approved }
-  const [approvingId, setApprovingId] = useState(null);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 350);
@@ -57,42 +58,34 @@ export default function ScholarApprovalsPage() {
 
   useEffect(() => { load(1); }, [load]);
 
-  async function handleApproveDirect(scholar) {
-    // Approving needs no reason, so skip the modal unless something looks off.
-    if (scholar.warnings.length > 0) { setDeciding({ scholar, approved: true }); return; }
-    if (approvingId) return;
-    setApprovingId(scholar.id);
+  async function handleDelete(scholar) {
+    const ok = await confirm({
+      title: 'Delete this account?',
+      message: `This permanently deletes ${scholar.fullName}'s account, profile, documents and grades. ` +
+        'Their Master List line becomes available again, so they could sign up anew.',
+      confirmLabel: 'Delete account',
+      danger: true,
+    });
+    if (!ok) return;
     try {
-      await approveScholar(scholar.id, null, token);
-      toast(`${scholar.fullName}'s registration is approved.`, 'success');
-      afterDecision();
+      await deleteUser(scholar.id, token);
+      toast(`${scholar.fullName}'s account was deleted.`, 'success');
+      const stepBack = items.length === 1 && paging.page > 1;
+      load(stepBack ? paging.page - 1 : paging.page);
     } catch (e) {
       toast(e.message, 'error');
-    } finally {
-      setApprovingId(null);
     }
   }
-
-  /* Deciding the last row on a later page used to reload that page, which no longer exists,
-     and showed an empty queue while items remained on earlier pages. The sidebar badge also
-     only refreshed on navigation, so it kept counting the scholar just approved. */
-  function afterDecision() {
-    const stepBack = status === 'Pending' && items.length === 1 && paging.page > 1;
-    load(stepBack ? paging.page - 1 : paging.page);
-    window.dispatchEvent(new Event('scholar-approvals-changed'));
-  }
-
-  const pendingOnly = status === 'Pending';
 
   return (
     <Layout>
       <div className="page-shell">
         <div className="page-head">
           <div>
-            <h1 className="page-title">Scholar Approvals</h1>
+            <h1 className="page-title">Scholar Registrations</h1>
             <p className="page-subtitle">
-              Review the profiles scholars filled in when they signed up. Approving one also
-              verifies their email, so they can sign in and submit documents.
+              Scholars who signed up. Accounts are accepted automatically when the student matches the
+              Master List, so there is nothing to approve — open a profile to review it, or delete an account.
             </p>
             <span className="page-title-bar" />
           </div>
@@ -107,20 +100,9 @@ export default function ScholarApprovalsPage() {
             className="clay-input"
             style={{ ...ctlStyle, width: 220 }}
           />
-          <div className="flex gap-1.5">
-            {['Pending', 'Approved', 'Rejected', ''].map(s => (
-              <button
-                key={s || 'all'}
-                onClick={() => setStatus(s)}
-                className="px-3 py-1.5 rounded-xl text-xs font-bold transition-colors"
-                style={status === s
-                  ? { background: '#002570', color: '#fff' }
-                  : { background: 'var(--surface-inset)', color: 'var(--text)' }}
-              >
-                {s || 'All'}
-              </button>
-            ))}
-          </div>
+          <button onClick={() => navigate('/master-list')} className="text-xs font-bold hover:underline" style={{ color: 'var(--accent)' }}>
+            Manage the Master List →
+          </button>
         </div>
 
         {error && <p className="text-sm mb-4" style={{ color: 'var(--danger)' }}>{error}</p>}
@@ -129,17 +111,12 @@ export default function ScholarApprovalsPage() {
           {loading ? (
             <TableSkeleton />
           ) : items.length === 0 ? (
-            <EmptyState
-              title={pendingOnly ? 'No registrations waiting' : 'Nothing to show'}
-              message={pendingOnly
-                ? 'Every self-registered scholar has been verified.'
-                : 'Try a different status filter or search term.'}
-            />
+            <EmptyState title="No registrations yet" message="Scholars appear here once they sign up." />
           ) : (
             <div className="overflow-x-auto"><table className="w-full min-w-[900px] text-sm">
               <thead className="clay-table-head">
                 <tr>
-                  {['Scholar', 'Student ID', 'Program', 'Scholarship', 'Registered', 'Checks', 'Status', ''].map(h => (
+                  {['Scholar', 'Student ID', 'Program', 'Scholarship', 'Registered', 'Checks', ''].map(h => (
                     <th key={h} className="text-left px-5 py-3 text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{h}</th>
                   ))}
                 </tr>
@@ -189,17 +166,6 @@ export default function ScholarApprovalsPage() {
                         </ul>
                       )}
                     </td>
-                    <td className="px-5 py-3.5">
-                      <StatusBadge status={s.approvalStatus} />
-                      {s.approvalDecidedAt && (
-                        <p className="text-xs mt-1" style={{ color: 'var(--text-faint)' }}>
-                          {s.decidedBy ? `by ${s.decidedBy}` : ''}
-                        </p>
-                      )}
-                      {s.approvalNote && (
-                        <p className="text-xs mt-0.5 italic" style={{ color: 'var(--text-muted)' }}>“{s.approvalNote}”</p>
-                      )}
-                    </td>
                     <td className="px-5 py-3.5 text-right">
                       <div className="flex items-center gap-3 justify-end">
                         <button
@@ -209,23 +175,13 @@ export default function ScholarApprovalsPage() {
                         >
                           View profile
                         </button>
-                        {s.approvalStatus !== 'Approved' && (
+                        {isAdmin && (
                           <button
-                            onClick={() => handleApproveDirect(s)}
-                            disabled={approvingId === s.id}
-                            className="text-xs font-bold hover:underline flex items-center gap-1"
-                            style={{ color: 'var(--tone-ok-fg)', opacity: approvingId === s.id ? 0.6 : 1 }}
-                          >
-                            <ShieldCheck size={12} strokeWidth={2.6} /> Approve
-                          </button>
-                        )}
-                        {s.approvalStatus !== 'Rejected' && (
-                          <button
-                            onClick={() => setDeciding({ scholar: s, approved: false })}
+                            onClick={() => handleDelete(s)}
                             className="text-xs font-bold hover:underline flex items-center gap-1"
                             style={{ color: 'var(--danger)' }}
                           >
-                            <ShieldX size={12} strokeWidth={2.6} /> Reject
+                            <Trash2 size={12} strokeWidth={2.6} /> Delete
                           </button>
                         )}
                       </div>
@@ -250,142 +206,6 @@ export default function ScholarApprovalsPage() {
         )}
       </div>
 
-      {deciding && (
-        <DecisionModal
-          scholar={deciding.scholar}
-          approved={deciding.approved}
-          token={token}
-          onClose={() => setDeciding(null)}
-          onDone={msg => { setDeciding(null); toast(msg, 'success'); afterDecision(); }}
-        />
-      )}
     </Layout>
-  );
-}
-
-function DecisionModal({ scholar, approved, token, onClose, onDone }) {
-  const [note, setNote] = useState('');
-  const [error, setError] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-
-  const noteRequired = !approved;
-  const canSubmit = !noteRequired || note.trim().length >= 5;
-
-  async function handleSubmit(e) {
-    e.preventDefault();
-    setError('');
-    if (!canSubmit) return;
-    setSubmitting(true);
-    try {
-      if (approved) {
-        await approveScholar(scholar.id, note.trim() || null, token);
-        onDone(`${scholar.fullName}'s registration is approved.`);
-      } else {
-        await rejectScholar(scholar.id, note.trim(), token);
-        onDone(`${scholar.fullName}'s registration was rejected.`);
-      }
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <Modal
-      title={
-        <span className="flex items-center gap-2.5">
-          <span className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
-            style={{ background: approved ? 'rgba(22,101,52,0.10)' : 'rgba(224,48,48,0.10)' }}>
-            {approved
-              ? <UserCheck size={15} strokeWidth={2.4} style={{ color: '#166534' }} />
-              : <ShieldX size={15} strokeWidth={2.4} style={{ color: 'var(--danger)' }} />}
-          </span>
-          {approved ? 'Approve registration' : 'Reject registration'}
-        </span>
-      }
-      subtitle={`${scholar.fullName} · ${scholar.email}`}
-      onClose={onClose}
-      width={460}
-      dismissible={!submitting}
-    >
-      {error && <ErrorBox>{error}</ErrorBox>}
-
-      <div className="clay-card-inner p-3.5 mb-4 space-y-1.5">
-        <Row label="Student ID" value={scholar.studentId ?? '—'} />
-        <Row label="Program" value={scholar.programName ?? '—'} />
-        <Row label="Scholarship" value={scholar.scholarshipTypeName ?? 'Not selected'} />
-        <Row label="Email verified" value={scholar.emailConfirmed ? 'Yes' : 'No'} />
-      </div>
-
-      {scholar.warnings.length > 0 && (
-        <div className="rounded-2xl p-3.5 mb-4"
-          style={{ background: 'rgba(245,200,60,0.13)', border: '1.5px solid rgba(245,200,60,0.45)' }}>
-          <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: '#b58600' }}>
-            Please check first
-          </p>
-          <ul className="space-y-1">
-            {scholar.warnings.map(w => (
-              <li key={w} className="flex items-start gap-1.5 text-xs" style={{ color: '#8a6500' }}>
-                <AlertTriangle size={11} strokeWidth={2.5} className="mt-0.5 shrink-0" />
-                {w}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <Field label={noteRequired ? 'Reason (sent to the scholar)' : 'Note (optional)'}>
-          <textarea
-            rows={3}
-            required={noteRequired}
-            value={note}
-            onChange={e => setNote(e.target.value)}
-            className="clay-input"
-            placeholder={noteRequired
-              ? 'e.g. Student ID does not match our enrolment list — please visit the scholarship office.'
-              : 'Anything the scholar should know…'}
-          />
-          {noteRequired && !canSubmit && note.length > 0 && (
-            <p className="text-xs mt-1 font-medium" style={{ color: 'var(--danger)' }}>
-              Please give the scholar a usable reason (at least 5 characters).
-            </p>
-          )}
-        </Field>
-
-        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-          {approved
-            ? 'The scholar is notified by email and in-app, and can start submitting documents right away.'
-            : 'The scholar is notified with your reason. Their account stays active but document submission stays locked.'}
-        </p>
-
-        <div className="flex gap-3 pt-1">
-          <button type="button" onClick={onClose} className="clay-btn clay-btn-ghost flex-1 py-2.5 text-sm">
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={submitting || !canSubmit}
-            className={`clay-btn flex-1 py-2.5 text-sm font-bold ${approved ? 'clay-btn-primary' : ''}`}
-            style={approved
-              ? { opacity: (submitting || !canSubmit) ? 0.6 : 1 }
-              : { background: '#c02020', color: '#fff', opacity: (submitting || !canSubmit) ? 0.6 : 1,
-                  boxShadow: '4px 4px 0 rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.15)' }}
-          >
-            {submitting ? 'Saving…' : approved ? 'Approve' : 'Reject'}
-          </button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
-function Row({ label, value }) {
-  return (
-    <div className="flex items-baseline justify-between gap-3 text-xs">
-      <span style={{ color: 'var(--text-muted)' }}>{label}</span>
-      <span className="font-semibold text-right" style={{ color: 'var(--text-strong)' }}>{value}</span>
-    </div>
   );
 }

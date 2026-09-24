@@ -19,6 +19,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
         [HttpGet]
         [Authorize(Roles = $"{UserRoles.Administrator},{UserRoles.ScholarshipCoordinator}")]
         public async Task<IActionResult> GetAll(
+            [FromQuery] int? campusId,
             [FromQuery] int? programId,
             [FromQuery] int? scholarshipTypeId,
             [FromQuery] string? search,
@@ -33,10 +34,14 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
             var query = db.ScholarProfiles
                 .Include(sp => sp.User)
+                .Include(sp => sp.Campus)
                 .Include(sp => sp.Program)
                 .Include(sp => sp.ScholarshipType)
                 .Include(sp => sp.Grades.OrderByDescending(g => g.AcademicYear).ThenByDescending(g => g.Semester).Take(1))
                 .AsQueryable();
+
+            if (campusId.HasValue)
+                query = query.Where(sp => sp.CampusId == campusId);
 
             if (!string.IsNullOrWhiteSpace(lifecycleStatus))
                 query = query.Where(sp => sp.LifecycleStatus == lifecycleStatus);
@@ -112,6 +117,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
             var profile = await db.ScholarProfiles
                 .Include(sp => sp.User)
+                .Include(sp => sp.Campus)
                 .Include(sp => sp.Program)
                 .Include(sp => sp.ScholarshipType)
                 .Include(sp => sp.Grades.OrderByDescending(g => g.AcademicYear).ThenByDescending(g => g.Semester).Take(1))
@@ -120,7 +126,9 @@ namespace PSUEISKOLARSystem.Server.Controllers
             if (profile is null) return NotFound(new { message = "Scholar profile not found." });
 
             var ledger = await LoadLedgerAsync([userId]);
-            return Ok(Map(profile, ledger.GetValueOrDefault(userId)));
+            var dto = Map(profile, ledger.GetValueOrDefault(userId));
+            dto.GrantCount = await db.OneTimeGrants.CountAsync(g => g.ScholarId == userId);
+            return Ok(dto);
         }
 
         // GET /api/scholars/{userId}/scholarship-history
@@ -384,6 +392,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
             var profile = await db.ScholarProfiles
                 .Include(sp => sp.User)
+                .Include(sp => sp.Campus)
                 .Include(sp => sp.Program)
                 .Include(sp => sp.ScholarshipType)
                 .Include(sp => sp.Grades)
@@ -410,6 +419,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 Profile = new
                 {
                     profile.StudentId,
+                    Campus = profile.Campus?.Name,
                     Program = profile.Program?.Name,
                     ScholarshipType = profile.ScholarshipType?.Name,
                     profile.YearLevel,
@@ -417,6 +427,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     profile.ContactNumber,
                     profile.BirthDate,
                     profile.Address,
+                    profile.Personal,
                 },
                 Grades = profile.Grades.Select(g => new { g.AcademicYear, g.Semester, g.Gwa, g.MeetsRequirement, g.Remarks }),
                 Documents = documents,
@@ -450,33 +461,38 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
             var profile = await db.ScholarProfiles.FirstOrDefaultAsync(sp => sp.UserId == userId);
 
-            /* A scholar supplies their own student number and programme when they first
-               complete their profile, and the office approves them against those values.
-               After that the pair is identity rather than preference: leaving it editable
-               let an approved account quietly become a different student, against a number
-               nobody had verified. Staff can still correct a typo. Contact number, address,
-               birth date, and year level stay self-service — none of them identify anyone,
-               and year level legitimately changes every June. */
-            var identityLocked = !isAdminOrCoord
-                && user.ApprovalStatus == ApprovalStatuses.Approved
-                && profile is not null
-                && !string.IsNullOrWhiteSpace(profile.StudentId);
+            /* Everything on a scholar's profile was either cross-matched against the master
+               list at sign-up (student number, name, scholarship) or is office data (campus,
+               course, year level, personal and family details). A scholar may change only what
+               is theirs to keep current — contact number and address; the rest goes through
+               the scholarship office. */
+            if (!isAdminOrCoord)
+            {
+                if (profile is null)
+                    return BadRequest(new { message = "Your scholar profile has not been set up yet. Contact the scholarship office." });
 
-            if (identityLocked && (dto.StudentId.Trim() != profile!.StudentId || dto.ProgramId != profile.ProgramId))
-                return BadRequest(new
-                {
-                    message = "Your student number and programme were verified when your scholarship " +
-                              "was approved and can no longer be changed here. Ask your scholarship " +
-                              "coordinator to correct them."
-                });
+                profile.ContactNumber = string.IsNullOrWhiteSpace(dto.ContactNumber) ? null : dto.ContactNumber.Trim();
+                profile.Address = string.IsNullOrWhiteSpace(dto.Address) ? null : dto.Address.Trim();
+
+                db.Audit(this, "UpdateScholarProfile", $"{user.FullName} updated their contact details");
+                await db.SaveChangesAsync();
+                return NoContent();
+            }
 
             // A student number must identify exactly one scholar — a duplicate is the usual
             // symptom of the same student registering twice.
-            var studentId = dto.StudentId.Trim();
+            var studentId = dto.StudentId.Trim().ToUpperInvariant();
             var studentIdTaken = await db.ScholarProfiles
-                .AnyAsync(sp => sp.UserId != userId && sp.StudentId == studentId);
+                .AnyAsync(sp => sp.UserId != userId && sp.StudentId == studentId)
+                || await db.GranteeProfiles.AnyAsync(gp => gp.StudentId == studentId);
             if (studentIdTaken)
-                return BadRequest(new { message = $"Student ID {studentId} is already registered to another scholar." });
+                return BadRequest(new { message = $"Student ID {studentId} is already registered to another account." });
+
+            if (dto.CampusId is int cid && !await db.Campuses.AnyAsync(c => c.Id == cid))
+                return BadRequest(new { message = "The selected campus does not exist." });
+
+            if (dto.Personal?.Validate() is string personalError)
+                return BadRequest(new { message = personalError });
 
             if (profile is null)
             {
@@ -498,12 +514,14 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 return BadRequest(new { message = rejection });
 
             profile.StudentId = studentId;
+            profile.CampusId = dto.CampusId ?? profile.CampusId;
             profile.ProgramId = dto.ProgramId;
             profile.ScholarshipTypeId = dto.ScholarshipTypeId;
             profile.YearLevel = dto.YearLevel;
             profile.ContactNumber = dto.ContactNumber;
-            profile.BirthDate = dto.BirthDate;
+            profile.BirthDate = dto.BirthDate?.Date;
             profile.Address = dto.Address;
+            dto.Personal?.ApplyTo(profile.Personal);
 
             db.Audit(this, "UpdateScholarProfile", $"Updated profile for {user.FullName} (student {studentId})");
             await db.SaveChangesAsync();
@@ -691,6 +709,8 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 Email = sp.User.Email ?? string.Empty,
                 HasAvatar = sp.User.AvatarPath != null,
                 StudentId = sp.StudentId,
+                CampusId = sp.CampusId,
+                CampusName = sp.Campus?.Name,
                 ProgramId = sp.ProgramId,
                 ProgramName = sp.Program?.Name,
                 ProgramCode = sp.Program?.Code,
@@ -704,6 +724,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 BirthDate = sp.BirthDate,
                 Address = sp.Address,
                 EnrolledAt = sp.EnrolledAt,
+                Personal = PersonalDetailsDto.From(sp.Personal),
                 LatestGwa = latest?.Gwa,
                 MeetsRequirement = latest?.MeetsRequirement,
             };

@@ -9,6 +9,8 @@ namespace PSUEISKOLARSystem.Server.DTOs.Scholars
         [RegularExpression(@"^[A-Za-z0-9\-]{3,30}$", ErrorMessage = "Student ID may only contain letters, numbers, and hyphens.")]
         public string StudentId { get; set; } = string.Empty;
 
+
+        public int? CampusId { get; set; }
         public int? ProgramId { get; set; }
         public int? ScholarshipTypeId { get; set; }
 
@@ -23,6 +25,9 @@ namespace PSUEISKOLARSystem.Server.DTOs.Scholars
 
         [MaxLength(500)]
         public string? Address { get; set; }
+
+        // Staff only. Null leaves the stored details untouched.
+        public PersonalDetailsDto? Personal { get; set; }
 
         // Recorded on the scholarship ledger when staff transfer a scholar between
         // scholarships, so the history explains itself.

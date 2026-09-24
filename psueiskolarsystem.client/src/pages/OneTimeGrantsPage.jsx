@@ -7,6 +7,7 @@ import {
   releaseOneTimeGrant, cancelOneTimeGrant, deleteOneTimeGrant,
 } from '../api/oneTimeGrants';
 import { getScholarshipTypes } from '../api/lookups';
+import { getGrantTypes } from '../api/grantTypes';
 import ScholarSearchSelect from '../components/ScholarSearchSelect';
 import Pagination from '../components/Pagination';
 import { TableSkeleton, EmptyState } from '../components/ListState';
@@ -31,6 +32,9 @@ export default function OneTimeGrantsPage() {
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
+  const [grantTypes, setGrantTypes] = useState([]);
+  const [grantTypeFilter, setGrantTypeFilter] = useState('');
+  const [recipientFilter, setRecipientFilter] = useState('');
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [pageSize, setPageSize] = useState(20);
@@ -46,6 +50,7 @@ export default function OneTimeGrantsPage() {
   useEffect(() => {
     // The scholarship a grant is filed under — the scholar itself is searched on demand.
     getScholarshipTypes(token).then(setScholarshipTypes).catch(() => {});
+    getGrantTypes(token).then(setGrantTypes).catch(() => {});
   }, [token]);
 
   const load = useCallback(async (page = 1) => {
@@ -55,6 +60,8 @@ export default function OneTimeGrantsPage() {
       setData(await getOneTimeGrants(token, {
         status: status || undefined,
         scholarshipTypeId: typeFilter || undefined,
+        grantTypeId: grantTypeFilter || undefined,
+        recipient: recipientFilter || undefined,
         search: debouncedSearch || undefined,
         page,
         pageSize,
@@ -64,7 +71,7 @@ export default function OneTimeGrantsPage() {
     } finally {
       setLoading(false);
     }
-  }, [token, status, typeFilter, debouncedSearch, pageSize]);
+  }, [token, status, typeFilter, grantTypeFilter, recipientFilter, debouncedSearch, pageSize]);
 
   useEffect(() => { load(1); }, [load]);
 
@@ -125,6 +132,15 @@ export default function OneTimeGrantsPage() {
             <option value="">All statuses</option>
             {GRANT_RELEASE_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
+          <select value={grantTypeFilter} onChange={e => setGrantTypeFilter(e.target.value)} className="clay-input" style={{ ...ctlStyle, width: 'auto' }} aria-label="Grant type">
+            <option value="">All grant types</option>
+            {grantTypes.map(t => <option key={t.id} value={t.id}>{t.name}{t.isActive ? '' : ' (closed)'}</option>)}
+          </select>
+          <select value={recipientFilter} onChange={e => setRecipientFilter(e.target.value)} className="clay-input" style={{ ...ctlStyle, width: 'auto' }} aria-label="Recipient">
+            <option value="">Scholars &amp; grantees</option>
+            <option value="scholar">Scholars</option>
+            <option value="grantee">Grantees</option>
+          </select>
           <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} className="clay-input" style={{ ...ctlStyle, width: 'auto' }}>
             <option value="">All scholarships</option>
             {scholarshipTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
@@ -142,7 +158,7 @@ export default function OneTimeGrantsPage() {
             <div className="overflow-x-auto"><table className="w-full min-w-[1020px] text-sm">
               <thead className="clay-table-head">
                 <tr>
-                  {['Scholar', 'Grant', 'Scholarship', 'Amount', 'Awarded', 'Status', 'Reference', ''].map(h => (
+                  {['Recipient', 'Grant', 'Scholarship', 'Amount', 'Awarded', 'Status', 'Reference', ''].map(h => (
                     <th key={h} className="text-left px-5 py-3 text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{h}</th>
                   ))}
                 </tr>
@@ -152,10 +168,15 @@ export default function OneTimeGrantsPage() {
                   <tr key={g.id} className="clay-table-row">
                     <td className="px-5 py-3.5">
                       <p className="font-semibold" style={{ color: 'var(--text-strong)' }}>{g.scholarName}</p>
-                      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{g.scholarEmail}</p>
+                      <p className="text-xs flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
+                        <span className={`status-badge tone-${g.isGrantee ? 'warn' : 'info'}`} style={{ fontSize: 10, padding: '1px 6px' }}>
+                          {g.isGrantee ? 'Grantee' : 'Scholar'}
+                        </span>
+                        {!g.recipientActive && <span>· account closed</span>}
+                      </p>
                     </td>
                     <td className="px-5 py-3.5">
-                      <p className="font-medium" style={{ color: 'var(--text-strong)' }}>{g.title}</p>
+                      <p className="font-medium" style={{ color: 'var(--text-strong)' }}>{g.grantTypeName ?? g.title}</p>
                       <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
                         {[g.source, g.purpose].filter(Boolean).join(' · ') || '—'}
                       </p>
@@ -330,7 +351,13 @@ function Tile({ label, value, sub, Icon, bg, iconColor }) {
 }
 
 export function GrantModal({ initial, scholarshipTypes = [], token, fixedScholar, onClose, onSaved }) {
+  const [grantTypes, setGrantTypes] = useState([]);
+  useEffect(() => {
+    getGrantTypes(token).then(setGrantTypes).catch(() => {});
+  }, [token]);
+
   const [form, setForm] = useState({
+    grantTypeId: initial?.grantTypeId != null ? String(initial.grantTypeId) : '',
     scholarId: initial?.scholarId ?? fixedScholar?.userId ?? '',
     scholarshipTypeId: initial?.scholarshipTypeId != null
       ? String(initial.scholarshipTypeId)
@@ -364,6 +391,7 @@ export function GrantModal({ initial, scholarshipTypes = [], token, fixedScholar
     try {
       const payload = {
         scholarId: form.scholarId,
+        grantTypeId: form.grantTypeId ? parseInt(form.grantTypeId, 10) : null,
         scholarshipTypeId: form.scholarshipTypeId ? parseInt(form.scholarshipTypeId, 10) : null,
         title:     form.title.trim(),
         purpose:   form.purpose.trim() || null,
@@ -395,9 +423,10 @@ export function GrantModal({ initial, scholarshipTypes = [], token, fixedScholar
       {error && <ErrorBox>{error}</ErrorBox>}
       <form onSubmit={handleSubmit} className="space-y-4">
         {!fixedScholar && (
-          <Field label="Scholar">
+          <Field label="Scholar or grantee">
             <ScholarSearchSelect
               token={token}
+              includeGrantees
               value={form.scholarId}
               initialLabel={initial?.scholarName ?? ''}
               disabled={!!initial}
@@ -418,6 +447,32 @@ export function GrantModal({ initial, scholarshipTypes = [], token, fixedScholar
             )}
           </Field>
         )}
+
+        <Field label="Grant type">
+          <select
+            value={form.grantTypeId}
+            onChange={e => {
+              const t = grantTypes.find(x => String(x.id) === e.target.value);
+              setForm(f => ({
+                ...f,
+                grantTypeId: e.target.value,
+                // Pre-fill from the type; the office can still adjust each field.
+                title: t ? t.name : f.title,
+                source: t?.sponsor ?? f.source,
+                amount: t?.defaultAmount != null && !f.amount ? String(t.defaultAmount) : f.amount,
+              }));
+            }}
+            className="clay-input"
+          >
+            <option value="">— Other / not a listed grant type —</option>
+            {grantTypes.filter(t => t.isActive || String(t.id) === form.grantTypeId).map(t => (
+              <option key={t.id} value={t.id}>{t.name}{t.sponsor ? ` · ${t.sponsor}` : ''}</option>
+            ))}
+          </select>
+          <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+            Manage grant types on the Grant Types page. Deactivating a type after its release closes the grantee accounts under it.
+          </p>
+        </Field>
 
         <Field label="Kind of scholarship">
           <select

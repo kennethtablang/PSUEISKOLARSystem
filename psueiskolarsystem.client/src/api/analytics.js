@@ -24,3 +24,16 @@ export async function getAnalyticsDisbursements(token, { academicYear, semester 
 export async function getAnalyticsTrends(token) {
   return apiGet('/api/analytics/trends', token, 'Failed to load period trends.');
 }
+
+// Profile make-up from the Scholar's Data sheet. population: 'scholars' | 'grantees' | 'all'.
+export async function getAnalyticsDemographics(token, { population = 'scholars', campusId } = {}) {
+  const params = new URLSearchParams({ population });
+  if (campusId) params.set('campusId', campusId);
+  return apiGet(`/api/analytics/demographics?${params}`, token, 'Failed to load demographics.');
+}
+
+// Grantee accounts and grants by type, campus and month.
+export async function getAnalyticsGrantees(token, { campusId } = {}) {
+  const qs = campusId ? `?campusId=${encodeURIComponent(campusId)}` : '';
+  return apiGet(`/api/analytics/grantees${qs}`, token, 'Failed to load grantee analytics.');
+}

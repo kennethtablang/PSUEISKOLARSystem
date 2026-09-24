@@ -36,9 +36,20 @@ import ActivityLogPage from './pages/ActivityLogPage';
 import UnauthorizedPage from './pages/UnauthorizedPage';
 import ProfilePage from './pages/ProfilePage';
 import HelpPage from './pages/HelpPage';
+import MasterListPage from './pages/MasterListPage';
+import GrantTypesPage from './pages/GrantTypesPage';
+import CampusesPage from './pages/CampusesPage';
+import GranteesPage from './pages/GranteesPage';
+import GranteeProfilePage from './pages/GranteeProfilePage';
 
 const admin = ['Administrator'];
 const adminCoord = ['Administrator', 'ScholarshipCoordinator'];
+
+// Grantees have no scholar dashboard — their home is their grants and profile.
+function DashboardSwitch() {
+  const { user } = useAuth();
+  return user?.role === 'Grantee' ? <GranteeProfilePage /> : <DashboardPage />;
+}
 
 export default function App() {
   return (
@@ -59,7 +70,13 @@ export default function App() {
           <Route path="/verify-email" element={<VerifyEmailPage />} />
           <Route path="/unauthorized" element={<UnauthorizedPage />} />
 
-          <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+          <Route path="/dashboard" element={<ProtectedRoute><DashboardSwitch /></ProtectedRoute>} />
+          <Route path="/master-list" element={<ProtectedRoute roles={adminCoord}><MasterListPage /></ProtectedRoute>} />
+          <Route path="/grant-types" element={<ProtectedRoute roles={adminCoord}><GrantTypesPage /></ProtectedRoute>} />
+          <Route path="/campuses" element={<ProtectedRoute roles={admin}><CampusesPage /></ProtectedRoute>} />
+          <Route path="/grantees" element={<ProtectedRoute roles={adminCoord}><GranteesPage /></ProtectedRoute>} />
+          <Route path="/grantees/:userId" element={<ProtectedRoute roles={adminCoord}><GranteeProfilePage /></ProtectedRoute>} />
+          <Route path="/my-grants" element={<ProtectedRoute roles={['Grantee']}><GranteeProfilePage /></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute roles={admin}><UsersPage /></ProtectedRoute>} />
           <Route path="/scholars" element={<ProtectedRoute roles={adminCoord}><ScholarsPage /></ProtectedRoute>} />
           <Route path="/scholars/:userId" element={<ProtectedRoute roles={adminCoord}><ScholarDetailPage /></ProtectedRoute>} />

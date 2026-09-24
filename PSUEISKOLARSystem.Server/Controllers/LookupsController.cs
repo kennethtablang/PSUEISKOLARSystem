@@ -14,11 +14,16 @@ namespace PSUEISKOLARSystem.Server.Controllers
         // Anonymous so the scholar sign-up form can offer the program and scholarship pickers.
         [HttpGet("programs")]
         [AllowAnonymous]
-        public async Task<IActionResult> GetPrograms()
+        // ?campusId= narrows the list to the courses that campus offers.
+        public async Task<IActionResult> GetPrograms([FromQuery] int? campusId)
         {
-            var programs = await db.AcademicPrograms
+            var query = db.AcademicPrograms.AsQueryable();
+            if (campusId is int cid)
+                query = query.Where(p => p.Campuses.Any(c => c.CampusId == cid));
+
+            var programs = await query
                 .OrderBy(p => p.Name)
-                .Select(p => new { p.Id, p.Name, p.Code })
+                .Select(p => new { p.Id, p.Name, p.Code, CampusIds = p.Campuses.Select(c => c.CampusId).ToList() })
                 .ToListAsync();
             return Ok(programs);
         }
@@ -28,24 +33,32 @@ namespace PSUEISKOLARSystem.Server.Controllers
         // "new conversation" dialog — id + name + student number only.
         [HttpGet("scholars")]
         [Authorize(Roles = $"{UserRoles.Administrator},{UserRoles.ScholarshipCoordinator}")]
-        public async Task<IActionResult> GetScholars([FromQuery] string? search, [FromQuery] int limit = 50)
+        public async Task<IActionResult> GetScholars([FromQuery] string? search, [FromQuery] int limit = 50, [FromQuery] bool includeGrantees = false)
         {
             limit = Math.Clamp(limit, 1, 200);
 
-            var scholarRoleId = await db.Roles
-                .Where(r => r.Name == UserRoles.Scholar)
+            // ?includeGrantees=true widens the picker to grantee accounts — used where a grant is
+            // being recorded, since a grant can go to either.
+            var roleNames = includeGrantees
+                ? new[] { UserRoles.Scholar, UserRoles.Grantee }
+                : new[] { UserRoles.Scholar };
+            var roleIds = await db.Roles
+                .Where(r => roleNames.Contains(r.Name))
                 .Select(r => r.Id)
-                .FirstOrDefaultAsync();
+                .ToListAsync();
 
             var query = db.Users
-                .Where(u => u.IsActive && db.UserRoles.Any(ur => ur.UserId == u.Id && ur.RoleId == scholarRoleId));
+                .Where(u => u.IsActive && db.UserRoles.Any(ur => ur.UserId == u.Id && roleIds.Contains(ur.RoleId)));
 
             if (!string.IsNullOrWhiteSpace(search))
             {
                 var s = search.Trim().ToLower();
                 var matchingIds = db.ScholarProfiles
                     .Where(sp => EF.Functions.Like(sp.StudentId.ToLower(), $"%{s}%"))
-                    .Select(sp => sp.UserId);
+                    .Select(sp => sp.UserId)
+                    .Concat(db.GranteeProfiles
+                        .Where(gp => EF.Functions.Like(gp.StudentId.ToLower(), $"%{s}%"))
+                        .Select(gp => gp.UserId));
 
                 query = query.Where(u =>
                     EF.Functions.Like((u.FirstName + " " + u.LastName).ToLower(), $"%{s}%") ||
@@ -63,7 +76,9 @@ namespace PSUEISKOLARSystem.Server.Controllers
                         ? u.FirstName + " " + u.MiddleName + " " + u.LastName
                         : u.FirstName + " " + u.LastName,
                     u.Email,
-                    StudentId = db.ScholarProfiles.Where(sp => sp.UserId == u.Id).Select(sp => sp.StudentId).FirstOrDefault(),
+                    StudentId = db.ScholarProfiles.Where(sp => sp.UserId == u.Id).Select(sp => sp.StudentId).FirstOrDefault()
+                        ?? db.GranteeProfiles.Where(gp => gp.UserId == u.Id).Select(gp => gp.StudentId).FirstOrDefault(),
+                    IsGrantee = db.GranteeProfiles.Any(gp => gp.UserId == u.Id),
                     ScholarshipType = db.ScholarProfiles.Where(sp => sp.UserId == u.Id)
                         .Select(sp => sp.ScholarshipType != null ? sp.ScholarshipType.Name : null).FirstOrDefault(),
                 })

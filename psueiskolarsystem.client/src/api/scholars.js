@@ -4,6 +4,7 @@ const API = '/api/scholars';
 
 export async function getScholars(token, filters = {}) {
   const params = new URLSearchParams();
+  if (filters.campusId) params.set('campusId', filters.campusId);
   if (filters.programId) params.set('programId', filters.programId);
   if (filters.scholarshipTypeId) params.set('scholarshipTypeId', filters.scholarshipTypeId);
   if (filters.search) params.set('search', filters.search);

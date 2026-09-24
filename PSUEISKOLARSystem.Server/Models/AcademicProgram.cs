@@ -13,5 +13,6 @@ namespace PSUEISKOLARSystem.Server.Models
         public string Code { get; set; } = string.Empty;
 
         public ICollection<ScholarProfile> Scholars { get; set; } = [];
+        public ICollection<CampusProgram> Campuses { get; set; } = [];
     }
 }

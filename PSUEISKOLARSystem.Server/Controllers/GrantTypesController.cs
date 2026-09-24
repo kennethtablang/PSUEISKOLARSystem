@@ -1,0 +1,210 @@
+using System.ComponentModel.DataAnnotations;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using PSUEISKOLARSystem.Server.Data;
+using PSUEISKOLARSystem.Server.Interfaces;
+using PSUEISKOLARSystem.Server.Models;
+using PSUEISKOLARSystem.Server.Models.Enums;
+
+namespace PSUEISKOLARSystem.Server.Controllers
+{
+    /// <summary>
+    /// Kinds of one-time grant, managed like scholarship types. Deactivating a type is the
+    /// "this grant has been released, close it out" action: it also deactivates every grantee
+    /// account under the type so they can no longer sign in, while their profiles and grants
+    /// stay on record for the analytics. Scholars who received the grant are not touched —
+    /// their account belongs to their scholarship, not to the grant.
+    /// </summary>
+    [ApiController]
+    [Route("api/grant-types")]
+    [Authorize(Roles = $"{UserRoles.Administrator},{UserRoles.ScholarshipCoordinator}")]
+    public class GrantTypesController(ApplicationDbContext db, INotificationService notifications) : ControllerBase
+    {
+        // GET /api/grant-types
+        [HttpGet]
+        public async Task<IActionResult> GetAll()
+        {
+            var granteeRoleId = await RoleIdAsync(UserRoles.Grantee);
+
+            var types = await db.GrantTypes
+                .OrderByDescending(t => t.IsActive)
+                .ThenBy(t => t.Name)
+                .Select(t => new
+                {
+                    t.Id,
+                    t.Name,
+                    t.Description,
+                    t.Sponsor,
+                    t.DefaultAmount,
+                    t.IsActive,
+                    t.CreatedAt,
+                    t.DeactivatedAt,
+                    GrantCount = db.OneTimeGrants.Count(g => g.GrantTypeId == t.Id),
+                    ReleasedCount = db.OneTimeGrants.Count(g => g.GrantTypeId == t.Id && g.ReleaseStatus == GrantReleaseStatuses.Released),
+                    PendingCount = db.OneTimeGrants.Count(g => g.GrantTypeId == t.Id && g.ReleaseStatus == GrantReleaseStatuses.Pending),
+                    ReleasedAmount = db.OneTimeGrants
+                        .Where(g => g.GrantTypeId == t.Id && g.ReleaseStatus == GrantReleaseStatuses.Released)
+                        .Sum(g => (decimal?)g.Amount) ?? 0m,
+                    GranteeAccounts = db.OneTimeGrants
+                        .Where(g => g.GrantTypeId == t.Id && db.UserRoles.Any(ur => ur.UserId == g.ScholarId && ur.RoleId == granteeRoleId))
+                        .Select(g => g.ScholarId).Distinct().Count(),
+                    MasterListLines = db.EligibilityRecords.Count(e => e.GrantTypeId == t.Id),
+                })
+                .ToListAsync();
+
+            return Ok(types);
+        }
+
+        // POST /api/grant-types
+        [HttpPost]
+        [Authorize(Roles = UserRoles.Administrator)]
+        public async Task<IActionResult> Create(GrantTypeRequest dto)
+        {
+            var error = await ValidateAsync(dto, null);
+            if (error is not null) return BadRequest(new { message = error });
+
+            var type = new GrantType
+            {
+                Name = dto.Name.Trim(),
+                Description = Trim(dto.Description),
+                Sponsor = Trim(dto.Sponsor),
+                DefaultAmount = dto.DefaultAmount,
+            };
+            db.GrantTypes.Add(type);
+            db.Audit(this, "CreateGrantType", $"Added grant type '{type.Name}'");
+            await db.SaveChangesAsync();
+            return Ok(new { type.Id });
+        }
+
+        // PUT /api/grant-types/{id}
+        [HttpPut("{id:int}")]
+        [Authorize(Roles = UserRoles.Administrator)]
+        public async Task<IActionResult> Update(int id, GrantTypeRequest dto)
+        {
+            var type = await db.GrantTypes.FindAsync(id);
+            if (type is null) return NotFound();
+
+            var error = await ValidateAsync(dto, id);
+            if (error is not null) return BadRequest(new { message = error });
+
+            type.Name = dto.Name.Trim();
+            type.Description = Trim(dto.Description);
+            type.Sponsor = Trim(dto.Sponsor);
+            type.DefaultAmount = dto.DefaultAmount;
+            db.Audit(this, "UpdateGrantType", $"Updated grant type '{type.Name}'");
+            await db.SaveChangesAsync();
+            return NoContent();
+        }
+
+        /// <summary>
+        /// PATCH /api/grant-types/{id}/deactivate — closes the grant type and deactivates the
+        /// grantee accounts under it. A grantee who also has a pending grant under another,
+        /// still-active type keeps their account, since they are still owed something.
+        /// </summary>
+        [HttpPatch("{id:int}/deactivate")]
+        [Authorize(Roles = UserRoles.Administrator)]
+        public async Task<IActionResult> Deactivate(int id)
+        {
+            var type = await db.GrantTypes.FindAsync(id);
+            if (type is null) return NotFound();
+            if (!type.IsActive) return BadRequest(new { message = $"'{type.Name}' is already deactivated." });
+
+            var granteeRoleId = await RoleIdAsync(UserRoles.Grantee);
+
+            var granteeIds = await db.OneTimeGrants
+                .Where(g => g.GrantTypeId == id && db.UserRoles.Any(ur => ur.UserId == g.ScholarId && ur.RoleId == granteeRoleId))
+                .Select(g => g.ScholarId)
+                .Distinct()
+                .ToListAsync();
+
+            var stillOwed = await db.OneTimeGrants
+                .Where(g => granteeIds.Contains(g.ScholarId)
+                         && g.GrantTypeId != id
+                         && g.ReleaseStatus == GrantReleaseStatuses.Pending
+                         && (g.GrantType == null || g.GrantType.IsActive))
+                .Select(g => g.ScholarId)
+                .Distinct()
+                .ToListAsync();
+
+            var toClose = granteeIds.Except(stillOwed).ToList();
+            var users = await db.Users.Where(u => toClose.Contains(u.Id) && u.IsActive).ToListAsync();
+            foreach (var u in users)
+            {
+                u.IsActive = false;
+                // Rotating the stamp ends any session the grantee still has open.
+                u.SecurityStamp = Guid.NewGuid().ToString();
+            }
+
+            type.IsActive = false;
+            type.DeactivatedAt = DateTime.UtcNow;
+
+            var pending = await db.OneTimeGrants.CountAsync(g => g.GrantTypeId == id && g.ReleaseStatus == GrantReleaseStatuses.Pending);
+
+            db.Audit(this, "DeactivateGrantType",
+                $"Deactivated grant type '{type.Name}' and {users.Count} grantee account(s)" +
+                (pending > 0 ? $" ({pending} grant(s) were still pending)" : ""));
+            await db.SaveChangesAsync();
+
+            _ = notifications.BroadcastAsync("AnalyticsChanged");
+            return Ok(new { deactivatedAccounts = users.Count, keptOpen = stillOwed.Count, pendingGrants = pending });
+        }
+
+        // PATCH /api/grant-types/{id}/activate — reopens the type. Accounts stay as they are;
+        // an administrator reactivates individual grantees from Users if needed.
+        [HttpPatch("{id:int}/activate")]
+        [Authorize(Roles = UserRoles.Administrator)]
+        public async Task<IActionResult> Activate(int id)
+        {
+            var type = await db.GrantTypes.FindAsync(id);
+            if (type is null) return NotFound();
+
+            type.IsActive = true;
+            type.DeactivatedAt = null;
+            db.Audit(this, "ActivateGrantType", $"Reactivated grant type '{type.Name}'");
+            await db.SaveChangesAsync();
+            return NoContent();
+        }
+
+        // DELETE /api/grant-types/{id} — only while nothing has been recorded under it.
+        [HttpDelete("{id:int}")]
+        [Authorize(Roles = UserRoles.Administrator)]
+        public async Task<IActionResult> Delete(int id)
+        {
+            var type = await db.GrantTypes.FindAsync(id);
+            if (type is null) return NotFound();
+
+            if (await db.OneTimeGrants.AnyAsync(g => g.GrantTypeId == id) ||
+                await db.EligibilityRecords.AnyAsync(e => e.GrantTypeId == id))
+                return BadRequest(new { message = $"'{type.Name}' has grants or master-list lines recorded under it. Deactivate it instead." });
+
+            db.Audit(this, "DeleteGrantType", $"Deleted grant type '{type.Name}'");
+            db.GrantTypes.Remove(type);
+            await db.SaveChangesAsync();
+            return NoContent();
+        }
+
+        private Task<string?> RoleIdAsync(string role) =>
+            db.Roles.Where(r => r.Name == role).Select(r => r.Id).FirstOrDefaultAsync();
+
+        private async Task<string?> ValidateAsync(GrantTypeRequest dto, int? id)
+        {
+            if (string.IsNullOrWhiteSpace(dto.Name)) return "Name is required.";
+            if (dto.DefaultAmount is decimal a && (a <= 0 || a > 10_000_000m)) return "Default amount must be greater than zero.";
+
+            var name = dto.Name.Trim();
+            if (await db.GrantTypes.AnyAsync(t => t.Id != id && t.Name == name))
+                return $"A grant type named '{name}' already exists.";
+            return null;
+        }
+
+        private static string? Trim(string? v) => string.IsNullOrWhiteSpace(v) ? null : v.Trim();
+    }
+
+    public record GrantTypeRequest(
+        [Required, MaxLength(150)] string Name,
+        [MaxLength(500)] string? Description,
+        [MaxLength(150)] string? Sponsor,
+        decimal? DefaultAmount);
+}

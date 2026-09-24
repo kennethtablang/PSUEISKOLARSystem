@@ -12,10 +12,13 @@ async function downloadFile(url, token, filename) {
 }
 
 // format is 'xlsx' (spreadsheet) or 'pdf' (print-ready report).
-export function exportScholars(token, { scholarshipTypeId, programId } = {}, format = 'xlsx') {
+// With no scholarshipTypeId the export is split by type (one sheet / section each);
+// with one, only that scholarship's scholars are exported.
+export function exportScholars(token, { scholarshipTypeId, programId, campusId } = {}, format = 'xlsx') {
   const params = new URLSearchParams();
   if (scholarshipTypeId) params.set('scholarshipTypeId', scholarshipTypeId);
   if (programId) params.set('programId', programId);
+  if (campusId) params.set('campusId', campusId);
   const qs = params.toString() ? `?${params}` : '';
   return downloadFile(`${API}/scholars.${format}${qs}`, token, `scholars_${today()}.${format}`);
 }

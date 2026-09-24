@@ -11,6 +11,8 @@ namespace PSUEISKOLARSystem.Server.DTOs.Scholars
         public bool HasAvatar { get; set; }
 
         public string StudentId { get; set; } = string.Empty;
+        public int? CampusId { get; set; }
+        public string? CampusName { get; set; }
         public int? ProgramId { get; set; }
         public string? ProgramName { get; set; }
         public string? ProgramCode { get; set; }
@@ -25,6 +27,11 @@ namespace PSUEISKOLARSystem.Server.DTOs.Scholars
         public DateTime? BirthDate { get; set; }
         public string? Address { get; set; }
         public DateTime EnrolledAt { get; set; }
+
+        public PersonalDetailsDto Personal { get; set; } = new();
+
+        // Grants recorded against this scholar — a scholar can also be a grantee.
+        public int GrantCount { get; set; }
 
         public decimal? LatestGwa { get; set; }
         public bool? MeetsRequirement { get; set; }

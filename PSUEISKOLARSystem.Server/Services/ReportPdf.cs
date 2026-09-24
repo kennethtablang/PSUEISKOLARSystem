@@ -25,6 +25,52 @@ namespace PSUEISKOLARSystem.Server.Services
         /// <summary>A single cell: its text plus the colour it should print in.</summary>
         public record Cell(string Text, string? Color = null, bool Bold = false);
 
+        /// <summary>A titled block of rows — one scholarship type in a categorised report.</summary>
+        public record Group(string Heading, IReadOnlyList<Cell[]> Rows);
+
+        /// <summary>
+        /// A report split into sections, each with its own heading and table, so a master list
+        /// covering several scholarships never mixes their scholars together.
+        /// </summary>
+        public static byte[] BuildGrouped(string title, string subtitle, IReadOnlyList<Column> columns, IReadOnlyList<Group> groups)
+        {
+            var total = groups.Sum(g => g.Rows.Count);
+            var document = Document.Create(container =>
+            {
+                container.Page(page =>
+                {
+                    page.Size(PageSizes.A4.Landscape());
+                    page.Margin(28);
+                    page.DefaultTextStyle(t => t.FontSize(8).FontColor(Ink));
+
+                    page.Header().Element(h => Header(h, title, subtitle, total));
+                    page.Content().PaddingTop(10).Column(col =>
+                    {
+                        if (groups.Count == 0)
+                        {
+                            col.Item().Element(c => Table(c, columns, []));
+                            return;
+                        }
+
+                        for (int i = 0; i < groups.Count; i++)
+                        {
+                            var group = groups[i];
+                            col.Item().PaddingTop(i == 0 ? 0 : 14).Row(row =>
+                            {
+                                row.RelativeItem().Text(group.Heading).FontSize(11).SemiBold().FontColor(PsuBlue);
+                                row.ConstantItem(120).AlignRight().Text(
+                                    $"{group.Rows.Count:N0} scholar{(group.Rows.Count == 1 ? "" : "s")}").FontSize(8).FontColor(Muted);
+                            });
+                            col.Item().PaddingTop(4).Element(c => Table(c, columns, group.Rows));
+                        }
+                    });
+                    page.Footer().Element(Footer);
+                });
+            });
+
+            return document.GeneratePdf();
+        }
+
         public static byte[] Build(string title, string subtitle, IReadOnlyList<Column> columns, IReadOnlyList<Cell[]> rows)
         {
             var document = Document.Create(container =>
@@ -52,7 +98,7 @@ namespace PSUEISKOLARSystem.Server.Services
                 {
                     row.RelativeItem().Column(left =>
                     {
-                        left.Item().Text("Pangasinan State University — Lingayen Campus")
+                        left.Item().Text("Pangasinan State University")
                             .FontSize(8).FontColor(Muted).LetterSpacing(0.08f);
                         left.Item().PaddingTop(2).Text(title)
                             .FontSize(16).SemiBold().FontColor(PsuBlue);

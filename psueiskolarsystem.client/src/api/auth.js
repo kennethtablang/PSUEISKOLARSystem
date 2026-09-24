@@ -26,6 +26,11 @@ export async function registerScholar(data) {
   return apiSend(`${API}/register-scholar`, 'POST', data, null, 'Registration failed.');
 }
 
+/** Master-list pre-check: { matched, kind, scholarshipTypeName, grantTypeNames, message }. */
+export async function checkEligibility(data) {
+  return apiSend(`${API}/check-eligibility`, 'POST', data, null, 'Could not check your details.');
+}
+
 export async function verifyEmail(email, token) {
   const params = new URLSearchParams({ email, token });
   return apiGet(`${API}/verify-email?${params}`, null, 'Verification failed.');

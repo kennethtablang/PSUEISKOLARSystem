@@ -9,6 +9,7 @@ namespace PSUEISKOLARSystem.Server.Interfaces
         Task<UserDto> GetCurrentUserAsync(string userId);
         Task<UserDto> UpdateProfileAsync(string userId, UpdateProfileDto dto);
         Task<UserDto> RegisterScholarAsync(RegisterScholarRequestDto request);
+        Task<EligibilityCheckResultDto> CheckEligibilityAsync(EligibilityCheckRequestDto request);
         Task<bool> ForgotPasswordAsync(string email);
         Task ResetPasswordAsync(ResetPasswordRequestDto request);
         Task EnableTwoFactorAsync(string userId);

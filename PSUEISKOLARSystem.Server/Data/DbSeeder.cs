@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using PSUEISKOLARSystem.Server.Models;
 using PSUEISKOLARSystem.Server.Models.Enums;
 
@@ -45,6 +46,8 @@ namespace PSUEISKOLARSystem.Server.Data
                 );
                 await db.SaveChangesAsync();
             }
+
+            await SeedCampusesAsync(db);
 
             if (!db.DocumentRequirements.Any())
             {
@@ -102,6 +105,46 @@ namespace PSUEISKOLARSystem.Server.Data
                         await userManager.AddToRoleAsync(user, Role);
                 }
             }
+        }
+
+        // The nine PSU campuses. Lingayen is where the system started, so profiles created
+        // before campuses existed are placed there.
+        private static readonly (string Code, string Name)[] PsuCampuses =
+        [
+            ("ALA", "Alaminos City Campus"),
+            ("ASI", "Asingan Campus"),
+            ("BAY", "Bayambang Campus"),
+            ("BIN", "Binmaley Campus"),
+            ("INF", "Infanta Campus"),
+            ("LIN", "Lingayen Campus"),
+            ("SCC", "San Carlos City Campus"),
+            ("STM", "Santa Maria Campus"),
+            ("URD", "Urdaneta City Campus"),
+        ];
+
+        private static async Task SeedCampusesAsync(ApplicationDbContext db)
+        {
+            if (db.Campuses.Any()) return;
+
+            db.Campuses.AddRange(PsuCampuses.Select(c => new Campus { Code = c.Code, Name = c.Name }));
+            await db.SaveChangesAsync();
+
+            /* Every existing programme starts out offered at every campus so sign-up works on
+               day one; the office then narrows each campus to what it actually runs on the
+               Campuses & Programs page. */
+            var campusIds = await db.Campuses.Select(c => c.Id).ToListAsync();
+            var programIds = await db.AcademicPrograms.Select(p => p.Id).ToListAsync();
+            db.CampusPrograms.AddRange(
+                from c in campusIds
+                from p in programIds
+                select new CampusProgram { CampusId = c, ProgramId = p });
+
+            var lingayen = await db.Campuses.FirstAsync(c => c.Code == "LIN");
+            await db.ScholarProfiles
+                .Where(sp => sp.CampusId == null)
+                .ExecuteUpdateAsync(s => s.SetProperty(sp => sp.CampusId, lingayen.Id));
+
+            await db.SaveChangesAsync();
         }
     }
 }

@@ -75,13 +75,24 @@ export default function DeadlinesPage() {
   /* Saved when the field is committed (blur or Enter), not on every change. A date input
      reports each keystroke of the year as a new valid date — 0002, 0020, 0202, 2026 — and each
      one was saved, resetting the reminder sequence and writing an audit row per digit. */
-  async function handleSetDeadline(requirementId, dateStr, current) {
-    if (!dateStr || dateStr === current) return;
+  /* Setting a deadline notifies scholars and starts the reminder sequence, so it is confirmed
+     first. Returns false when nothing was saved, so the field can put the old date back. */
+  async function handleSetDeadline(requirementId, dateStr, current, requirementName) {
+    if (!dateStr || dateStr === current) return true;
     const year = Number(dateStr.slice(0, 4));
     if (year < 2000 || year > 2100) {
       toast('Enter a due date between the years 2000 and 2100.', 'error');
-      return;
+      return false;
     }
+    const pretty = new Date(`${dateStr}T00:00:00`).toLocaleDateString('en-PH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    const ok = await confirm({
+      title: current ? 'Change this deadline?' : 'Set this deadline?',
+      message: `${requirementName ?? 'This requirement'} will be due on ${pretty} (11:59 PM) for ` +
+        `A.Y. ${period.academicYear}, Semester ${period.semester}.` +
+        (current ? ` It replaces the current due date and restarts the reminders.` : ' Scholars will be reminded as the date approaches.'),
+      confirmLabel: current ? 'Change Deadline' : 'Set Deadline',
+    });
+    if (!ok) return false;
     try {
       await upsertDeadline({
         requirementId,
@@ -94,7 +105,11 @@ export default function DeadlinesPage() {
       }, token);
       toast('Deadline saved.', 'success');
       await loadManage({ quiet: true });
-    } catch (e) { toast(e.message, 'error'); }
+      return true;
+    } catch (e) {
+      toast(e.message, 'error');
+      return false;
+    }
   }
 
   async function handleClear(id) {
@@ -221,7 +236,12 @@ function ManageTab({ requirements, deadlineByReq, onSet, onClear }) {
                     type="date"
                     aria-label={`Due date for ${req.name}`}
                     defaultValue={toDateInput(dl?.dueDate)}
-                    onBlur={e => onSet(req.id, e.target.value, toDateInput(dl?.dueDate))}
+                    onBlur={async e => {
+                      const input = e.currentTarget;
+                      const original = toDateInput(dl?.dueDate);
+                      const saved = await onSet(req.id, input.value, original, req.name);
+                      if (!saved) input.value = original;
+                    }}
                     onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
                     className="clay-input"
                     style={{ width: 'auto' }}

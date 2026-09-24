@@ -9,10 +9,12 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
   AreaChart, Area,
 } from 'recharts';
-import { GraduationCap, FileCheck, Clock, AlertTriangle, TrendingUp, Download, Loader, Table2, ChartColumn, ArrowRight, Minus, TrendingDown, BanknoteArrowUp, Wallet } from 'lucide-react';
+import { GraduationCap, FileCheck, Clock, AlertTriangle, TrendingUp, Download, Loader, Table2, ChartColumn, ArrowRight, Minus, TrendingDown, BanknoteArrowUp, Wallet, HandCoins, UserX, Users, UserCheck } from 'lucide-react';
 import { useTitle } from '../hooks/useTitle';
 import { exportScholars, exportSubmissions } from '../api/reports';
-import { getAnalyticsTrends, getAnalyticsDisbursements } from '../api/analytics';
+import { getAnalyticsTrends, getAnalyticsDisbursements, getAnalyticsDemographics, getAnalyticsGrantees } from '../api/analytics';
+import { getScholarshipTypes } from '../api/lookups';
+import { getCampuses } from '../api/campuses';
 import { vizTokens, tooltipStyle } from '../constants/viz';
 import { peso, FREQUENCY_LABELS } from '../constants/grants';
 import InfoTip from '../components/InfoTip';
@@ -38,6 +40,13 @@ export default function AnalyticsPage() {
   const [lastUpdated, setLastUpdated] = useState(null);
   const [trends, setTrends] = useState(null);       // per-period rows for the comparison charts
   const [money, setMoney] = useState(null);         // release + grant disbursement figures
+  const [scholarshipTypes, setScholarshipTypes] = useState([]);
+  const [campuses, setCampuses] = useState([]);
+  // Scholar roster export filters: a type exports that scholarship alone; none splits by type.
+  const [reportTypeId, setReportTypeId] = useState('');
+  const [reportCampusId, setReportCampusId] = useState('');
+  // Bumped on every live refresh so the profile and grantee sections refetch too.
+  const [liveTick, setLiveTick] = useState(0);
   const periodRef = useRef(period);
   // Only the newest overview/disbursement request may write state: switching periods quickly
   // let a slow earlier response land last and show another period's figures under this one.
@@ -72,7 +81,10 @@ export default function AnalyticsPage() {
     setExporting(`${type}:${format}`);
     try {
       if (type === 'scholars') {
-        await exportScholars(token, {}, format);
+        await exportScholars(token, {
+          scholarshipTypeId: reportTypeId || undefined,
+          campusId: reportCampusId || undefined,
+        }, format);
       } else {
         // Submissions carry an academic period, so the export honours the filter above.
         const [academicYear, semester] = (period || '').split('__');
@@ -84,6 +96,11 @@ export default function AnalyticsPage() {
       setExporting(null);
     }
   }
+
+  useEffect(() => {
+    getScholarshipTypes(token).then(setScholarshipTypes).catch(() => {});
+    getCampuses(token).then(setCampuses).catch(() => {});
+  }, [token]);
 
   // Refetch when the period filter changes.
   useEffect(() => { periodRef.current = period; refetch(); }, [period, refetch]);
@@ -109,10 +126,10 @@ export default function AnalyticsPage() {
     let timer;
     const trigger = () => {
       clearTimeout(timer);
-      timer = setTimeout(() => { refetch(true); loadTrends(); loadMoney(); }, 600);
+      timer = setTimeout(() => { refetch(true); loadTrends(); loadMoney(); setLiveTick(n => n + 1); }, 600);
     };
     const unsub = subscribeToAnalytics(trigger);
-    const interval = setInterval(() => { refetch(true); loadTrends(); loadMoney(); }, 30000);
+    const interval = setInterval(() => { refetch(true); loadTrends(); loadMoney(); setLiveTick(n => n + 1); }, 30000);
     return () => { clearTimeout(timer); unsub(); clearInterval(interval); };
   }, [subscribeToAnalytics, refetch, loadTrends, loadMoney]);
 
@@ -152,7 +169,7 @@ export default function AnalyticsPage() {
         <div className="page-head">
           <div style={{ minWidth: 0 }}>
             <h1 className="page-title">Data Visualization &amp; Reports</h1>
-            <p className="page-subtitle">Descriptive analytics for PSU Lingayen Campus</p>
+            <p className="page-subtitle">Descriptive analytics for Pangasinan State University scholars and grantees</p>
             <span className="page-title-bar" />
           </div>
           {/* Filters in one row above the charts. Exports live in the rail so this row
@@ -297,6 +314,12 @@ export default function AnalyticsPage() {
 
             {/* ── Semester-over-semester comparison ── */}
             <PeriodComparison trends={trends} t={t} />
+
+            {/* ── Scholar's Data sheet: who the scholars and grantees are ── */}
+            <Demographics token={token} t={t} campuses={campuses} liveTick={liveTick} />
+
+            {/* ── Grantee accounts and one-time grants ── */}
+            <GranteeAnalytics token={token} t={t} campuses={campuses} liveTick={liveTick} />
           </div>
 
           {/* ── Right rail: composition and the numbers behind the charts ── */}
@@ -324,12 +347,25 @@ export default function AnalyticsPage() {
                 Excel to work with the numbers, PDF to print or file
               </p>
               <div className="space-y-3">
-                <ExportRow
-                  label="Scholar Roster"
-                  exporting={exporting}
-                  type="scholars"
-                  onExport={handleExport}
-                />
+                <div>
+                  <p className="text-xs font-bold mb-1.5" style={{ color: 'var(--text-strong)' }}>Scholar Master List</p>
+                  <select value={reportTypeId} onChange={e => setReportTypeId(e.target.value)}
+                    className="clay-input text-xs mb-2" style={{ height: 34, minHeight: 34 }} aria-label="Scholarship type to export">
+                    <option value="">All scholarship types (one sheet each)</option>
+                    {scholarshipTypes.map(st => <option key={st.id} value={st.id}>{st.name} only</option>)}
+                  </select>
+                  <select value={reportCampusId} onChange={e => setReportCampusId(e.target.value)}
+                    className="clay-input text-xs mb-2" style={{ height: 34, minHeight: 34 }} aria-label="Campus to export">
+                    <option value="">All campuses</option>
+                    {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                  <ExportRow
+                    label=""
+                    exporting={exporting}
+                    type="scholars"
+                    onExport={handleExport}
+                  />
+                </div>
                 <ExportRow
                   label="Submissions"
                   exporting={exporting}
@@ -982,7 +1018,7 @@ function EmptyChart() {
 function ExportRow({ label, type, exporting, onExport }) {
   return (
     <div>
-      <p className="text-xs font-bold mb-1.5" style={{ color: 'var(--text-strong)' }}>{label}</p>
+      {label && <p className="text-xs font-bold mb-1.5" style={{ color: 'var(--text-strong)' }}>{label}</p>}
       <div className="flex gap-2">
         <ExportButton label="Excel" loading={exporting === `${type}:xlsx`} onClick={() => onExport(type, 'xlsx')} />
         <ExportButton label="PDF"   loading={exporting === `${type}:pdf`}  onClick={() => onExport(type, 'pdf')} />
@@ -1004,5 +1040,241 @@ function ExportButton({ label, loading, onClick, block }) {
         : <Download size={13} strokeWidth={2.5} />}
       {loading ? 'Exporting…' : label}
     </button>
+  );
+}
+
+/* ── Scholar's Data sheet ─────────────────────────────── */
+
+const POPULATIONS = [
+  { value: 'scholars', label: 'Scholars' },
+  { value: 'grantees', label: 'Grantees' },
+  { value: 'all', label: 'Both' },
+];
+
+/** A single-measure bar chart with its numbers one toggle away. */
+function CountBars({ title, subtitle, info, rows, t, height = 240, name = 'Count', horizontal = false }) {
+  return (
+    <ChartCard title={title} subtitle={subtitle} info={info} compact
+      table={{ columns: ['', name], rows: rows.map(r => [r.name, r.count]) }}>
+      {rows.length === 0 || rows.every(r => r.count === 0) ? <EmptyChart /> : horizontal ? (
+        <ResponsiveContainer width="100%" height={Math.max(160, rows.length * 34)}>
+          <BarChart data={rows} layout="vertical" margin={{ top: 0, right: 16, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={t.grid} horizontal={false} />
+            <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: t.axis }} axisLine={false} tickLine={false} />
+            <YAxis type="category" dataKey="name" width={150} tick={{ fontSize: 11, fill: t.axis }} axisLine={false} tickLine={false} />
+            <Tooltip contentStyle={tooltipStyle(t)} cursor={{ fill: t.cursor }} />
+            <Bar dataKey="count" name={name} fill={t.markColor} radius={[0, 4, 4, 0]} maxBarSize={22} />
+          </BarChart>
+        </ResponsiveContainer>
+      ) : (
+        <ResponsiveContainer width="100%" height={height}>
+          <BarChart data={rows} margin={CHART_MARGIN}>
+            <CartesianGrid strokeDasharray="3 3" stroke={t.grid} vertical={false} />
+            <XAxis dataKey="name" tick={{ fontSize: 11, fill: t.axis }} axisLine={false} tickLine={false} interval={0} />
+            <YAxis allowDecimals={false} width={38} tick={{ fontSize: 11, fill: t.axis }} axisLine={false} tickLine={false} />
+            <Tooltip contentStyle={tooltipStyle(t)} cursor={{ fill: t.cursor }} />
+            <Bar dataKey="count" name={name} fill={t.markColor} radius={[4, 4, 0, 0]} maxBarSize={56} />
+          </BarChart>
+        </ResponsiveContainer>
+      )}
+    </ChartCard>
+  );
+}
+
+/**
+ * Profile make-up from the Scholar's Data sheet collected at sign-up — campus, sex, age,
+ * civil status, the equity flags, household income and support source — for scholars,
+ * grantees, or both. Grantee profiles outlive their deactivated accounts, so they count here.
+ */
+function Demographics({ token, t, campuses, liveTick }) {
+  const [population, setPopulation] = useState('scholars');
+  const [campusId, setCampusId] = useState('');
+  const [d, setD] = useState(null);
+  const seq = useRef(0);
+
+  useEffect(() => {
+    const mine = ++seq.current;
+    getAnalyticsDemographics(token, { population, campusId: campusId || undefined })
+      .then(r => { if (mine === seq.current) setD(r); })
+      .catch(() => {});
+  }, [token, population, campusId, liveTick]);
+
+  const who = population === 'grantees' ? 'grantees' : population === 'all' ? 'scholars and grantees' : 'scholars';
+
+  return (
+    <section className="space-y-6">
+      <div className="flex items-end justify-between gap-3 flex-wrap pt-2">
+        <div>
+          <h2 className="text-base font-black" style={{ color: 'var(--text-strong)' }}>Scholar &amp; Grantee Profile</h2>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            From the Scholar&apos;s Data sheet filled in at sign-up · {d?.total ?? 0} {who}
+          </p>
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-1">
+            {POPULATIONS.map(p => (
+              <button key={p.value} onClick={() => setPopulation(p.value)}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold"
+                aria-pressed={population === p.value}
+                style={population === p.value ? { background: '#002570', color: '#fff' } : { background: 'var(--surface-inset)', color: 'var(--text)' }}>
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <select value={campusId} onChange={e => setCampusId(e.target.value)} className="clay-input text-xs"
+            style={{ height: 32, minHeight: 32, width: 'auto' }} aria-label="Campus">
+            <option value="">All campuses</option>
+            {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {!d ? <div className="clay-card"><EmptyChart /></div> : (
+        <>
+          {!campusId && (
+            <CountBars title="By Campus" subtitle={`Where the ${who} study`} rows={d.byCampus} t={t} name="People" horizontal
+              info="Campus picked at sign-up. Profiles created before campuses existed were placed under Lingayen." />
+          )}
+
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            <MeterList title="Sex" subtitle={`Share of ${d.total}`} total={d.total} color={t.markColor} track={t.grid}
+              rows={d.bySex.map(r => ({ label: r.name, value: r.count }))} />
+            <MeterList title="Civil Status" subtitle={`Share of ${d.total}`} total={d.total} color={t.markColor} track={t.grid}
+              rows={d.byCivilStatus.map(r => ({ label: r.name, value: r.count }))} />
+          </div>
+
+          <MeterList title="Equity Indicators" subtitle={`How many of the ${d.total} ${who} answered Yes`}
+            total={d.total} color={t.markColor} track={t.grid}
+            rows={d.flags.map(f => ({ label: f.name, value: f.count }))} />
+
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            <CountBars title="Age" subtitle="Calculated from the birthdate" rows={d.byAge} t={t} name="People" />
+            <CountBars title="Year Level" subtitle="As recorded on the profile" rows={d.byYearLevel} t={t} name="People" />
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            <CountBars title="Household Monthly Income" subtitle="Father's and mother's estimated income combined"
+              rows={d.byIncome} t={t} name="People" horizontal
+              info="Sum of the two parents' estimated monthly income from the sign-up form. 'Not stated' means neither was given." />
+            <div className="space-y-6">
+              <MeterList title="Main Source of Educational Support" subtitle={`Share of ${d.total}`}
+                total={d.total} color={t.markColor} track={t.grid}
+                rows={d.bySupportSource.map(r => ({ label: r.name, value: r.count }))} />
+              <div className="clay-card p-5">
+                <p className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Average family size</p>
+                <p className="text-3xl font-black mt-1" style={{ color: 'var(--text-strong)' }}>
+                  {d.averageFamilySize ? d.averageFamilySize.toFixed(1) : '—'}
+                </p>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>members per household</p>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+/**
+ * Grantee accounts and the one-time grants behind them. Closed grant types and deactivated
+ * accounts stay in every figure — deactivation ends access, not the record.
+ */
+function GranteeAnalytics({ token, t, campuses, liveTick }) {
+  const [campusId, setCampusId] = useState('');
+  const [g, setG] = useState(null);
+  const seq = useRef(0);
+
+  useEffect(() => {
+    const mine = ++seq.current;
+    getAnalyticsGrantees(token, { campusId: campusId || undefined })
+      .then(r => { if (mine === seq.current) setG(r); })
+      .catch(() => {});
+  }, [token, campusId, liveTick]);
+
+  return (
+    <section className="space-y-6">
+      <div className="flex items-end justify-between gap-3 flex-wrap pt-2">
+        <div>
+          <h2 className="text-base font-black" style={{ color: 'var(--text-strong)' }}>Grantees &amp; One-Time Grants</h2>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            Grantee accounts, and every grant paid under each grant type — including closed ones
+          </p>
+        </div>
+        <select value={campusId} onChange={e => setCampusId(e.target.value)} className="clay-input text-xs"
+          style={{ height: 32, minHeight: 32, width: 'auto' }} aria-label="Campus">
+          <option value="">All campuses</option>
+          {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+      </div>
+
+      {!g ? <div className="clay-card"><EmptyChart /></div> : (
+        <>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <KpiCard Icon={HandCoins} label="Grantees" value={g.totalGrantees} color="#fff3cd" iconColor="#c07800"
+              info="Grantee accounts (one-time grant recipients who are not scholars), active or deactivated." />
+            <KpiCard Icon={UserCheck} label="Active Accounts" value={g.activeAccounts} color="#d4f5e2" iconColor="#10a060"
+              info="Grantees who can still sign in — usually those whose grant has not been released yet." />
+            <KpiCard Icon={UserX} label="Deactivated" value={g.deactivatedAccounts} color="#e8edf5" iconColor="#4a5a7a"
+              info="Grantee accounts closed after their grant was released. Their data is kept and still counted here." />
+            <KpiCard Icon={Users} label="Scholars with Grants" value={g.scholarGrantees} color="#dce8ff" iconColor="#003087"
+              info="Scholars who also received a one-time grant. A scholar can be a grantee; a grantee is never a scholar." />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="clay-card p-5">
+              <p className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Released</p>
+              <p className="text-2xl font-black mt-1" style={{ color: 'var(--tone-ok-fg)' }}>{peso(g.releasedAmount)}</p>
+            </div>
+            <div className="clay-card p-5">
+              <p className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Awaiting release</p>
+              <p className="text-2xl font-black mt-1" style={{ color: 'var(--tone-warn-fg)' }}>{peso(g.pendingAmount)}</p>
+            </div>
+          </div>
+
+          <ChartCard title="Grants by Type" subtitle="Amount released and still pending, per grant type"
+            info="Cancelled grants are left out. A closed (deactivated) grant type keeps its figures."
+            table={{
+              columns: ['Grant type', 'Recipients', 'Grantees', 'Scholars', 'Released', 'Pending'],
+              rows: g.byType.map(r => [r.name + (r.isActive ? '' : ' (closed)'), r.recipients, r.granteeRecipients, r.scholarRecipients, peso(r.releasedAmount), peso(r.pendingAmount)]),
+            }}>
+            {g.byType.length === 0 ? <EmptyChart /> : (
+              <ResponsiveContainer width="100%" height={Math.max(200, g.byType.length * 46)}>
+                <BarChart data={g.byType} layout="vertical" margin={{ top: 0, right: 16, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={t.grid} horizontal={false} />
+                  <XAxis type="number" tick={{ fontSize: 11, fill: t.axis }} axisLine={false} tickLine={false}
+                    tickFormatter={v => `₱${Number(v).toLocaleString()}`} />
+                  <YAxis type="category" dataKey="name" width={150} tick={{ fontSize: 11, fill: t.axis }} axisLine={false} tickLine={false} />
+                  <Tooltip contentStyle={tooltipStyle(t)} cursor={{ fill: t.cursor }} formatter={v => peso(v)} />
+                  <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12, color: t.axis }} />
+                  <Bar dataKey="releasedAmount" name="Released" stackId="a" fill={t.status.verified} stroke={t.gap} strokeWidth={2} maxBarSize={24} />
+                  <Bar dataKey="pendingAmount" name="Pending" stackId="a" fill={t.status.pending} stroke={t.gap} strokeWidth={2} radius={[0, 4, 4, 0]} maxBarSize={24} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </ChartCard>
+
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            {!campusId && (
+              <CountBars title="Grantees by Campus" subtitle="Active and deactivated accounts" t={t} name="Grantees" horizontal
+                rows={g.byCampus.map(c => ({ name: c.name, count: c.count }))} />
+            )}
+            <ChartCard title="Grant Releases by Month" subtitle="Amount handed out each month" compact
+              table={{ columns: ['Month', 'Grants', 'Amount'], rows: g.byMonth.map(m => [m.label, m.count, peso(m.amount)]) }}>
+              {g.byMonth.length === 0 ? <EmptyChart /> : (
+                <ResponsiveContainer width="100%" height={240}>
+                  <BarChart data={g.byMonth} margin={CHART_MARGIN}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={t.grid} vertical={false} />
+                    <XAxis dataKey="label" tick={{ fontSize: 11, fill: t.axis }} axisLine={false} tickLine={false} />
+                    <YAxis width={60} tick={{ fontSize: 11, fill: t.axis }} axisLine={false} tickLine={false} tickFormatter={v => `₱${Number(v).toLocaleString()}`} />
+                    <Tooltip contentStyle={tooltipStyle(t)} cursor={{ fill: t.cursor }} formatter={v => peso(v)} />
+                    <Bar dataKey="amount" name="Released" fill={t.markColor} radius={[4, 4, 0, 0]} maxBarSize={48} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </ChartCard>
+          </div>
+        </>
+      )}
+    </section>
   );
 }

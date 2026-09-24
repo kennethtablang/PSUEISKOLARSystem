@@ -13,6 +13,9 @@ namespace PSUEISKOLARSystem.Server.Models
         [Required, MaxLength(30)]
         public string StudentId { get; set; } = string.Empty;
 
+        public int? CampusId { get; set; }
+        public Campus? Campus { get; set; }
+
         public int? ProgramId { get; set; }
         public AcademicProgram? Program { get; set; }
 
@@ -34,6 +37,9 @@ namespace PSUEISKOLARSystem.Server.Models
         public string? Address { get; set; }
 
         public DateTime EnrolledAt { get; set; } = DateTime.UtcNow;
+
+        // Personal and family information from the Scholar's Data sheet.
+        public PersonalDetails Personal { get; set; } = new();
 
         public ICollection<AcademicGrade> Grades { get; set; } = [];
     }

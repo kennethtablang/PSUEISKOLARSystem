@@ -18,8 +18,10 @@ export async function getScholarshipReleases(token, {
  * The monitor: every scholar holding a scholarship type in one period, each with the
  * status of their payout — Released, Pending, Cancelled, or NotRecorded.
  */
-export async function getReleaseMonitor(token, { scholarshipTypeId, academicYear, semester }) {
+export async function getReleaseMonitor(token, { scholarshipTypeId, academicYear, semester, campusId, yearLevel }) {
   const params = new URLSearchParams({ scholarshipTypeId, academicYear, semester });
+  if (campusId) params.set('campusId', campusId);
+  if (yearLevel) params.set('yearLevel', yearLevel);
   return apiGet(`${API}/monitor?${params}`, token, 'Failed to load the release monitor.');
 }
 
@@ -38,6 +40,21 @@ export async function recordScholarshipRelease(data, token) {
 /** Opens a pending row for every holder of the type who has none for the period. */
 export async function generateScholarshipReleases(data, token) {
   return apiSend(`${API}/generate`, 'POST', data, token, 'Failed to open the releases.');
+}
+
+/**
+ * Schedules one scholarship type's payout for a period: the campuses receiving on the date,
+ * the year level paid, and optionally a hand-picked set of scholars.
+ */
+export async function scheduleScholarshipReleases(data, token) {
+  return apiSend(`${API}/schedule`, 'POST', data, token, 'Failed to schedule the release.');
+}
+
+/** Marks several pending releases as released in one step. */
+export async function releaseScholarshipBatch({ releaseIds, releasedAt, referenceNo }, token) {
+  return apiSend(`${API}/release-batch`, 'POST',
+    { releaseIds, releasedAt: releasedAt || null, referenceNo: referenceNo || null },
+    token, 'Failed to mark the releases as released.');
 }
 
 export async function releaseScholarship(id, { referenceNo, releasedAt } = {}, token) {

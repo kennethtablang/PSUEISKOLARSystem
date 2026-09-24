@@ -162,74 +162,184 @@ namespace PSUEISKOLARSystem.Server.Services
             return userDto;
         }
 
+        /// <summary>
+        /// The master-list pre-check behind the sign-up form's first step. Says only whether
+        /// the details match and what kind of account they would open — never who else is on
+        /// the list.
+        /// </summary>
+        public async Task<EligibilityCheckResultDto> CheckEligibilityAsync(EligibilityCheckRequestDto request)
+        {
+            var matches = await MasterList.FindMatchesAsync(
+                dbContext, request.StudentId, request.FirstName, request.LastName, request.MiddleName, request.CampusId);
+
+            if (matches.Count == 0)
+            {
+                var sid = MasterList.NormalizeStudentId(request.StudentId);
+                var alreadyRegistered =
+                    await dbContext.ScholarProfiles.AnyAsync(sp => sp.StudentId == sid) ||
+                    await dbContext.GranteeProfiles.AnyAsync(gp => gp.StudentId == sid);
+
+                return new EligibilityCheckResultDto
+                {
+                    Matched = false,
+                    Message = alreadyRegistered
+                        ? "An account has already been created for this student number. Sign in instead, or use Forgot Password."
+                        : NoMatchMessage,
+                };
+            }
+
+            var scholarLine = matches.FirstOrDefault(m => m.Kind == EligibilityKinds.Scholar);
+            return new EligibilityCheckResultDto
+            {
+                Matched = true,
+                Kind = scholarLine is not null ? EligibilityKinds.Scholar : EligibilityKinds.Grantee,
+                ScholarshipTypeName = scholarLine?.ScholarshipType?.Name,
+                GrantTypeNames = matches
+                    .Where(m => m.Kind == EligibilityKinds.Grantee && m.GrantType is not null)
+                    .Select(m => m.GrantType!.Name)
+                    .ToList(),
+            };
+        }
+
+        private const string NoMatchMessage =
+            "Your details do not match the scholarship office's list of scholars and grantees, so an " +
+            "account cannot be created. Enter your student number and name exactly as they appear on " +
+            "your school records, choose the correct campus, or contact the scholarship office.";
+
+        /// <summary>
+        /// Self sign-up for scholars and grantees. The details are cross-matched against the
+        /// master list; a match opens the account immediately (no approval queue), a miss
+        /// refuses it outright. A Scholar line makes a scholar holding that line's scholarship;
+        /// Grantee lines make a grantee — or, for a student who is on both, a scholar with the
+        /// grants recorded on their profile, since a scholar can be a grantee but not the
+        /// other way round.
+        /// </summary>
         public async Task<UserDto> RegisterScholarAsync(RegisterScholarRequestDto request)
         {
-            if (await userManager.FindByEmailAsync(request.Email) is not null)
+            var email = request.Email.Trim().ToLowerInvariant();
+            if (!email.EndsWith("@" + PersonalOptions.InstitutionalDomain))
+                throw new BadRequestException($"Use your institutional email address (@{PersonalOptions.InstitutionalDomain}). Personal email addresses are not accepted.");
+
+            if (!request.ConsentAccepted)
+                throw new BadRequestException("You must agree to the Data Privacy notice to create an account.");
+
+            if (await userManager.FindByEmailAsync(email) is not null)
                 throw new BadRequestException("An account with this email already exists.");
+
+            var personalError = request.Personal.Validate();
+            if (personalError is not null) throw new BadRequestException(personalError);
+
+            if (request.BirthDate is DateTime bd && (bd.Date > DateTime.UtcNow.Date || bd.Year < 1900))
+                throw new BadRequestException("Enter a valid birth date.");
 
             // Profile checks run before the account exists, so a rejected profile never
             // leaves a half-registered user behind.
-            var studentId = request.StudentId.Trim();
-            if (await dbContext.ScholarProfiles.AnyAsync(sp => sp.StudentId == studentId))
-                throw new BadRequestException($"Student ID {studentId} is already registered to another scholar.");
+            var studentId = MasterList.NormalizeStudentId(request.StudentId);
+            if (await dbContext.ScholarProfiles.AnyAsync(sp => sp.StudentId == studentId) ||
+                await dbContext.GranteeProfiles.AnyAsync(gp => gp.StudentId == studentId))
+                throw new BadRequestException($"Student ID {studentId} is already registered to another account.");
 
-            if (!await dbContext.AcademicPrograms.AnyAsync(p => p.Id == request.ProgramId))
-                throw new BadRequestException("The selected program no longer exists.");
+            var campus = await dbContext.Campuses.FirstOrDefaultAsync(c => c.Id == request.CampusId && c.IsActive)
+                ?? throw new BadRequestException("The selected campus is not available.");
+
+            if (!await dbContext.CampusPrograms.AnyAsync(cp => cp.CampusId == campus.Id && cp.ProgramId == request.ProgramId))
+                throw new BadRequestException($"The selected course is not offered at {campus.Name}.");
+
+            var matches = await MasterList.FindMatchesAsync(
+                dbContext, studentId, request.FirstName, request.LastName, request.MiddleName, campus.Id);
+            if (matches.Count == 0)
+                throw new BadRequestException(NoMatchMessage);
+
+            var scholarLine = matches.FirstOrDefault(m => m.Kind == EligibilityKinds.Scholar);
+            var granteeLines = matches.Where(m => m.Kind == EligibilityKinds.Grantee).ToList();
+            var role = scholarLine is not null ? UserRoles.Scholar : UserRoles.Grantee;
 
             var policy = await SystemSettingsStore.GetAsync(dbContext);
 
             var user = new ApplicationUser
             {
-                UserName = request.Email,
-                Email = request.Email,
-                FirstName = request.FirstName.Trim(),
-                MiddleName = string.IsNullOrWhiteSpace(request.MiddleName) ? null : request.MiddleName.Trim(),
-                LastName = request.LastName.Trim(),
+                UserName = email,
+                Email = email,
+                FirstName = MasterList.NormalizeName(request.FirstName),
+                MiddleName = MasterList.NormalizeOptionalName(request.MiddleName),
+                LastName = MasterList.NormalizeName(request.LastName),
                 // Skipping verification only makes sense if nothing is going to be emailed
                 // to that address anyway, which is what the email switch decides.
                 EmailConfirmed = !policy.RequireEmailVerification || !policy.EmailEnabled,
-                // Self-registration normally needs an administrator to verify the scholar
-                // before they can submit documents (see ScholarApprovalsController); an
-                // institution that vets applicants elsewhere can skip that queue.
-                ApprovalStatus = policy.AutoApproveScholars
-                    ? ApprovalStatuses.Approved
-                    : ApprovalStatuses.Pending,
+                // The master-list match is the approval.
+                ApprovalStatus = ApprovalStatuses.Approved,
+                ApprovalDecidedAt = DateTime.UtcNow,
+                ApprovalNote = "Approved automatically: matched the master list.",
+                ConsentAcceptedAt = DateTime.UtcNow,
+                ConsentVersion = PrivacyNotice.CurrentVersion,
             };
 
             var result = await userManager.CreateAsync(user, request.Password);
             if (!result.Succeeded)
                 throw new BadRequestException(string.Join("; ", result.Errors.Select(e => e.Description)));
 
-            // The ledger enforces one scholarship per student and the slot quota. A scholar
-            // picking their first scholarship is exactly the non-staff case it allows.
-            var rejection = await ScholarshipRegistry.SetAsync(
-                dbContext, user.Id, request.ScholarshipTypeId, user.Id, actorIsStaff: false);
-            if (rejection is not null)
-            {
-                await userManager.DeleteAsync(user);
-                throw new BadRequestException(rejection);
-            }
-
-            dbContext.ScholarProfiles.Add(new ScholarProfile
-            {
-                UserId = user.Id,
-                StudentId = studentId,
-                ProgramId = request.ProgramId,
-                ScholarshipTypeId = request.ScholarshipTypeId,
-                YearLevel = request.YearLevel,
-                ContactNumber = string.IsNullOrWhiteSpace(request.ContactNumber) ? null : request.ContactNumber.Trim(),
-                BirthDate = request.BirthDate,
-                Address = string.IsNullOrWhiteSpace(request.Address) ? null : request.Address.Trim(),
-            });
-
             try
             {
-                await userManager.AddToRoleAsync(user, UserRoles.Scholar);
+                if (scholarLine is not null)
+                {
+                    // The ledger enforces one scholarship per student and the slot quota.
+                    var rejection = await ScholarshipRegistry.SetAsync(
+                        dbContext, user.Id, scholarLine.ScholarshipTypeId, user.Id, actorIsStaff: false);
+                    if (rejection is not null)
+                        throw new BadRequestException(rejection);
+
+                    var profile = new ScholarProfile
+                    {
+                        UserId = user.Id,
+                        StudentId = studentId,
+                        CampusId = campus.Id,
+                        ProgramId = request.ProgramId,
+                        ScholarshipTypeId = scholarLine.ScholarshipTypeId,
+                        YearLevel = request.YearLevel,
+                        ContactNumber = request.ContactNumber.Trim(),
+                        BirthDate = request.BirthDate?.Date,
+                        Address = request.Address.Trim(),
+                    };
+                    request.Personal.ApplyTo(profile.Personal);
+                    dbContext.ScholarProfiles.Add(profile);
+
+                    scholarLine.ClaimedByUserId = user.Id;
+                    scholarLine.ClaimedAt = DateTime.UtcNow;
+                }
+                else
+                {
+                    var profile = new GranteeProfile
+                    {
+                        UserId = user.Id,
+                        StudentId = studentId,
+                        CampusId = campus.Id,
+                        ProgramId = request.ProgramId,
+                        YearLevel = request.YearLevel,
+                        ContactNumber = request.ContactNumber.Trim(),
+                        BirthDate = request.BirthDate?.Date,
+                        Address = request.Address.Trim(),
+                    };
+                    request.Personal.ApplyTo(profile.Personal);
+                    dbContext.GranteeProfiles.Add(profile);
+                }
+
+                foreach (var line in granteeLines)
+                    MasterList.ClaimGranteeLine(dbContext, line, user.Id, actorId: null);
+
+                dbContext.AuditLogs.Add(new AuditLog
+                {
+                    UserId = user.Id,
+                    Action = "RegisterAccount",
+                    Details = $"{user.FullName} ({studentId}) signed up as {role} — matched the master list" +
+                              (granteeLines.Count > 0 ? $"; {granteeLines.Count} grant(s) recorded" : ""),
+                });
+
+                await userManager.AddToRoleAsync(user, role);
                 await dbContext.SaveChangesAsync();
             }
             catch
             {
-                // Drop the unsaved profile and ledger row so the delete doesn't retry them.
+                // Drop the unsaved profile, ledger and grant rows so the delete doesn't retry them.
                 dbContext.ChangeTracker.Clear();
                 await userManager.DeleteAsync(user);
                 throw;
@@ -239,7 +349,7 @@ namespace PSUEISKOLARSystem.Server.Services
                 await QueueVerificationEmailAsync(user);
 
             var userDto = mapper.Map<UserDto>(user);
-            userDto.Role = UserRoles.Scholar;
+            userDto.Role = role;
             return userDto;
         }
 

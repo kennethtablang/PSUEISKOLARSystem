@@ -22,6 +22,8 @@ export default function ScholarSearchSelect({
   placeholder = 'Search by name, student ID, or email…',
   initialLabel = '',
   autoFocus = false,
+  // Also list grantee accounts (a one-time grant can go to either).
+  includeGrantees = false,
   // Handed down by Field so its <label for> lands on whichever element is focusable at
   // the time — the closed trigger button, or the search box once it opens.
   id,
@@ -45,7 +47,7 @@ export default function ScholarSearchSelect({
     let cancelled = false;
     setLoading(true);
     const t = setTimeout(() => {
-      searchScholars(token, { search: query || undefined, limit: 25 })
+      searchScholars(token, { search: query || undefined, limit: 25, includeGrantees })
         .then(rows => {
           if (cancelled) return;
           setResults(rows);
@@ -60,7 +62,7 @@ export default function ScholarSearchSelect({
         .finally(() => { if (!cancelled) setLoading(false); });
     }, 250);
     return () => { cancelled = true; clearTimeout(t); };
-  }, [query, token, open]);
+  }, [query, token, open, includeGrantees]);
 
   // Close when the click lands anywhere else on the page.
   useEffect(() => {
