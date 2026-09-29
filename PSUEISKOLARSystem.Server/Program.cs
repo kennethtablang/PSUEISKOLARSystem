@@ -119,6 +119,7 @@ namespace PSUEISKOLARSystem.Server
             builder.Services.AddSingleton<BackgroundEmailer>();
             builder.Services.AddHostedService<DeadlineReminderService>();
             builder.Services.AddHostedService<AnnouncementPublisherService>();
+            builder.Services.AddHostedService<GrantReleaseService>();
             builder.Services.AddHostedService<NotificationRetentionService>();
             builder.Services.AddSingleton<IFileStorageService, LocalFileStorageService>();
 

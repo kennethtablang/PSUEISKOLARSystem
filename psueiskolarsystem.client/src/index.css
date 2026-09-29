@@ -620,12 +620,19 @@ body.modal-open { overflow: hidden; }
   to   { opacity: 1; }
 }
 
+/* `overflow: clip` rather than `hidden`: a `hidden` box is still a scroll container, so when
+   focus landed on something the browser thought was out of view (a visually-hidden checkbox)
+   it scrolled the *panel* — sliding the header and form out and leaving a blank white card.
+   Only .modal-body should ever scroll. `position: relative` keeps absolutely positioned
+   descendants anchored inside the panel. */
 .modal-panel {
+  position: relative;
   width: 100%;
   max-height: calc(100dvh - 32px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  overflow: clip;
   margin: auto;
   animation: modalPanelIn 0.24s cubic-bezier(0.2, 0.9, 0.3, 1) both;
 }

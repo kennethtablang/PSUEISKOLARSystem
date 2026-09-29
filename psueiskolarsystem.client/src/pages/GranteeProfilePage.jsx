@@ -16,7 +16,7 @@ import { getCampuses } from '../api/campuses';
 import { getPrograms } from '../api/lookups';
 import { deleteUser, setUserStatus } from '../api/users';
 import { personalFromApi, personalToApi, localMobile } from '../constants/personal';
-import { ArrowLeft, HandCoins, Pencil, Trash2, Power } from 'lucide-react';
+import { ArrowLeft, HandCoins, Pencil, Trash2, Power, CalendarClock } from 'lucide-react';
 
 const peso = v => `₱${Number(v || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const fmtDate = d => (d ? new Date(d).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }) : '—');
@@ -211,6 +211,20 @@ export default function GranteeProfilePage() {
                   <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No grants recorded yet.</p>
                 ) : (
                   <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3 pb-1">
+                      <div>
+                        <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Received</p>
+                        <p className="text-sm font-black" style={{ color: 'var(--tone-ok-fg)' }}>
+                          {peso(data.grants.filter(g => g.releaseStatus === 'Released').reduce((s, g) => s + g.amount, 0))}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Pending</p>
+                        <p className="text-sm font-black" style={{ color: 'var(--tone-warn-fg)' }}>
+                          {peso(data.grants.filter(g => g.releaseStatus === 'Pending').reduce((s, g) => s + g.amount, 0))}
+                        </p>
+                      </div>
+                    </div>
                     {data.grants.map(g => (
                       <div key={g.id} className="rounded-2xl p-3.5" style={{ background: 'var(--surface-inset)' }}>
                         <div className="flex items-start justify-between gap-2">
@@ -226,6 +240,12 @@ export default function GranteeProfilePage() {
                             ? <>Received {fmtDate(g.releasedAt)}{g.referenceNo ? ` · Ref ${g.referenceNo}` : ''}</>
                             : <>Awarded {fmtDate(g.awardedOn)}</>}
                         </p>
+                        {g.releaseStatus === 'Pending' && g.scheduledReleaseDate && (
+                          <p className="text-xs mt-1 font-semibold flex items-center gap-1" style={{ color: 'var(--tone-warn-fg)' }}>
+                            <CalendarClock size={12} strokeWidth={2.4} />
+                            Release scheduled {fmtDate(String(g.scheduledReleaseDate).slice(0, 10) + 'T00:00:00')}
+                          </p>
+                        )}
                       </div>
                     ))}
                   </div>

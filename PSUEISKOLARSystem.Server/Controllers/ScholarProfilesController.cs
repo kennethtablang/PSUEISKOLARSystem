@@ -523,7 +523,11 @@ namespace PSUEISKOLARSystem.Server.Controllers
             profile.Address = dto.Address;
             dto.Personal?.ApplyTo(profile.Personal);
 
-            db.Audit(this, "UpdateScholarProfile", $"Updated profile for {user.FullName} (student {studentId})");
+            // Grants the office already listed for this student number are recorded now.
+            var grants = await MasterList.ClaimWaitingGrantLinesAsync(db, userId, studentId, currentUserId);
+
+            db.Audit(this, "UpdateScholarProfile", $"Updated profile for {user.FullName} (student {studentId})" +
+                (grants > 0 ? $"; {grants} grant(s) recorded from the master list" : ""));
             await db.SaveChangesAsync();
             return NoContent();
         }

@@ -105,6 +105,137 @@ namespace PSUEISKOLARSystem.Server.Data
                         await userManager.AddToRoleAsync(user, Role);
                 }
             }
+
+            await SeedSampleGranteeAsync(db, userManager);
+        }
+
+        public const string SampleGranteeEmail = "grantee@psu.edu.ph";
+        public const string SampleGranteeStudentId = "23-LN-9001";
+
+        /// <summary>
+        /// A sample grantee, so the grantee's side of the system can be tried out: their own
+        /// "My Grants" page, what happens when an administrator deactivates the account once the
+        /// grant is released, and the grantee → scholar sign-up. For that last one the master
+        /// list also carries an unclaimed Scholar line for the same student: once the account
+        /// is deactivated, signing up with student no. 23-LN-9001, ANA GARCIA MERCADO,
+        /// Lingayen Campus offers to turn this account into a scholar account.
+        /// Password: ChangeMe123!
+        /// </summary>
+        private static async Task SeedSampleGranteeAsync(ApplicationDbContext db, UserManager<ApplicationUser> userManager)
+        {
+            if (await userManager.FindByEmailAsync(SampleGranteeEmail) is not null) return;
+            if (await db.GranteeProfiles.AnyAsync(gp => gp.StudentId == SampleGranteeStudentId) ||
+                await db.ScholarProfiles.AnyAsync(sp => sp.StudentId == SampleGranteeStudentId)) return;
+
+            var campus = await db.Campuses.FirstOrDefaultAsync(c => c.Code == "LIN");
+            var program = await db.AcademicPrograms.FirstOrDefaultAsync(p => p.Code == "BSIT");
+            var scholarship = await db.ScholarshipTypes.FirstOrDefaultAsync(t => t.Name == "CHED Scholarship");
+            if (campus is null || program is null) return;
+
+            if (!await db.CampusPrograms.AnyAsync(cp => cp.CampusId == campus.Id && cp.ProgramId == program.Id))
+                db.CampusPrograms.Add(new CampusProgram { CampusId = campus.Id, ProgramId = program.Id });
+
+            var grantType = await db.GrantTypes.FirstOrDefaultAsync(t => t.Name == "Tulong Dunong Program");
+            if (grantType is null)
+            {
+                grantType = new GrantType
+                {
+                    Name = "Tulong Dunong Program",
+                    Sponsor = "CHED",
+                    Description = "One-time financial assistance for qualified students.",
+                    DefaultAmount = 7500m,
+                };
+                db.GrantTypes.Add(grantType);
+            }
+            await db.SaveChangesAsync();
+
+            var user = new ApplicationUser
+            {
+                UserName = SampleGranteeEmail,
+                Email = SampleGranteeEmail,
+                FirstName = "ANA",
+                MiddleName = "GARCIA",
+                LastName = "MERCADO",
+                EmailConfirmed = true,
+                ApprovalStatus = ApprovalStatuses.Approved,
+                ApprovalDecidedAt = DateTime.UtcNow,
+                ApprovalNote = "Sample grantee account.",
+            };
+            if (!(await userManager.CreateAsync(user, "ChangeMe123!")).Succeeded) return;
+            await userManager.AddToRoleAsync(user, UserRoles.Grantee);
+
+            var profile = new GranteeProfile
+            {
+                UserId = user.Id,
+                StudentId = SampleGranteeStudentId,
+                CampusId = campus.Id,
+                ProgramId = program.Id,
+                YearLevel = 2,
+                ContactNumber = "+639171234567",
+                BirthDate = new DateTime(2005, 3, 14),
+                Address = "POBLACION, LINGAYEN, PANGASINAN",
+            };
+            new DTOs.Scholars.PersonalDetailsDto
+            {
+                Sex = "Female",
+                CivilStatus = "Single",
+                Is4PsBeneficiary = true,
+                IsFirstGenerationStudent = true,
+                FatherLastName = "MERCADO",
+                FatherFirstName = "JOSE",
+                FatherMiddleName = "SANTOS",
+                FatherLiving = true,
+                FatherEducation = "High School Graduate",
+                FatherOccupation = "FARMER",
+                FatherMonthlyIncome = 12000m,
+                MotherLastName = "MERCADO",
+                MotherFirstName = "LOURDES",
+                MotherMiddleName = "GARCIA",
+                MotherLiving = true,
+                MotherEducation = "College Level",
+                MotherOccupation = "VENDOR",
+                MotherMonthlyIncome = 8000m,
+                FamilyMembers = 5,
+                Siblings = 2,
+                SiblingsStudying = 1,
+                MainSupportSource = "Parents",
+            }.ApplyTo(profile.Personal);
+            db.GranteeProfiles.Add(profile);
+
+            // The Grantee line the account was opened from, with its grant recorded.
+            var granteeLine = new EligibilityRecord
+            {
+                Kind = EligibilityKinds.Grantee,
+                StudentId = SampleGranteeStudentId,
+                LastName = "MERCADO",
+                FirstName = "ANA",
+                MiddleName = "GARCIA",
+                CampusId = campus.Id,
+                GrantTypeId = grantType.Id,
+                GrantType = grantType,
+                GrantAmount = 7500m,
+                Notes = "Sample grantee.",
+            };
+            db.EligibilityRecords.Add(granteeLine);
+            MasterList.ClaimGranteeLine(db, granteeLine, user.Id, actorId: null);
+
+            // An open Scholar line for the same student, to try the grantee → scholar sign-up.
+            if (scholarship is not null)
+            {
+                db.EligibilityRecords.Add(new EligibilityRecord
+                {
+                    Kind = EligibilityKinds.Scholar,
+                    StudentId = SampleGranteeStudentId,
+                    LastName = "MERCADO",
+                    FirstName = "ANA",
+                    MiddleName = "GARCIA",
+                    CampusId = campus.Id,
+                    ScholarshipTypeId = scholarship.Id,
+                    Notes = "Sample: lets the sample grantee try the grantee-to-scholar sign-up.",
+                });
+            }
+
+            await db.SaveChangesAsync();
         }
 
         // The nine PSU campuses. Lingayen is where the system started, so profiles created

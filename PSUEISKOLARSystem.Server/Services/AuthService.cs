@@ -189,9 +189,18 @@ namespace PSUEISKOLARSystem.Server.Services
             }
 
             var scholarLine = matches.FirstOrDefault(m => m.Kind == EligibilityKinds.Scholar);
+
+            // Listed as a scholar but already holding a grantee account: that account is reused.
+            var granteeEmail = scholarLine is null ? null : await dbContext.GranteeProfiles
+                .Where(gp => gp.StudentId == scholarLine.StudentId)
+                .Select(gp => gp.User.Email)
+                .FirstOrDefaultAsync();
+
             return new EligibilityCheckResultDto
             {
                 Matched = true,
+                ExistingGranteeAccount = granteeEmail is not null,
+                ExistingAccountEmail = MaskEmail(granteeEmail),
                 Kind = scholarLine is not null ? EligibilityKinds.Scholar : EligibilityKinds.Grantee,
                 ScholarshipTypeName = scholarLine?.ScholarshipType?.Name,
                 GrantTypeNames = matches
@@ -223,27 +232,25 @@ namespace PSUEISKOLARSystem.Server.Services
             if (!request.ConsentAccepted)
                 throw new BadRequestException("You must agree to the Data Privacy notice to create an account.");
 
+            var studentId = MasterList.NormalizeStudentId(request.StudentId);
+
+            // A past grantee now listed as a scholar keeps their account rather than opening
+            // a second one — see ConvertGranteeToScholarAsync.
+            var existingGrantee = await dbContext.GranteeProfiles
+                .Include(gp => gp.User)
+                .FirstOrDefaultAsync(gp => gp.StudentId == studentId);
+            if (existingGrantee is not null)
+                return await ConvertGranteeToScholarAsync(existingGrantee, email, request);
+
             if (await userManager.FindByEmailAsync(email) is not null)
                 throw new BadRequestException("An account with this email already exists.");
 
-            var personalError = request.Personal.Validate();
-            if (personalError is not null) throw new BadRequestException(personalError);
-
-            if (request.BirthDate is DateTime bd && (bd.Date > DateTime.UtcNow.Date || bd.Year < 1900))
-                throw new BadRequestException("Enter a valid birth date.");
-
             // Profile checks run before the account exists, so a rejected profile never
             // leaves a half-registered user behind.
-            var studentId = MasterList.NormalizeStudentId(request.StudentId);
-            if (await dbContext.ScholarProfiles.AnyAsync(sp => sp.StudentId == studentId) ||
-                await dbContext.GranteeProfiles.AnyAsync(gp => gp.StudentId == studentId))
+            var campus = await ValidateSheetAsync(request);
+
+            if (await dbContext.ScholarProfiles.AnyAsync(sp => sp.StudentId == studentId))
                 throw new BadRequestException($"Student ID {studentId} is already registered to another account.");
-
-            var campus = await dbContext.Campuses.FirstOrDefaultAsync(c => c.Id == request.CampusId && c.IsActive)
-                ?? throw new BadRequestException("The selected campus is not available.");
-
-            if (!await dbContext.CampusPrograms.AnyAsync(cp => cp.CampusId == campus.Id && cp.ProgramId == request.ProgramId))
-                throw new BadRequestException($"The selected course is not offered at {campus.Name}.");
 
             var matches = await MasterList.FindMatchesAsync(
                 dbContext, studentId, request.FirstName, request.LastName, request.MiddleName, campus.Id);
@@ -353,6 +360,192 @@ namespace PSUEISKOLARSystem.Server.Services
             return userDto;
         }
 
+        /// <summary>The Scholar's Data sheet checks shared by sign-up and grantee conversion. Returns the campus.</summary>
+        private async Task<Campus> ValidateSheetAsync(RegisterScholarRequestDto request)
+        {
+            var personalError = request.Personal.Validate();
+            if (personalError is not null) throw new BadRequestException(personalError);
+
+            if (request.BirthDate is DateTime bd && (bd.Date > DateTime.UtcNow.Date || bd.Year < 1900))
+                throw new BadRequestException("Enter a valid birth date.");
+
+            var campus = await dbContext.Campuses.FirstOrDefaultAsync(c => c.Id == request.CampusId && c.IsActive)
+                ?? throw new BadRequestException("The selected campus is not available.");
+
+            if (!await dbContext.CampusPrograms.AnyAsync(cp => cp.CampusId == campus.Id && cp.ProgramId == request.ProgramId))
+                throw new BadRequestException($"The selected course is not offered at {campus.Name}.");
+
+            return campus;
+        }
+
+        /// <summary>
+        /// Checks that a past grantee is who they say they are: the email is the grantee
+        /// account's, the password is right, and the name on it is the name that matched a
+        /// scholar line. Wrong passwords count toward the lockout exactly as a sign-in would.
+        /// Returns the scholar line.
+        /// </summary>
+        private async Task<EligibilityRecord> AuthenticateGranteeForConversionAsync(
+            GranteeProfile grantee, string email, string password, EligibilityCheckRequestDto identity)
+        {
+            var user = grantee.User;
+            if (!string.Equals(user.Email, email.Trim(), StringComparison.OrdinalIgnoreCase))
+                throw new BadRequestException(
+                    $"Student No. {grantee.StudentId} already has a grantee account ({MaskEmail(user.Email)}). " +
+                    "Enter that account's email and password to turn it into your scholar account.");
+
+            if (await userManager.IsLockedOutAsync(user))
+                throw new BadRequestException("Your grantee account is temporarily locked after too many attempts. Please try again in a few minutes.");
+
+            if (!await userManager.CheckPasswordAsync(user, password))
+            {
+                await userManager.AccessFailedAsync(user);
+                throw new BadRequestException(
+                    "That password is not correct for your grantee account. If you no longer remember it, " +
+                    "use Forgot Password on the sign-in page first.");
+            }
+            await userManager.ResetAccessFailedCountAsync(user);
+
+            var matches = await MasterList.FindMatchesAsync(
+                dbContext, identity.StudentId, identity.FirstName, identity.LastName, identity.MiddleName, identity.CampusId);
+            var scholarLine = matches.FirstOrDefault(m => m.Kind == EligibilityKinds.Scholar)
+                ?? throw new BadRequestException(
+                    "Your grantee account can become a scholar account only once the scholarship office has " +
+                    "listed you as a scholar. Contact the scholarship office.");
+
+            if (MasterList.NormalizeName(user.FirstName) != MasterList.NormalizeName(identity.FirstName) ||
+                MasterList.NormalizeName(user.LastName) != MasterList.NormalizeName(identity.LastName))
+                throw new BadRequestException(NoMatchMessage);
+
+            return scholarLine;
+        }
+
+        public async Task<GranteeConversionPrefillDto> GetGranteeAccountForConversionAsync(GranteeAccountLookupDto request)
+        {
+            var studentId = MasterList.NormalizeStudentId(request.StudentId);
+            var grantee = await dbContext.GranteeProfiles
+                .Include(gp => gp.User)
+                .FirstOrDefaultAsync(gp => gp.StudentId == studentId)
+                ?? throw new BadRequestException("No grantee account was found for this student number.");
+
+            await AuthenticateGranteeForConversionAsync(grantee, request.Email, request.Password, request);
+
+            return new GranteeConversionPrefillDto
+            {
+                Email = grantee.User.Email!,
+                // Only carried over when the chosen campus offers that course.
+                ProgramId = await dbContext.CampusPrograms.AnyAsync(cp => cp.CampusId == request.CampusId && cp.ProgramId == grantee.ProgramId)
+                    ? grantee.ProgramId
+                    : null,
+                YearLevel = grantee.YearLevel,
+                ContactNumber = grantee.ContactNumber,
+                BirthDate = grantee.BirthDate,
+                Address = grantee.Address,
+                Personal = DTOs.Scholars.PersonalDetailsDto.From(grantee.Personal),
+                GrantCount = await dbContext.OneTimeGrants.CountAsync(g => g.ScholarId == grantee.UserId),
+            };
+        }
+
+        /// <summary>
+        /// Grantee → scholar. A student who already holds a grantee account (usually deactivated
+        /// once their grant was released) and is now on the list as a scholar does not get a
+        /// second account: the grantee account is reactivated and becomes their scholar account.
+        /// The profile is rebuilt from the sheet they have just updated, the scholarship comes
+        /// from the scholar line, and every one-time grant stays on the account — so what they
+        /// received as a grantee still shows on their scholar profile.
+        /// </summary>
+        private async Task<UserDto> ConvertGranteeToScholarAsync(GranteeProfile grantee, string email, RegisterScholarRequestDto request)
+        {
+            var user = grantee.User;
+            var identity = new EligibilityCheckRequestDto
+            {
+                StudentId = request.StudentId,
+                FirstName = request.FirstName,
+                LastName = request.LastName,
+                MiddleName = request.MiddleName,
+                CampusId = request.CampusId,
+            };
+            var scholarLine = await AuthenticateGranteeForConversionAsync(grantee, email, request.Password, identity);
+            var campus = await ValidateSheetAsync(request);
+
+            if (await dbContext.ScholarProfiles.AnyAsync(sp => sp.UserId == user.Id || sp.StudentId == grantee.StudentId))
+                throw new BadRequestException($"Student ID {grantee.StudentId} is already registered to a scholar account.");
+
+            var matches = await MasterList.FindMatchesAsync(
+                dbContext, request.StudentId, request.FirstName, request.LastName, request.MiddleName, campus.Id);
+            var granteeLines = matches.Where(m => m.Kind == EligibilityKinds.Grantee).ToList();
+
+            try
+            {
+                // The ledger enforces one scholarship per student and the slot quota.
+                var rejection = await ScholarshipRegistry.SetAsync(
+                    dbContext, user.Id, scholarLine.ScholarshipTypeId, user.Id, actorIsStaff: false);
+                if (rejection is not null)
+                    throw new BadRequestException(rejection);
+
+                var profile = new ScholarProfile
+                {
+                    UserId = user.Id,
+                    StudentId = grantee.StudentId,
+                    CampusId = campus.Id,
+                    ProgramId = request.ProgramId,
+                    ScholarshipTypeId = scholarLine.ScholarshipTypeId,
+                    YearLevel = request.YearLevel,
+                    ContactNumber = request.ContactNumber.Trim(),
+                    BirthDate = request.BirthDate?.Date,
+                    Address = request.Address.Trim(),
+                };
+                request.Personal.ApplyTo(profile.Personal);
+                dbContext.ScholarProfiles.Add(profile);
+                dbContext.GranteeProfiles.Remove(grantee);
+
+                scholarLine.ClaimedByUserId = user.Id;
+                scholarLine.ClaimedAt = DateTime.UtcNow;
+                foreach (var line in granteeLines)
+                    MasterList.ClaimGranteeLine(dbContext, line, user.Id, actorId: null);
+
+                user.MiddleName = MasterList.NormalizeOptionalName(request.MiddleName) ?? user.MiddleName;
+                user.IsActive = true;
+                user.ConsentAcceptedAt = DateTime.UtcNow;
+                user.ConsentVersion = PrivacyNotice.CurrentVersion;
+
+                dbContext.AuditLogs.Add(new AuditLog
+                {
+                    UserId = user.Id,
+                    Action = "ConvertGranteeToScholar",
+                    Details = $"{user.FullName} ({grantee.StudentId}) turned their grantee account into a scholar account " +
+                              $"under {scholarLine.ScholarshipType?.Name ?? "the listed scholarship"} — matched the master list" +
+                              (granteeLines.Count > 0 ? $"; {granteeLines.Count} grant(s) recorded" : ""),
+                });
+
+                await dbContext.SaveChangesAsync();
+            }
+            catch
+            {
+                dbContext.ChangeTracker.Clear();
+                throw;
+            }
+
+            // Rotating the stamp retires any session still carrying the Grantee role.
+            await userManager.RemoveFromRoleAsync(user, UserRoles.Grantee);
+            await userManager.AddToRoleAsync(user, UserRoles.Scholar);
+            await userManager.UpdateSecurityStampAsync(user);
+
+            var userDto = mapper.Map<UserDto>(user);
+            userDto.Role = UserRoles.Scholar;
+            return userDto;
+        }
+
+        /// <summary>"23ln0001_ms@psu.edu.ph" → "23l••••••••@psu.edu.ph": enough to recognise, not to harvest.</summary>
+        private static string? MaskEmail(string? email)
+        {
+            if (string.IsNullOrEmpty(email)) return null;
+            var at = email.IndexOf('@');
+            if (at <= 0) return email;
+            var local = email[..at];
+            var keep = Math.Clamp(local.Length / 3, 1, 3);
+            return local[..keep] + new string('•', Math.Max(3, local.Length - keep)) + email[at..];
+        }
+
         /* Generates a fresh confirmation token and emails the verification link.
            The send is queued rather than awaited: an SMTP failure (wrong app password, relay
            down) used to throw out of registration after the account had already been
@@ -444,7 +637,13 @@ namespace PSUEISKOLARSystem.Server.Services
         public async Task<bool> ForgotPasswordAsync(string email)
         {
             var user = await userManager.FindByEmailAsync(email);
-            if (user is null || !user.IsActive) return false;
+            if (user is null) return false;
+
+            // A deactivated account cannot reset its password — except a past grantee's, which
+            // they need in order to turn it into a scholar account. The reset alone does not
+            // let them sign in; only that conversion reactivates the account.
+            if (!user.IsActive && !await dbContext.GranteeProfiles.AnyAsync(gp => gp.UserId == user.Id))
+                return false;
 
             var token = await userManager.GeneratePasswordResetTokenAsync(user);
             var resetLink = $"{_emailSettings.AppBaseUrl}/reset-password" +

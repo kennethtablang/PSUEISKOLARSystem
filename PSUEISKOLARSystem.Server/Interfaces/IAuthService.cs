@@ -10,6 +10,13 @@ namespace PSUEISKOLARSystem.Server.Interfaces
         Task<UserDto> UpdateProfileAsync(string userId, UpdateProfileDto dto);
         Task<UserDto> RegisterScholarAsync(RegisterScholarRequestDto request);
         Task<EligibilityCheckResultDto> CheckEligibilityAsync(EligibilityCheckRequestDto request);
+
+        /// <summary>
+        /// Confirms a past grantee's credentials and returns what their account holds, so the
+        /// scholar sign-up form starts pre-filled. The conversion itself happens in
+        /// <see cref="RegisterScholarAsync"/>.
+        /// </summary>
+        Task<GranteeConversionPrefillDto> GetGranteeAccountForConversionAsync(GranteeAccountLookupDto request);
         Task<bool> ForgotPasswordAsync(string email);
         Task ResetPasswordAsync(ResetPasswordRequestDto request);
         Task EnableTwoFactorAsync(string userId);

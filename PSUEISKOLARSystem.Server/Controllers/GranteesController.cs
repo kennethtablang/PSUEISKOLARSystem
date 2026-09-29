@@ -100,6 +100,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     x.Id,
                     x.Title,
                     GrantTypeName = x.GrantType != null ? x.GrantType.Name : null,
+                    ScheduledReleaseDate = x.GrantType != null ? x.GrantType.ScheduledDate : null,
                     x.Source,
                     x.Amount,
                     x.AwardedOn,

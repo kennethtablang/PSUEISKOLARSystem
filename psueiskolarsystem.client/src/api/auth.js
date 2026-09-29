@@ -31,6 +31,15 @@ export async function checkEligibility(data) {
   return apiSend(`${API}/check-eligibility`, 'POST', data, null, 'Could not check your details.');
 }
 
+/**
+ * A past grantee now listed as a scholar signs in with their grantee account so it can become
+ * their scholar account. Returns what the account holds, to pre-fill the sign-up form:
+ * { email, programId, yearLevel, contactNumber, birthDate, address, personal, grantCount }.
+ */
+export async function lookupGranteeAccount(data) {
+  return apiSend(`${API}/grantee-account`, 'POST', data, null, 'Could not sign in to your grantee account.');
+}
+
 export async function verifyEmail(email, token) {
   const params = new URLSearchParams({ email, token });
   return apiGet(`${API}/verify-email?${params}`, null, 'Verification failed.');

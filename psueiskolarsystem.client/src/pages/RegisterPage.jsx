@@ -1,17 +1,17 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { registerScholar, checkEmailAvailable, checkEligibility } from '../api/auth';
+import { registerScholar, checkEmailAvailable, checkEligibility, lookupGranteeAccount } from '../api/auth';
 import { getPrograms } from '../api/lookups';
 import { getCampuses } from '../api/campuses';
 import { useTitle } from '../hooks/useTitle';
-import { Lock, UserCheck, FolderUp, TrendingUp, Bell, ArrowRight, ArrowLeft, AlertTriangle, GraduationCap, CheckCircle2, XCircle, ShieldCheck, IdCard, BadgeCheck } from 'lucide-react';
+import { Lock, UserCheck, FolderUp, TrendingUp, Bell, ArrowRight, ArrowLeft, AlertTriangle, GraduationCap, CheckCircle2, XCircle, ShieldCheck, IdCard, BadgeCheck, RefreshCw } from 'lucide-react';
 import PasswordStrengthMeter, { getPasswordStrength } from '../components/PasswordStrengthMeter';
 import Logo from '../components/Logo';
 import {
   SectionTitle, UpperInput, ContactInput, InstitutionalEmailInput, BirthDateAge,
   PersonalQuestions, FamilyQuestions,
 } from '../components/PersonalDetailsFields';
-import { EMPTY_PERSONAL, INSTITUTIONAL_DOMAIN, personalToApi } from '../constants/personal';
+import { EMPTY_PERSONAL, INSTITUTIONAL_DOMAIN, personalToApi, personalFromApi, localMobile } from '../constants/personal';
 
 const HIGHLIGHTS = [
   { Icon: UserCheck,  label: 'Scholar Profiling',   desc: 'Academic records and personal information' },
@@ -21,6 +21,8 @@ const HIGHLIGHTS = [
 ];
 
 const STEPS = ['Verify', 'Personal', 'Family', 'Account'];
+// A past grantee reuses their grantee account, so the last step confirms rather than creates.
+const CONVERT_STEPS = ['Verify', 'Personal', 'Family', 'Confirm'];
 
 const EMPTY_FORM = {
   // Step 1 — matched against the office's master list
@@ -42,6 +44,8 @@ export default function RegisterPage() {
   // never shown for a newly chosen campus.
   const [loadedPrograms, setLoadedPrograms] = useState({ campusId: '', list: [] });
   const [match, setMatch]       = useState(null); // result of the master-list check
+  // Set once a past grantee has signed in with their grantee account: { email, password, grantCount }.
+  const [granteeAccount, setGranteeAccount] = useState(null);
   const [checking, setChecking] = useState(false);
   const [error, setError]       = useState('');
   const [success, setSuccess]   = useState(null);
@@ -64,6 +68,7 @@ export default function RegisterPage() {
   // Changing anything that was matched invalidates the match.
   function setIdentity(field, value) {
     setMatch(null);
+    setGranteeAccount(null);
     setForm(f => ({ ...f, [field]: value, ...(field === 'campusId' ? { programId: '' } : {}) }));
   }
 
@@ -100,6 +105,8 @@ export default function RegisterPage() {
   async function handleVerify(e) {
     e.preventDefault();
     setError('');
+    // Already matched as a past grantee: this submit is the grantee-account sign-in.
+    if (match?.existingGranteeAccount) { await handleGranteeSignIn(); return; }
     if (!/^[A-Za-z0-9-]{3,30}$/.test(form.studentId.trim())) {
       setError('Student No. may only contain letters, numbers, and hyphens (3–30 characters).');
       return;
@@ -121,6 +128,42 @@ export default function RegisterPage() {
         return;
       }
       setMatch(result);
+      // A past grantee stays on this step to sign in with the account they already have.
+      if (!result.existingGranteeAccount) setStep(2);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  /* Grantee → scholar: rather than opening a second account, the student signs in with their
+     grantee account; the rest of the form is pre-filled from it for them to update. */
+  async function handleGranteeSignIn() {
+    if (!/^[a-z0-9._-]+$/.test(form.emailLocal)) { setError(`Enter your grantee account's email (the part before @${INSTITUTIONAL_DOMAIN}).`); return; }
+    if (!form.password) { setError('Enter the password of your grantee account.'); return; }
+
+    setChecking(true);
+    try {
+      const acct = await lookupGranteeAccount({
+        studentId: form.studentId.trim(),
+        lastName: form.lastName.trim(),
+        firstName: form.firstName.trim(),
+        middleName: form.middleName.trim() || null,
+        campusId: parseInt(form.campusId),
+        email,
+        password: form.password,
+      });
+      setForm(f => ({
+        ...f,
+        programId: acct.programId ? String(acct.programId) : '',
+        yearLevel: String(acct.yearLevel || 1),
+        birthDate: acct.birthDate ? String(acct.birthDate).slice(0, 10) : '',
+        address: acct.address ?? '',
+        contactLocal: localMobile(acct.contactNumber),
+        personal: personalFromApi(acct.personal),
+      }));
+      setGranteeAccount({ email: acct.email, password: form.password, grantCount: acct.grantCount });
       setStep(2);
     } catch (err) {
       setError(err.message);
@@ -156,10 +199,13 @@ export default function RegisterPage() {
     e.preventDefault();
     setError('');
 
-    if (!/^[a-z0-9._-]+$/.test(form.emailLocal)) { setError(`Enter your institutional email (the part before @${INSTITUTIONAL_DOMAIN}).`); return; }
-    if (emailStatus === 'taken') { setError('An account with this email already exists.'); return; }
-    if (getPasswordStrength(form.password).passed !== 5) { setError('Password does not meet the requirements below.'); return; }
-    if (form.password !== form.confirmPassword) { setError('Passwords do not match.'); return; }
+    // A converting grantee keeps the email and password of the account they already have.
+    if (!granteeAccount) {
+      if (!/^[a-z0-9._-]+$/.test(form.emailLocal)) { setError(`Enter your institutional email (the part before @${INSTITUTIONAL_DOMAIN}).`); return; }
+      if (emailStatus === 'taken') { setError('An account with this email already exists.'); return; }
+      if (getPasswordStrength(form.password).passed !== 5) { setError('Password does not meet the requirements below.'); return; }
+      if (form.password !== form.confirmPassword) { setError('Passwords do not match.'); return; }
+    }
     if (!form.consent) { setError('You must agree to the Data Privacy notice to create an account.'); return; }
 
     setSubmitting(true);
@@ -168,8 +214,8 @@ export default function RegisterPage() {
         firstName:  form.firstName.trim(),
         middleName: form.middleName.trim() || null,
         lastName:   form.lastName.trim(),
-        email,
-        password:   form.password,
+        email:      granteeAccount?.email ?? email,
+        password:   granteeAccount?.password ?? form.password,
         studentId:  form.studentId.trim(),
         campusId:   parseInt(form.campusId),
         programId:  parseInt(form.programId),
@@ -180,7 +226,7 @@ export default function RegisterPage() {
         personal:   personalToApi(form.personal),
         consentAccepted: form.consent,
       });
-      setSuccess({ role: user?.role || match?.kind, email });
+      setSuccess({ role: user?.role || match?.kind, email: granteeAccount?.email ?? email, converted: !!granteeAccount });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -189,6 +235,7 @@ export default function RegisterPage() {
   }
 
   const onSubmit = [handleVerify, handlePersonalNext, handleFamilyNext, handleSubmit][step - 1];
+  const steps = granteeAccount || match?.existingGranteeAccount ? CONVERT_STEPS : STEPS;
   const campusName = campuses.find(c => String(c.id) === String(form.campusId))?.name;
 
   return (
@@ -321,19 +368,28 @@ export default function RegisterPage() {
                   style={{ background: 'var(--tone-ok-bg)', border: '2px solid rgba(16,160,96,0.25)' }}>
                   <CheckCircle2 size={32} style={{ color: 'var(--tone-ok-fg)' }} strokeWidth={1.8} />
                 </div>
-                <p className="font-black text-lg mb-2" style={{ color: 'var(--text-strong)' }}>Account Created!</p>
-                <p className="text-sm leading-relaxed mb-4" style={{ color: 'var(--text)' }}>
-                  Your {success.role === 'Grantee' ? 'grantee' : 'scholar'} account for <strong>{success.email}</strong> is
-                  ready. It was matched to the scholarship office&apos;s list, so no approval is needed.
-                </p>
-
-                <div className="rounded-2xl p-4 mb-5 text-left"
-                  style={{ background: '#fffbea', border: '1px solid rgba(245,184,0,0.35)' }}>
-                  <p className="text-xs leading-relaxed" style={{ color: '#7a5c00' }}>
-                    If email verification is on, we sent a link to your inbox — click it before signing in.
-                    Can&apos;t find it? Check your <strong>spam</strong> or <strong>junk</strong> folder.
+                {success.converted ? (<>
+                  <p className="font-black text-lg mb-2" style={{ color: 'var(--text-strong)' }}>You&apos;re Now a Scholar!</p>
+                  <p className="text-sm leading-relaxed mb-5" style={{ color: 'var(--text)' }}>
+                    Your grantee account <strong>{success.email}</strong> has been reactivated and is now your scholar
+                    account. Sign in with the same email and password — the one-time grants you received as a grantee
+                    are still on your profile.
                   </p>
-                </div>
+                </>) : (<>
+                  <p className="font-black text-lg mb-2" style={{ color: 'var(--text-strong)' }}>Account Created!</p>
+                  <p className="text-sm leading-relaxed mb-4" style={{ color: 'var(--text)' }}>
+                    Your {success.role === 'Grantee' ? 'grantee' : 'scholar'} account for <strong>{success.email}</strong> is
+                    ready. It was matched to the scholarship office&apos;s list, so no approval is needed.
+                  </p>
+
+                  <div className="rounded-2xl p-4 mb-5 text-left"
+                    style={{ background: '#fffbea', border: '1px solid rgba(245,184,0,0.35)' }}>
+                    <p className="text-xs leading-relaxed" style={{ color: '#7a5c00' }}>
+                      If email verification is on, we sent a link to your inbox — click it before signing in.
+                      Can&apos;t find it? Check your <strong>spam</strong> or <strong>junk</strong> folder.
+                    </p>
+                  </div>
+                </>)}
 
                 <button onClick={() => navigate('/login')}
                   className="clay-btn clay-btn-primary w-full py-3 text-sm">
@@ -351,8 +407,8 @@ export default function RegisterPage() {
                 )}
 
                 {/* Step indicator */}
-                <div className="flex items-center gap-2 mb-5 text-xs font-bold" aria-label={`Step ${step} of ${STEPS.length}`}>
-                  {STEPS.map((label, i) => {
+                <div className="flex items-center gap-2 mb-5 text-xs font-bold" aria-label={`Step ${step} of ${steps.length}`}>
+                  {steps.map((label, i) => {
                     const active = step === i + 1;
                     const done = step > i + 1;
                     return (
@@ -379,6 +435,7 @@ export default function RegisterPage() {
                       {match.scholarshipTypeName && <> — {match.scholarshipTypeName}</>}
                       {match.grantTypeNames?.length > 0 && <> · Grant: {match.grantTypeNames.join(', ')}</>}
                       {campusName && <> · {campusName}</>}
+                      {granteeAccount && <> · using your grantee account</>}
                     </span>
                   </div>
                 )}
@@ -437,10 +494,51 @@ export default function RegisterPage() {
                       </select>
                     </div>
 
+                    {match?.existingGranteeAccount && (
+                      <div className="rounded-2xl p-4 space-y-4" role="status"
+                        style={{ background: 'rgba(0,48,135,0.05)', border: '1.5px solid rgba(0,48,135,0.18)' }}>
+                        <div className="flex items-start gap-2.5">
+                          <RefreshCw size={16} strokeWidth={2.4} className="mt-0.5 shrink-0" style={{ color: 'var(--accent-strong)' }} />
+                          <div className="text-sm leading-relaxed" style={{ color: 'var(--text)' }}>
+                            <p className="font-black" style={{ color: 'var(--text-strong)' }}>
+                              You already have a grantee account{match.existingAccountEmail && <> ({match.existingAccountEmail})</>}.
+                            </p>
+                            <p className="mt-1">
+                              You are now listed as a scholar{match.scholarshipTypeName && <> under <strong>{match.scholarshipTypeName}</strong></>}.
+                              Instead of creating a new account, your grantee account will be reactivated and become your
+                              scholar account — the one-time grants you received stay on your profile. Sign in with it to continue.
+                            </p>
+                          </div>
+                        </div>
+                        <div>
+                          <label htmlFor="reg-grantee-email" className={LABEL} style={{ color: 'var(--text)' }}>Grantee Account Email</label>
+                          <InstitutionalEmailInput id="reg-grantee-email" required value={form.emailLocal} onChange={v => set('emailLocal', v)} />
+                        </div>
+                        <div>
+                          <label htmlFor="reg-grantee-password" className={LABEL} style={{ color: 'var(--text)' }}>Grantee Account Password</label>
+                          <div className="relative">
+                            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
+                              <Lock size={14} style={{ color: 'var(--text-muted)' }} strokeWidth={2} />
+                            </span>
+                            <input id="reg-grantee-password" type="password" required value={form.password}
+                              onChange={e => set('password', e.target.value)} placeholder="The password you used as a grantee"
+                              className="clay-input" style={{ paddingLeft: '36px' }} autoComplete="current-password" />
+                          </div>
+                          <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                            Forgot it? Use <Link to="/login" className="font-bold underline">Forgot Password</Link> on the sign-in page, then come back here.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
                     <button type="submit" disabled={checking}
                       className="clay-btn clay-btn-primary w-full py-3.5 text-sm flex items-center justify-center gap-2 mt-2"
                       style={{ opacity: checking ? 0.65 : 1 }}>
-                      {checking ? 'Checking the list…' : <>Verify &amp; Continue <ArrowRight size={15} strokeWidth={2.5} /></>}
+                      {checking
+                        ? (match?.existingGranteeAccount ? 'Signing in…' : 'Checking the list…')
+                        : match?.existingGranteeAccount
+                          ? <>Continue with My Grantee Account <ArrowRight size={15} strokeWidth={2.5} /></>
+                          : <>Verify &amp; Continue <ArrowRight size={15} strokeWidth={2.5} /></>}
                     </button>
                   </>)}
 
@@ -495,7 +593,24 @@ export default function RegisterPage() {
                     <StepButtons onBack={() => { setError(''); setStep(2); }} label="Next: Account" />
                   </>)}
 
-                  {step === 4 && (<>
+                  {step === 4 && granteeAccount && (<>
+                    <SectionTitle>Confirm</SectionTitle>
+                    <div className="rounded-2xl p-4 text-sm leading-relaxed"
+                      style={{ background: 'var(--surface-inset)', color: 'var(--text)' }}>
+                      <p>
+                        Your grantee account <strong>{granteeAccount.email}</strong> will become your scholar account.
+                        You will sign in with the same email and password.
+                      </p>
+                      {granteeAccount.grantCount > 0 && (
+                        <p className="mt-2">
+                          The {granteeAccount.grantCount} one-time grant{granteeAccount.grantCount === 1 ? '' : 's'} on
+                          the account will stay on your scholar profile.
+                        </p>
+                      )}
+                    </div>
+                  </>)}
+
+                  {step === 4 && !granteeAccount && (<>
                     <SectionTitle>Account</SectionTitle>
 
                     <div>
@@ -538,7 +653,9 @@ export default function RegisterPage() {
                         </p>
                       )}
                     </div>
+                  </>)}
 
+                  {step === 4 && (<>
                     {/* Data Privacy Clause (RA 10173) */}
                     <div className="rounded-2xl p-4 text-xs leading-relaxed space-y-2"
                       style={{ background: 'rgba(0,48,135,0.05)', border: '1px solid rgba(0,48,135,0.15)', color: 'var(--text)' }}>
@@ -571,7 +688,9 @@ export default function RegisterPage() {
                       <button type="submit" disabled={submitting || !form.consent}
                         className="clay-btn clay-btn-primary flex-1 py-3.5 text-sm flex items-center justify-center gap-2"
                         style={{ opacity: submitting || !form.consent ? 0.65 : 1 }}>
-                        {submitting ? 'Creating account…' : <>Create Account <ArrowRight size={15} strokeWidth={2.5} /></>}
+                        {granteeAccount
+                          ? (submitting ? 'Converting account…' : <>Make This My Scholar Account <ArrowRight size={15} strokeWidth={2.5} /></>)
+                          : (submitting ? 'Creating account…' : <>Create Account <ArrowRight size={15} strokeWidth={2.5} /></>)}
                       </button>
                     </div>
                   </>)}

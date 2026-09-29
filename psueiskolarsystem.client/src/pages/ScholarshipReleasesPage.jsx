@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { NumericInput } from '../components/PersonalDetailsFields';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { useToast, useConfirm } from '../context/UIContext';
@@ -584,16 +585,8 @@ function RecordReleaseModal({ scholar, type, academicYear, semester, token, onCl
       {error && <ErrorBox>{error}</ErrorBox>}
       <form onSubmit={handleSubmit} className="space-y-4">
         <Field label="Amount (PHP)">
-          <input
-            required
-            type="number"
-            step="0.01"
-            min="0.01"
-            value={amount}
-            onChange={e => setAmount(e.target.value)}
-            className="clay-input"
-            placeholder="10000.00"
-          />
+          <NumericInput required prefix="₱" allowDecimal maxLength={11}
+            value={amount} onChange={setAmount} placeholder="10,000.00" />
           {amountError
             ? <p className="text-xs mt-1 font-medium" style={{ color: 'var(--danger)' }}>{amountError}</p>
             : type.amount != null && (
@@ -793,8 +786,8 @@ function ScheduleReleaseModal({ type, academicYear, semester, campuses, initialC
             <input required type="date" value={scheduledDate} onChange={e => setScheduledDate(e.target.value)} className="clay-input" />
           </Field>
           <Field label="Amount per scholar (PHP)">
-            <input required type="number" step="0.01" min="0.01" value={amount}
-              onChange={e => setAmount(e.target.value)} className="clay-input" placeholder="10000.00" />
+            <NumericInput required prefix="₱" allowDecimal maxLength={11}
+              value={amount} onChange={setAmount} placeholder="10,000.00" />
           </Field>
         </div>
 

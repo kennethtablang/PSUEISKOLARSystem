@@ -250,6 +250,10 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     // Open the scholarship ledger row so the one-scholarship-per-student rule
                     // and the verification report cover imported scholars too.
                     await ScholarshipRegistry.BackfillAsync(db, profile, actorId);
+
+                    // A grant the office already listed for this student lands on the profile.
+                    if (await MasterList.ClaimWaitingGrantLinesAsync(db, user.Id, studentId, actorId) > 0)
+                        await db.SaveChangesAsync();
                 }
 
                 var token = await userManager.GenerateEmailConfirmationTokenAsync(user);

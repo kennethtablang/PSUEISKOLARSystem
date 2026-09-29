@@ -119,8 +119,8 @@ export default function MasterListPage() {
     setSaving(true);
     try {
       if (e2.id) {
-        await updateMasterListLine(e2.id, body, token);
-        toast('Line updated.', 'success');
+        const res = await updateMasterListLine(e2.id, body, token);
+        toast(res?.applied ? `Line updated — ${res.applied}.` : 'Line updated.', 'success');
       } else {
         const res = await createMasterListLine(body, token);
         toast(res?.applied ? `Added — ${res.applied}.` : 'Added to the master list.', 'success');

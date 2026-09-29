@@ -25,6 +25,15 @@ namespace PSUEISKOLARSystem.Server.Models
         /// <summary>The standard amount, pre-filled when a grant of this type is recorded.</summary>
         public decimal? DefaultAmount { get; set; }
 
+        /// <summary>
+        /// The day the grant is handed out. Once that day arrives (Philippine time) every grant
+        /// of this type still pending is marked released automatically — see
+        /// <see cref="Services.GrantReleaseService"/>. A calendar date, not an instant, so it is
+        /// stored without a time zone like <see cref="ScholarshipRelease.ScheduledDate"/>.
+        /// Null while the office has not fixed a date; those grants are released by hand.
+        /// </summary>
+        public DateTime? ScheduledDate { get; set; }
+
         public bool IsActive { get; set; } = true;
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

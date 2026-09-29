@@ -32,8 +32,10 @@ export const EMPTY_PERSONAL = {
   sex: '', civilStatus: '',
   is4PsBeneficiary: false, isIndigenousPeople: false, isPwd: false,
   isSoloParent: false, isFirstGenerationStudent: false, isWorkingStudent: false,
-  fatherName: '', fatherLiving: null, fatherEducation: '', fatherOccupation: '', fatherMonthlyIncome: '',
-  motherName: '', motherLiving: null, motherEducation: '', motherOccupation: '', motherMonthlyIncome: '',
+  fatherLastName: '', fatherFirstName: '', fatherMiddleName: '',
+  fatherLiving: null, fatherEducation: '', fatherOccupation: '', fatherMonthlyIncome: '',
+  motherLastName: '', motherFirstName: '', motherMiddleName: '',
+  motherLiving: null, motherEducation: '', motherOccupation: '', motherMonthlyIncome: '',
   familyMembers: '', siblings: '', siblingsStudying: '', mainSupportSource: '',
 };
 
@@ -53,6 +55,8 @@ export function ageFrom(birthDate) {
 export function personalToApi(p) {
   const num = v => (v === '' || v == null ? null : Number(v));
   const str = v => (v == null || String(v).trim() === '' ? null : String(v).trim());
+  const upper = v => str(v)?.toUpperCase() ?? null;
+  // The combined "LAST, FIRST MIDDLE" name is built by the server from the three parts.
   return {
     sex: str(p.sex),
     civilStatus: str(p.civilStatus),
@@ -62,15 +66,19 @@ export function personalToApi(p) {
     isSoloParent: !!p.isSoloParent,
     isFirstGenerationStudent: !!p.isFirstGenerationStudent,
     isWorkingStudent: !!p.isWorkingStudent,
-    fatherName: str(p.fatherName)?.toUpperCase() ?? null,
+    fatherLastName: upper(p.fatherLastName),
+    fatherFirstName: upper(p.fatherFirstName),
+    fatherMiddleName: upper(p.fatherMiddleName),
     fatherLiving: p.fatherLiving,
     fatherEducation: str(p.fatherEducation),
-    fatherOccupation: str(p.fatherOccupation),
+    fatherOccupation: upper(p.fatherOccupation),
     fatherMonthlyIncome: num(p.fatherMonthlyIncome),
-    motherName: str(p.motherName)?.toUpperCase() ?? null,
+    motherLastName: upper(p.motherLastName),
+    motherFirstName: upper(p.motherFirstName),
+    motherMiddleName: upper(p.motherMiddleName),
     motherLiving: p.motherLiving,
     motherEducation: str(p.motherEducation),
-    motherOccupation: str(p.motherOccupation),
+    motherOccupation: upper(p.motherOccupation),
     motherMonthlyIncome: num(p.motherMonthlyIncome),
     familyMembers: num(p.familyMembers),
     siblings: num(p.siblings),

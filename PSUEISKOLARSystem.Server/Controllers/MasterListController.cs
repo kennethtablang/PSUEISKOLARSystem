@@ -144,9 +144,15 @@ namespace PSUEISKOLARSystem.Server.Controllers
             line.GrantAmount = updated.GrantAmount;
             line.Notes = updated.Notes;
 
-            db.Audit(this, "UpdateMasterListLine", $"Updated master-list line for {line.LastName}, {line.FirstName} ({line.StudentId})");
+            // A corrected line may now point at a student who already has an account.
+            if (line.GrantTypeId is int grantTypeId)
+                line.GrantType = await db.GrantTypes.FindAsync(grantTypeId);
+            var applied = await MasterList.ApplyToExistingAccountAsync(db, line, ActorId);
+
+            db.Audit(this, "UpdateMasterListLine", $"Updated master-list line for {line.LastName}, {line.FirstName} ({line.StudentId})" +
+                (applied is null ? "" : $" — {applied}"));
             await db.SaveChangesAsync();
-            return NoContent();
+            return Ok(new { line.Id, applied });
         }
 
         // DELETE /api/master-list/{id} — removing a claimed line leaves the account alone.

@@ -108,8 +108,13 @@ namespace PSUEISKOLARSystem.Server.Data
 
             if (line.Kind == EligibilityKinds.Scholar)
             {
+                // A scholar line for a past grantee stays open: when they sign up as a scholar
+                // they are asked to reuse their grantee account, which turns it into their
+                // scholar account (see AuthService.RegisterScholarAsync).
+                if (scholarUserId is null)
+                    return "this student already has a grantee account — it becomes their scholar account when they sign up";
+
                 // A scholar line for an existing scholar just links the two.
-                if (scholarUserId is null) return null;
                 line.ClaimedByUserId = scholarUserId;
                 line.ClaimedAt = DateTime.UtcNow;
                 return "linked to the existing scholar account";
@@ -130,6 +135,31 @@ namespace PSUEISKOLARSystem.Server.Data
             return scholarUserId is not null
                 ? "grant recorded on the existing scholar's profile"
                 : "grant recorded on the existing grantee account";
+        }
+
+        /// <summary>
+        /// Records every unclaimed Grantee line waiting on this student number against the
+        /// given scholar account. Covers scholars whose profile is created or re-numbered by
+        /// the office rather than through sign-up: a grant the office listed for them earlier
+        /// lands on their profile automatically. Returns how many grants were recorded.
+        /// The caller saves.
+        /// </summary>
+        public static async Task<int> ClaimWaitingGrantLinesAsync(
+            ApplicationDbContext db, string userId, string studentId, string? actorId)
+        {
+            var sid = NormalizeStudentId(studentId);
+            if (sid.Length == 0) return 0;
+
+            var lines = await db.EligibilityRecords
+                .Include(e => e.GrantType)
+                .Where(e => e.ClaimedByUserId == null
+                         && e.Kind == EligibilityKinds.Grantee
+                         && e.StudentId == sid)
+                .ToListAsync();
+
+            foreach (var line in lines)
+                ClaimGranteeLine(db, line, userId, actorId);
+            return lines.Count;
         }
     }
 }

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { NumericInput } from '../components/PersonalDetailsFields';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { useToast, useConfirm } from '../context/UIContext';
@@ -506,16 +507,8 @@ export function GrantModal({ initial, scholarshipTypes = [], token, fixedScholar
 
         <div className="grid grid-cols-2 gap-4">
           <Field label="Amount (PHP)">
-            <input
-              required
-              type="number"
-              step="0.01"
-              min="0.01"
-              value={form.amount}
-              onChange={e => set('amount', e.target.value)}
-              className="clay-input"
-              placeholder="5000.00"
-            />
+            <NumericInput required prefix="₱" allowDecimal maxLength={11}
+              value={form.amount} onChange={v => set('amount', v)} placeholder="5,000.00" />
             {amountError && <p className="text-xs mt-1 font-medium" style={{ color: 'var(--danger)' }}>{amountError}</p>}
           </Field>
           <Field label="Date awarded">

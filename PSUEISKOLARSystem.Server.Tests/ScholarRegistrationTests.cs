@@ -142,6 +142,106 @@ public class ScholarRegistrationTests
         Assert.Single(host.Db.OneTimeGrants, g => g.ScholarId == user.Id && g.GrantTypeId == grant.Id);
     }
 
+    /// <summary>Signs a grantee up, then deactivates them the way closing the grant type does.</summary>
+    private static async Task<(UserDto Grantee, GrantType Grant)> DeactivatedGranteeAsync(AuthHost host, Lookups l, string studentId)
+    {
+        var grant = new GrantType { Name = "Tulong Dunong", DefaultAmount = 7500m };
+        host.Db.GrantTypes.Add(grant);
+        await host.Db.SaveChangesAsync();
+        await AddLineAsync(host, EligibilityKinds.Grantee, studentId, grantTypeId: grant.Id);
+
+        var grantee = await host.Auth.RegisterScholarAsync(Request("ana@psu.edu.ph", studentId, l));
+        var user = await host.Db.Users.SingleAsync(u => u.Id == grantee.Id);
+        user.IsActive = false;
+        await host.Db.SaveChangesAsync();
+        return (grantee, grant);
+    }
+
+    [Fact]
+    public async Task A_past_grantee_listed_as_a_scholar_is_offered_their_existing_account()
+    {
+        using var host = new AuthHost();
+        var l = await SeedLookupsAsync(host);
+        await DeactivatedGranteeAsync(host, l, "22-LN-7777");
+        await AddLineAsync(host, EligibilityKinds.Scholar, "22-LN-7777", typeId: l.TypeId);
+
+        var check = await host.Auth.CheckEligibilityAsync(new EligibilityCheckRequestDto
+        {
+            StudentId = "22-LN-7777", FirstName = "Ana", LastName = "Reyes", CampusId = l.CampusId,
+        });
+
+        Assert.True(check.Matched);
+        Assert.Equal(EligibilityKinds.Scholar, check.Kind);
+        Assert.True(check.ExistingGranteeAccount);
+        Assert.EndsWith("@psu.edu.ph", check.ExistingAccountEmail);
+        Assert.DoesNotContain("ana@", check.ExistingAccountEmail);   // masked
+    }
+
+    [Fact]
+    public async Task A_past_grantee_becomes_a_scholar_on_the_same_account_and_keeps_their_grants()
+    {
+        using var host = new AuthHost();
+        var l = await SeedLookupsAsync(host);
+        var (grantee, grant) = await DeactivatedGranteeAsync(host, l, "22-LN-7777");
+        await AddLineAsync(host, EligibilityKinds.Scholar, "22-LN-7777", typeId: l.TypeId);
+
+        var prefill = await host.Auth.GetGranteeAccountForConversionAsync(new GranteeAccountLookupDto
+        {
+            StudentId = "22-LN-7777", FirstName = "Ana", LastName = "Reyes", CampusId = l.CampusId,
+            Email = "ana@psu.edu.ph", Password = "Str0ng!Passw0rd",
+        });
+        Assert.Equal(1, prefill.GrantCount);
+        Assert.Equal(l.ProgramId, prefill.ProgramId);
+
+        var updated = Request("ana@psu.edu.ph", "22-LN-7777", l);
+        updated.YearLevel = 3;
+        var scholar = await host.Auth.RegisterScholarAsync(updated);
+
+        host.Db.ChangeTracker.Clear();
+        Assert.Equal(grantee.Id, scholar.Id);   // no second account
+        Assert.Equal(UserRoles.Scholar, scholar.Role);
+        var user = await host.Db.Users.SingleAsync();
+        Assert.True(user.IsActive);
+        Assert.Equal([UserRoles.Scholar], await host.Users.GetRolesAsync(user));
+
+        Assert.Empty(host.Db.GranteeProfiles);
+        var profile = await host.Db.ScholarProfiles.SingleAsync();
+        Assert.Equal(l.TypeId, profile.ScholarshipTypeId);
+        Assert.Equal(3, profile.YearLevel);
+        Assert.Single(host.Db.OneTimeGrants, g => g.ScholarId == grantee.Id && g.GrantTypeId == grant.Id);
+        Assert.All(host.Db.EligibilityRecords, e => Assert.Equal(grantee.Id, e.ClaimedByUserId));
+    }
+
+    [Fact]
+    public async Task A_past_grantee_cannot_convert_with_the_wrong_password()
+    {
+        using var host = new AuthHost();
+        var l = await SeedLookupsAsync(host);
+        await DeactivatedGranteeAsync(host, l, "22-LN-7777");
+        await AddLineAsync(host, EligibilityKinds.Scholar, "22-LN-7777", typeId: l.TypeId);
+
+        var attempt = Request("ana@psu.edu.ph", "22-LN-7777", l);
+        attempt.Password = "Wr0ng!Passw0rd";
+        await Assert.ThrowsAsync<BadRequestException>(() => host.Auth.RegisterScholarAsync(attempt));
+
+        host.Db.ChangeTracker.Clear();
+        Assert.Empty(host.Db.ScholarProfiles);
+        Assert.Single(host.Db.GranteeProfiles);
+        Assert.False((await host.Db.Users.SingleAsync()).IsActive);
+    }
+
+    [Fact]
+    public async Task A_grantee_with_no_scholar_line_cannot_convert()
+    {
+        using var host = new AuthHost();
+        var l = await SeedLookupsAsync(host);
+        await DeactivatedGranteeAsync(host, l, "22-LN-7777");
+
+        await Assert.ThrowsAsync<BadRequestException>(() =>
+            host.Auth.RegisterScholarAsync(Request("ana@psu.edu.ph", "22-LN-7777", l)));
+        Assert.Empty(host.Db.ScholarProfiles);
+    }
+
     [Fact]
     public async Task A_full_scholarship_is_refused_and_the_account_is_removed()
     {

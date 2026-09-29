@@ -13,7 +13,14 @@ import {
 import { Gift, Plus, Pencil, Power, RotateCcw, Trash2 } from 'lucide-react';
 
 const peso = v => `₱${Number(v || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const EMPTY = { name: '', description: '', sponsor: '', defaultAmount: '' };
+const EMPTY = { name: '', description: '', sponsor: '', defaultAmount: '', scheduledDate: '' };
+
+// Release dates are calendar days (no time zone), sent and received as yyyy-mm-dd.
+const fmtDay = d => (d ? new Date(String(d).slice(0, 10) + 'T00:00:00').toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }) : null);
+const todayIso = () => {
+  const n = new Date();
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
+};
 
 /**
  * Kinds of one-time grant, managed the way scholarship types are. Deactivating a type once it
@@ -54,6 +61,7 @@ export default function GrantTypesPage() {
       description: editing.description.trim() || null,
       sponsor: editing.sponsor.trim() || null,
       defaultAmount: editing.defaultAmount !== '' ? Number(editing.defaultAmount) : null,
+      scheduledDate: editing.scheduledDate || null,
     };
     setSaving(true);
     try {
@@ -120,7 +128,8 @@ export default function GrantTypesPage() {
           <div>
             <h1 className="page-title">Grant Types</h1>
             <p className="page-subtitle">
-              One-time grants the office gives out. Deactivate a type after its release to close the grantee accounts under it.
+              One-time grants the office gives out. Set a release date and every pending grant of that type is marked
+              released automatically on that day. Deactivate a type after its release to close the grantee accounts under it.
             </p>
             <span className="page-title-bar" />
           </div>
@@ -139,7 +148,7 @@ export default function GrantTypesPage() {
             <div className="overflow-x-auto"><table className="w-full min-w-[900px] text-sm">
               <thead className="clay-table-head">
                 <tr>
-                  {['Grant Type', 'Default Amount', 'Grantee Accounts', 'Released', 'Pending', 'Status', ''].map(h => (
+                  {['Grant Type', 'Default Amount', 'Release Date', 'Grantee Accounts', 'Released', 'Pending', 'Status', ''].map(h => (
                     <th key={h} className="text-left px-5 py-3 text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{h}</th>
                   ))}
                 </tr>
@@ -154,6 +163,16 @@ export default function GrantTypesPage() {
                       </p>
                     </td>
                     <td className="px-5 py-3" style={{ color: 'var(--text)' }}>{t.defaultAmount != null ? peso(t.defaultAmount) : 'Varies'}</td>
+                    <td className="px-5 py-3 whitespace-nowrap" style={{ color: 'var(--text)' }}>
+                      {t.scheduledDate ? (
+                        <>
+                          {fmtDay(t.scheduledDate)}
+                          <span className="block text-xs" style={{ color: 'var(--text-muted)' }}>
+                            {String(t.scheduledDate).slice(0, 10) <= todayIso() ? 'Released on schedule' : 'Scheduled'}
+                          </span>
+                        </>
+                      ) : <span style={{ color: 'var(--text-muted)' }}>Not set</span>}
+                    </td>
                     <td className="px-5 py-3" style={{ color: 'var(--text)' }}>
                       {t.granteeAccounts}
                       <span className="text-xs ml-1" style={{ color: 'var(--text-muted)' }}>· {t.masterListLines} on list</span>
@@ -171,7 +190,7 @@ export default function GrantTypesPage() {
                       {isAdmin && (
                         <>
                           <button className="p-2 rounded-lg" title="Edit" aria-label={`Edit ${t.name}`}
-                            onClick={() => { setFormError(''); setEditing({ id: t.id, name: t.name, description: t.description ?? '', sponsor: t.sponsor ?? '', defaultAmount: t.defaultAmount ?? '' }); }}>
+                            onClick={() => { setFormError(''); setEditing({ id: t.id, name: t.name, description: t.description ?? '', sponsor: t.sponsor ?? '', defaultAmount: t.defaultAmount ?? '', scheduledDate: t.scheduledDate ? String(t.scheduledDate).slice(0, 10) : '' }); }}>
                             <Pencil size={14} style={{ color: 'var(--accent)' }} />
                           </button>
                           {t.isActive ? (
@@ -214,6 +233,13 @@ export default function GrantTypesPage() {
             <Field label="Default Amount" hint="Pre-filled for each grantee. Leave blank if it varies.">
               <NumericInput prefix="₱" allowDecimal maxLength={10} value={String(editing.defaultAmount ?? '')}
                 onChange={x => setEditing(v => ({ ...v, defaultAmount: x }))} />
+            </Field>
+            <Field label="Release Date"
+              hint={editing.scheduledDate && editing.scheduledDate <= todayIso()
+                ? 'This date has arrived — every pending grant of this type will be marked released within a few minutes of saving.'
+                : 'The day grantees receive this grant. On that day every pending grant of this type is marked released automatically and shows as received on each grantee’s and scholar’s profile. Leave blank to release grants by hand.'}>
+              <input type="date" value={editing.scheduledDate} min="2000-01-01"
+                onChange={e => setEditing(v => ({ ...v, scheduledDate: e.target.value }))} className="clay-input" />
             </Field>
             <Field label="Description">
               <textarea rows={2} maxLength={500} value={editing.description} onChange={e => setEditing(v => ({ ...v, description: e.target.value }))} className="clay-input" />

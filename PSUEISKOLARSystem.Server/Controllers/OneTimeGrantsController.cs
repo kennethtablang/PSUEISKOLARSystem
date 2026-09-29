@@ -7,6 +7,7 @@ using PSUEISKOLARSystem.Server.DTOs;
 using PSUEISKOLARSystem.Server.Interfaces;
 using PSUEISKOLARSystem.Server.Models;
 using PSUEISKOLARSystem.Server.Models.Enums;
+using PSUEISKOLARSystem.Server.Services;
 
 namespace PSUEISKOLARSystem.Server.Controllers
 {
@@ -100,6 +101,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     g.GrantTypeId,
                     GrantTypeName = g.GrantType != null ? g.GrantType.Name : null,
                     GrantTypeActive = g.GrantType == null || g.GrantType.IsActive,
+                    ScheduledReleaseDate = g.GrantType != null ? g.GrantType.ScheduledDate : null,
                     IsGrantee = db.GranteeProfiles.Any(gp => gp.UserId == g.ScholarId),
                     RecipientActive = g.Scholar.IsActive,
                     g.Title,
@@ -225,7 +227,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 $"You have been awarded '{grant.Title}' worth PHP {grant.Amount:N2}. " +
                 "You will be notified once it is released.",
                 NotificationCategories.Account,
-                "/my-profile");
+                GrantReleaseService.GrantsLink(await IsGranteeAsync(scholar.Id)));
 
             return Ok(new { grant.Id });
         }
@@ -302,7 +304,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 $"'{grant.Title}' (PHP {grant.Amount:N2}) has been released" +
                 (string.IsNullOrWhiteSpace(grant.ReferenceNo) ? "." : $" under reference {grant.ReferenceNo}."),
                 NotificationCategories.Account,
-                "/my-profile");
+                GrantReleaseService.GrantsLink(await IsGranteeAsync(grant.ScholarId)));
 
             return Ok(new { grant.ReleaseStatus, grant.ReleasedAt, grant.ReferenceNo });
         }
@@ -348,6 +350,9 @@ namespace PSUEISKOLARSystem.Server.Controllers
             await db.SaveChangesAsync();
             return NoContent();
         }
+
+        private Task<bool> IsGranteeAsync(string userId) =>
+            db.GranteeProfiles.AnyAsync(gp => gp.UserId == userId);
 
         private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 

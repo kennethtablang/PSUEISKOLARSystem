@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { NumericInput } from '../components/PersonalDetailsFields';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { useToast, useConfirm } from '../context/UIContext';
@@ -651,15 +652,8 @@ function ScholarshipTypeModal({ initial, allRequirements, defaultGwa = '2.50', t
           </Field>
 
           <Field label="Standard amount (optional)">
-            <input
-              type="number"
-              step="0.01"
-              min="0.01"
-              value={form.amount}
-              onChange={e => set('amount', e.target.value)}
-              className="clay-input"
-              placeholder="Leave blank if it varies"
-            />
+            <NumericInput prefix="₱" allowDecimal maxLength={11}
+              value={form.amount} onChange={v => set('amount', v)} placeholder="Leave blank if it varies" />
           </Field>
         </div>
         {amountError

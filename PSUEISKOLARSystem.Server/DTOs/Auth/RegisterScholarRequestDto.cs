@@ -80,4 +80,32 @@ namespace PSUEISKOLARSystem.Server.DTOs.Auth
 
         public int? CampusId { get; set; }
     }
+
+    /// <summary>
+    /// A past grantee who is now listed as a scholar proves the grantee account is theirs,
+    /// so the sign-up form can be pre-filled from it (see
+    /// <see cref="Interfaces.IAuthService.GetGranteeAccountForConversionAsync"/>).
+    /// </summary>
+    public class GranteeAccountLookupDto : EligibilityCheckRequestDto
+    {
+        [Required, EmailAddress]
+        public string Email { get; set; } = string.Empty;
+
+        [Required]
+        public string Password { get; set; } = string.Empty;
+    }
+
+    /// <summary>What a grantee account already holds, to pre-fill the scholar sign-up form.</summary>
+    public class GranteeConversionPrefillDto
+    {
+        public string Email { get; set; } = string.Empty;
+        public int? ProgramId { get; set; }
+        public int YearLevel { get; set; }
+        public string? ContactNumber { get; set; }
+        public DateTime? BirthDate { get; set; }
+        public string? Address { get; set; }
+        public Scholars.PersonalDetailsDto Personal { get; set; } = new();
+        /// <summary>One-time grants already on the account; they stay on it as a scholar.</summary>
+        public int GrantCount { get; set; }
+    }
 }

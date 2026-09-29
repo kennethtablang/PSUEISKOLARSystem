@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { AlertTriangle, Printer, Award, Plus, BanknoteArrowUp, History, Camera, Wallet, FileCheck, Eye, Download } from 'lucide-react';
+import { AlertTriangle, Printer, Award, Plus, BanknoteArrowUp, History, Camera, Wallet, FileCheck, Eye, Download, CalendarClock } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
@@ -757,8 +757,17 @@ function OneTimeGrantsCard({ grants, isAdminOrCoord, onAdd, onRelease }) {
                     </p>
                     <p className="text-xs mt-0.5" style={{ color: 'var(--text-faint)' }}>
                       Awarded {new Date(g.awardedOn).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      {g.releaseStatus === 'Released' && g.releasedAt &&
+                        ` · Received ${new Date(g.releasedAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}`}
                       {g.referenceNo ? ` · ref ${g.referenceNo}` : ''}
                     </p>
+                    {g.releaseStatus === 'Pending' && g.scheduledReleaseDate && (
+                      <p className="text-xs mt-0.5 font-semibold flex items-center gap-1" style={{ color: 'var(--tone-warn-fg)' }}>
+                        <CalendarClock size={11} strokeWidth={2.6} />
+                        Release scheduled {new Date(String(g.scheduledReleaseDate).slice(0, 10) + 'T00:00:00')
+                          .toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </p>
+                    )}
                   </div>
                   <div className="text-right shrink-0 flex flex-col items-end gap-1.5">
                     <span className="font-mono font-bold text-sm" style={{ color: 'var(--text-strong)' }}>{peso(g.amount)}</span>

@@ -26,6 +26,14 @@ namespace PSUEISKOLARSystem.Server.Models
         public bool IsFirstGenerationStudent { get; set; }
         public bool IsWorkingStudent { get; set; }
 
+        // Entered as separate last / first / middle names; FatherName is kept as the
+        // "LAST, FIRST MIDDLE" display form built from them (see PersonalDetailsDto.ApplyTo).
+        [MaxLength(100)]
+        public string? FatherLastName { get; set; }
+        [MaxLength(100)]
+        public string? FatherFirstName { get; set; }
+        [MaxLength(100)]
+        public string? FatherMiddleName { get; set; }
         [MaxLength(150)]
         public string? FatherName { get; set; }
         public bool? FatherLiving { get; set; }
@@ -35,6 +43,14 @@ namespace PSUEISKOLARSystem.Server.Models
         public string? FatherOccupation { get; set; }
         public decimal? FatherMonthlyIncome { get; set; }
 
+        // Entered as separate last / first / middle names; MotherName is kept as the
+        // "LAST, FIRST MIDDLE" display form built from them (see PersonalDetailsDto.ApplyTo).
+        [MaxLength(100)]
+        public string? MotherLastName { get; set; }
+        [MaxLength(100)]
+        public string? MotherFirstName { get; set; }
+        [MaxLength(100)]
+        public string? MotherMiddleName { get; set; }
         [MaxLength(150)]
         public string? MotherName { get; set; }
         public bool? MotherLiving { get; set; }

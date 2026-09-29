@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useId, useLayoutEffect, useRef } from 'react';
 import { Check } from 'lucide-react';
 import {
   SEX_OPTIONS, CIVIL_STATUS_OPTIONS, EDUCATION_OPTIONS, SUPPORT_SOURCE_OPTIONS, PERSONAL_FLAGS,
@@ -35,8 +35,11 @@ export function ChoiceChecks({ label, options, value, onChange, required, disabl
         {options.map(opt => {
           const checked = value === opt.value;
           return (
+            /* `relative` keeps the visually-hidden checkbox inside its own label. Without it the
+               input was positioned against the modal backdrop, so focusing it on click made the
+               browser scroll the dialog panel to "reveal" it — leaving the panel blank. */
             <label key={String(opt.value)}
-              className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm cursor-pointer select-none"
+              className="relative flex items-center gap-2 px-3 py-2 rounded-xl text-sm cursor-pointer select-none"
               style={{
                 background: checked ? 'rgba(0,48,135,0.08)' : 'var(--surface-inset)',
                 border: `1.5px solid ${checked ? 'var(--accent-strong)' : 'transparent'}`,
@@ -68,8 +71,27 @@ export function ChoiceChecks({ label, options, value, onChange, required, disabl
 
 const YES_NO = [{ value: true, label: 'Yes' }, { value: false, label: 'No' }];
 
-/** Digits-only text input; `prefix` renders a fixed adornment (₱, +63). */
-export function NumericInput({ value, onChange, prefix, maxLength = 9, placeholder, id, required, allowDecimal = false }) {
+/** "1234567.5" → "1,234,567.5": a comma every three digits of the whole-number part. */
+function groupDigits(raw) {
+  const s = String(raw ?? '');
+  if (s === '') return '';
+  const [whole, ...dec] = s.split('.');
+  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return dec.length ? `${grouped}.${dec.join('')}` : grouped;
+}
+
+/**
+ * Digits-only text input; `prefix` renders a fixed adornment (₱, +63). Amounts are shown with
+ * a comma every three digits as they are typed (`grouped`), but `value`/`onChange` carry the
+ * bare digits, so callers keep parsing plain numbers.
+ */
+export function NumericInput({ value, onChange, prefix, maxLength = 9, placeholder, id, required, allowDecimal = false, grouped = true }) {
+  const inputRef = useRef(null);
+  // How many digits (and the decimal point) sat before the caret on the last keystroke, so
+  // the caret can be put back after the same ones once the commas have moved around it.
+  const caretAfter = useRef(null);
+  const significant = allowDecimal ? /[\d.]/ : /\d/;
+
   const clean = raw => {
     let v = raw.replace(allowDecimal ? /[^\d.]/g : /\D/g, '');
     if (allowDecimal) {
@@ -78,6 +100,28 @@ export function NumericInput({ value, onChange, prefix, maxLength = 9, placehold
     }
     return v.slice(0, maxLength);
   };
+
+  const raw = String(value ?? '');
+  const shown = grouped ? groupDigits(raw) : raw;
+
+  useLayoutEffect(() => {
+    const el = inputRef.current;
+    const want = caretAfter.current;
+    caretAfter.current = null;
+    if (!el || want == null || document.activeElement !== el) return;
+    let pos = 0;
+    for (let seen = 0; pos < el.value.length && seen < want; pos++)
+      if (significant.test(el.value[pos])) seen++;
+    el.setSelectionRange(pos, pos);
+  });
+
+  function handleChange(e) {
+    const el = e.target;
+    const before = el.value.slice(0, el.selectionStart ?? el.value.length);
+    caretAfter.current = [...before].filter(ch => significant.test(ch)).length;
+    onChange(clean(el.value));
+  }
+
   return (
     <div className="relative">
       {prefix && (
@@ -85,12 +129,13 @@ export function NumericInput({ value, onChange, prefix, maxLength = 9, placehold
           style={{ color: 'var(--text-muted)' }}>{prefix}</span>
       )}
       <input
+        ref={inputRef}
         id={id}
         type="text"
         inputMode={allowDecimal ? 'decimal' : 'numeric'}
         required={required}
-        value={value ?? ''}
-        onChange={e => onChange(clean(e.target.value))}
+        value={shown}
+        onChange={handleChange}
         placeholder={placeholder}
         className="clay-input"
         style={prefix ? { paddingLeft: prefix.length > 1 ? '48px' : '30px' } : undefined}
@@ -103,7 +148,7 @@ export function NumericInput({ value, onChange, prefix, maxLength = 9, placehold
 export function ContactInput({ value, onChange, id, required }) {
   return (
     <NumericInput id={id} value={value} onChange={onChange} prefix="+63" maxLength={10}
-      placeholder="9XX XXX XXXX" required={required} />
+      placeholder="9XX XXX XXXX" required={required} grouped={false} />
   );
 }
 
@@ -212,14 +257,24 @@ export function PersonalQuestions({ value, onChange, required = false }) {
 
 function ParentBlock({ who, prefix, value, onChange }) {
   const set = (k, v) => onChange({ ...value, [prefix + k]: v });
-  const nameId = useId(), eduId = useId(), occId = useId(), incId = useId();
+  const lastId = useId(), firstId = useId(), middleId = useId(), eduId = useId(), occId = useId(), incId = useId();
   return (
     <div className="rounded-2xl p-4 space-y-3" style={{ background: 'var(--surface-inset)' }}>
-      <p className="text-xs font-black" style={{ color: 'var(--text-strong)' }}>{who}</p>
-      <Labelled label={`${who}'s Name`} htmlFor={nameId}>
-        <UpperInput id={nameId} value={value[prefix + 'Name']} onChange={v => set('Name', v)}
-          placeholder="LAST NAME, FIRST NAME MIDDLE NAME" maxLength={150} />
-      </Labelled>
+      <p className="text-xs font-black" style={{ color: 'var(--text-strong)' }}>{who}&apos;s Name</p>
+      <div className="grid sm:grid-cols-3 gap-3">
+        <Labelled label="Last Name" htmlFor={lastId}>
+          <UpperInput id={lastId} value={value[prefix + 'LastName']} onChange={v => set('LastName', v)}
+            placeholder="DELA CRUZ" maxLength={100} />
+        </Labelled>
+        <Labelled label="First Name" htmlFor={firstId}>
+          <UpperInput id={firstId} value={value[prefix + 'FirstName']} onChange={v => set('FirstName', v)}
+            placeholder="JUAN" maxLength={100} />
+        </Labelled>
+        <Labelled label="Middle Name" htmlFor={middleId}>
+          <UpperInput id={middleId} value={value[prefix + 'MiddleName']} onChange={v => set('MiddleName', v)}
+            placeholder="SANTOS" maxLength={100} />
+        </Labelled>
+      </div>
       <ChoiceChecks label="Living" options={YES_NO} value={value[prefix + 'Living']} onChange={v => set('Living', v)} />
       <div className="grid sm:grid-cols-2 gap-3">
         <Labelled label="Highest Educational Attainment" htmlFor={eduId}>
@@ -227,8 +282,8 @@ function ParentBlock({ who, prefix, value, onChange }) {
             options={EDUCATION_OPTIONS} placeholder="— Select —" />
         </Labelled>
         <Labelled label="Occupation" htmlFor={occId}>
-          <input id={occId} type="text" maxLength={100} value={value[prefix + 'Occupation']}
-            onChange={e => set('Occupation', e.target.value)} className="clay-input" placeholder="e.g. Farmer" />
+          <UpperInput id={occId} maxLength={100} value={value[prefix + 'Occupation']}
+            onChange={v => set('Occupation', v)} placeholder="E.G. FARMER" />
         </Labelled>
       </div>
       <Labelled label="Estimated Monthly Income" htmlFor={incId}>
@@ -305,7 +360,9 @@ export function PersonalDetailsView({ personal, birthDate }) {
         <div key={k} className="rounded-2xl p-4" style={{ background: 'var(--surface-inset)' }}>
           <p className="text-xs font-black mb-3" style={{ color: 'var(--text-strong)' }}>{who}</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-            <Row label="Name" value={p[k + 'Name'] || '—'} />
+            <Row label="Last Name" value={p[k + 'LastName'] || '—'} />
+            <Row label="First Name" value={p[k + 'FirstName'] || '—'} />
+            <Row label="Middle Name" value={p[k + 'MiddleName'] || '—'} />
             <Row label="Living" value={yn(p[k + 'Living'])} />
             <Row label="Education" value={p[k + 'Education'] || '—'} />
             <Row label="Occupation" value={p[k + 'Occupation'] || '—'} />

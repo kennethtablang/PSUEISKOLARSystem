@@ -51,6 +51,23 @@ namespace PSUEISKOLARSystem.Server.Controllers
         public async Task<ActionResult<EligibilityCheckResultDto>> CheckEligibility(EligibilityCheckRequestDto request) =>
             Ok(await authService.CheckEligibilityAsync(request));
 
+        // POST /api/auth/grantee-account — a past grantee now listed as a scholar signs in with
+        // their grantee account so the sign-up form can reuse it (pre-filled). Rate-limited like
+        // sign-in: it checks a password.
+        [HttpPost("grantee-account")]
+        [EnableRateLimiting("auth")]
+        public async Task<ActionResult<GranteeConversionPrefillDto>> GranteeAccount(GranteeAccountLookupDto request)
+        {
+            try
+            {
+                return Ok(await authService.GetGranteeAccountForConversionAsync(request));
+            }
+            catch (BadRequestException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
         [HttpPost("register-scholar")]
         [EnableRateLimiting("auth")]
         public async Task<ActionResult<UserDto>> RegisterScholar(RegisterScholarRequestDto request)

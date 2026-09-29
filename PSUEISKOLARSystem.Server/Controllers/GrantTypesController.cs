@@ -7,6 +7,7 @@ using PSUEISKOLARSystem.Server.Data;
 using PSUEISKOLARSystem.Server.Interfaces;
 using PSUEISKOLARSystem.Server.Models;
 using PSUEISKOLARSystem.Server.Models.Enums;
+using PSUEISKOLARSystem.Server.Services;
 
 namespace PSUEISKOLARSystem.Server.Controllers
 {
@@ -38,6 +39,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     t.Description,
                     t.Sponsor,
                     t.DefaultAmount,
+                    t.ScheduledDate,
                     t.IsActive,
                     t.CreatedAt,
                     t.DeactivatedAt,
@@ -71,6 +73,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 Description = Trim(dto.Description),
                 Sponsor = Trim(dto.Sponsor),
                 DefaultAmount = dto.DefaultAmount,
+                ScheduledDate = dto.ScheduledDate?.Date,
             };
             db.GrantTypes.Add(type);
             db.Audit(this, "CreateGrantType", $"Added grant type '{type.Name}'");
@@ -93,8 +96,32 @@ namespace PSUEISKOLARSystem.Server.Controllers
             type.Description = Trim(dto.Description);
             type.Sponsor = Trim(dto.Sponsor);
             type.DefaultAmount = dto.DefaultAmount;
-            db.Audit(this, "UpdateGrantType", $"Updated grant type '{type.Name}'");
+
+            var newDate = dto.ScheduledDate?.Date;
+            var rescheduled = newDate != type.ScheduledDate;
+            type.ScheduledDate = newDate;
+
+            db.Audit(this, "UpdateGrantType", $"Updated grant type '{type.Name}'" +
+                (rescheduled ? $" — release {(newDate is DateTime d ? $"scheduled for {d:MMM d, yyyy}" : "schedule cleared")}" : ""));
             await db.SaveChangesAsync();
+
+            // Tell everyone still waiting for this grant when it will arrive.
+            if (rescheduled && newDate is DateTime date && date >= GrantReleaseService.PhilippineToday())
+            {
+                var waiting = await db.OneTimeGrants
+                    .Where(g => g.GrantTypeId == id && g.ReleaseStatus == GrantReleaseStatuses.Pending)
+                    .Select(g => new { g.ScholarId, IsGrantee = db.GranteeProfiles.Any(gp => gp.UserId == g.ScholarId) })
+                    .Distinct()
+                    .ToListAsync();
+                foreach (var r in waiting)
+                    await notifications.CreateAsync(
+                        r.ScholarId,
+                        "Grant release scheduled",
+                        $"Your '{type.Name}' grant is scheduled for release on {date:MMMM d, yyyy}.",
+                        NotificationCategories.Account,
+                        GrantReleaseService.GrantsLink(r.IsGrantee));
+            }
+
             return NoContent();
         }
 
@@ -192,6 +219,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
         {
             if (string.IsNullOrWhiteSpace(dto.Name)) return "Name is required.";
             if (dto.DefaultAmount is decimal a && (a <= 0 || a > 10_000_000m)) return "Default amount must be greater than zero.";
+            if (dto.ScheduledDate is DateTime d && (d.Year < 2000 || d.Year > 2100)) return "Enter a valid release date.";
 
             var name = dto.Name.Trim();
             if (await db.GrantTypes.AnyAsync(t => t.Id != id && t.Name == name))
@@ -206,5 +234,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
         [Required, MaxLength(150)] string Name,
         [MaxLength(500)] string? Description,
         [MaxLength(150)] string? Sponsor,
-        decimal? DefaultAmount);
+        decimal? DefaultAmount,
+        // The day grants of this type are released; pending ones flip to Released automatically.
+        DateTime? ScheduledDate = null);
 }
