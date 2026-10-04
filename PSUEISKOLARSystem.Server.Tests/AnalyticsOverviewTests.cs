@@ -33,7 +33,7 @@ public class AnalyticsOverviewTests
         db.AddSubmission("s1", 1, DocumentStatus.Verified);
         db.AddSubmission("s2", 1, DocumentStatus.Verified);
         db.AddSubmission("s3", 1, DocumentStatus.Pending);
-        db.AddSubmission("s4", 1, DocumentStatus.Incomplete);
+        db.AddSubmission("s4", 1, DocumentStatus.Rejected);
         db.SaveChanges();
 
         var overview = await new AnalyticsQueries(db).OverviewAsync();

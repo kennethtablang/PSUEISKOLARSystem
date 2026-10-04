@@ -17,6 +17,7 @@ import { getPrograms } from '../api/lookups';
 import { deleteUser, setUserStatus } from '../api/users';
 import { personalFromApi, personalToApi, localMobile } from '../constants/personal';
 import { ArrowLeft, HandCoins, Pencil, Trash2, Power, CalendarClock } from 'lucide-react';
+import AddressPicker from '../components/AddressPicker';
 
 const peso = v => `₱${Number(v || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const fmtDate = d => (d ? new Date(d).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }) : '—');
@@ -125,7 +126,7 @@ export default function GranteeProfilePage() {
     try {
       await deleteUser(userId, token);
       toast('Grantee deleted.', 'success');
-      navigate('/grantees');
+      navigate('/master-list');
     } catch (err) {
       toast(err.message, 'error');
     }
@@ -139,7 +140,7 @@ export default function GranteeProfilePage() {
     <Layout>
       <div className="page-shell">
         {isStaff && (
-          <button onClick={() => navigate('/grantees')} className="text-sm font-semibold mb-4 flex items-center gap-1.5" style={{ color: 'var(--accent)' }}>
+          <button onClick={() => navigate(-1)} className="text-sm font-semibold mb-4 flex items-center gap-1.5" style={{ color: 'var(--accent)' }}>
             <ArrowLeft size={14} /> Back
           </button>
         )}
@@ -266,9 +267,7 @@ export default function GranteeProfilePage() {
               </p>
             )}
             <Field label="Contact Number"><ContactInput value={editing.contactLocal} onChange={v => setEditing(x => ({ ...x, contactLocal: v }))} /></Field>
-            <Field label="Complete Address">
-              <textarea rows={2} maxLength={500} value={editing.address} onChange={e => setEditing(x => ({ ...x, address: e.target.value }))} className="clay-input" />
-            </Field>
+            <AddressPicker value={editing.address} onChange={v => setEditing(x => ({ ...x, address: v }))} />
             {isStaff && (
               <>
                 <div className="grid sm:grid-cols-3 gap-3">

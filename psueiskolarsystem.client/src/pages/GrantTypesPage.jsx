@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import Layout from '../components/Layout';
 import Modal from '../components/Modal';
 import Field from '../components/Field';
@@ -8,9 +9,9 @@ import { useAuth } from '../context/AuthContext';
 import { useToast, useConfirm } from '../context/UIContext';
 import { useTitle } from '../hooks/useTitle';
 import {
-  getGrantTypes, createGrantType, updateGrantType, deactivateGrantType, activateGrantType, deleteGrantType,
+  getGrantTypes, createGrantType, updateGrantType, activateGrantType, deleteGrantType,
 } from '../api/grantTypes';
-import { Gift, Plus, Pencil, Power, RotateCcw, Trash2 } from 'lucide-react';
+import { Gift, Plus, Pencil, RotateCcw, Trash2, CalendarX2, ChevronRight } from 'lucide-react';
 
 const peso = v => `₱${Number(v || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const EMPTY = { name: '', description: '', sponsor: '', defaultAmount: '', scheduledDate: '' };
@@ -23,8 +24,11 @@ const todayIso = () => {
 };
 
 /**
- * Kinds of one-time grant, managed the way scholarship types are. Deactivating a type once it
- * has been released closes the grantee accounts under it; their data stays for the analytics.
+ * Kinds of one-time grant, managed the way scholarship types are. The release date is optional
+ * — a type can be added before the office knows it — and the page flags every type still
+ * waiting on one. Setting the date announces it to the grantees; once the release day is over
+ * the type and its grantee accounts are deactivated automatically (their data stays for the
+ * analytics), so there is no deactivate button — only reactivate.
  */
 export default function GrantTypesPage() {
   useTitle('Grant Types');
@@ -77,32 +81,16 @@ export default function GrantTypesPage() {
     }
   }
 
-  async function deactivate(t) {
+  async function reactivate(t) {
     const ok = await confirm({
-      title: `Deactivate ${t.name}?`,
-      message:
-        `This closes the grant and deactivates the ${t.granteeAccounts} grantee account${t.granteeAccounts === 1 ? '' : 's'} under it, ` +
-        'so they can no longer sign in. Their profiles and grant records stay for reports and data visualization. ' +
-        'Scholars who also received this grant keep their accounts.' +
-        (t.pendingCount > 0 ? ` Note: ${t.pendingCount} grant${t.pendingCount === 1 ? ' is' : 's are'} still pending release.` : ''),
-      confirmLabel: 'Deactivate',
-      danger: true,
+      title: `Reactivate ${t.name}?`,
+      message: 'This reopens the grant type and the grantee accounts that were closed with it, so they can sign in again.',
+      confirmLabel: 'Reactivate',
     });
     if (!ok) return;
     try {
-      const res = await deactivateGrantType(t.id, token);
-      toast(`${t.name} deactivated · ${res.deactivatedAccounts} account(s) closed` +
-        (res.keptOpen ? ` · ${res.keptOpen} kept open (still owed another grant)` : ''), 'success');
-      load();
-    } catch (err) {
-      toast(err.message, 'error');
-    }
-  }
-
-  async function reactivate(t) {
-    try {
-      await activateGrantType(t.id, token);
-      toast(`${t.name} reactivated.`, 'success');
+      const res = await activateGrantType(t.id, token);
+      toast(`${t.name} reactivated` + (res?.reactivatedAccounts ? ` · ${res.reactivatedAccounts} account(s) reopened.` : '.'), 'success');
       load();
     } catch (err) {
       toast(err.message, 'error');
@@ -128,8 +116,9 @@ export default function GrantTypesPage() {
           <div>
             <h1 className="page-title">Grant Types</h1>
             <p className="page-subtitle">
-              One-time grants the office gives out. Set a release date and every pending grant of that type is marked
-              released automatically on that day. Deactivate a type after its release to close the grantee accounts under it.
+              One-time grants the office gives out. The release date can be set later — once it is, the grantees are
+              told automatically, every pending grant is marked released on that day, and the grantee accounts under the
+              type are deactivated automatically when the release day is over. Open a grant type to see its grantees.
             </p>
             <span className="page-title-bar" />
           </div>
@@ -140,6 +129,19 @@ export default function GrantTypesPage() {
             </button>
           )}
         </div>
+
+        {!loading && types.some(t => t.isActive && !t.scheduledDate) && (
+          <div className="clay-card px-4 py-3 mb-4 flex items-start gap-2.5 text-sm"
+            style={{ background: 'var(--tone-warn-bg, #fff7e0)', color: 'var(--tone-warn-fg, #8a5a00)' }} role="status">
+            <CalendarX2 size={16} className="mt-0.5 shrink-0" />
+            <span>
+              <strong>{types.filter(t => t.isActive && !t.scheduledDate).length}</strong> grant type
+              {types.filter(t => t.isActive && !t.scheduledDate).length === 1 ? ' has' : 's have'} no release date yet:
+              {' '}{types.filter(t => t.isActive && !t.scheduledDate).map(t => t.name).join(', ')}. Edit the type to set it
+              once it is known — the grantees are notified automatically.
+            </span>
+          </div>
+        )}
 
         <div className="clay-card overflow-hidden">
           {loading ? <TableSkeleton /> : types.length === 0 ? (
@@ -157,7 +159,9 @@ export default function GrantTypesPage() {
                 {types.map(t => (
                   <tr key={t.id} className="clay-table-row" style={{ opacity: t.isActive ? 1 : 0.7 }}>
                     <td className="px-5 py-3">
-                      <p className="font-semibold" style={{ color: 'var(--text-strong)' }}>{t.name}</p>
+                      <Link to={`/grant-types/${t.id}`} className="font-semibold hover:underline inline-flex items-center gap-1" style={{ color: 'var(--text-strong)' }}>
+                        {t.name} <ChevronRight size={13} style={{ color: 'var(--text-muted)' }} />
+                      </Link>
                       <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
                         {[t.sponsor, t.description].filter(Boolean).join(' · ') || '—'}
                       </p>
@@ -171,7 +175,11 @@ export default function GrantTypesPage() {
                             {String(t.scheduledDate).slice(0, 10) <= todayIso() ? 'Released on schedule' : 'Scheduled'}
                           </span>
                         </>
-                      ) : <span style={{ color: 'var(--text-muted)' }}>Not set</span>}
+                      ) : (
+                        <span className="status-badge tone-warn inline-flex items-center gap-1" title="The release date has not been set yet">
+                          <CalendarX2 size={11} /> Not set yet
+                        </span>
+                      )}
                     </td>
                     <td className="px-5 py-3" style={{ color: 'var(--text)' }}>
                       {t.granteeAccounts}
@@ -184,7 +192,9 @@ export default function GrantTypesPage() {
                     <td className="px-5 py-3">
                       {t.isActive
                         ? <span className="status-badge tone-ok">Active</span>
-                        : <span className="status-badge tone-neutral" title={t.deactivatedAt ? `Since ${new Date(t.deactivatedAt).toLocaleDateString()}` : ''}>Deactivated</span>}
+                        : <span className="status-badge tone-neutral" title={t.deactivatedAt ? `Since ${new Date(t.deactivatedAt).toLocaleDateString()}` : ''}>
+                            {t.accountsClosedAt && t.scheduledDate && String(t.scheduledDate).slice(0, 10) < todayIso() ? 'Closed after release' : 'Deactivated'}
+                          </span>}
                     </td>
                     <td className="px-5 py-3 text-right whitespace-nowrap">
                       {isAdmin && (
@@ -193,11 +203,8 @@ export default function GrantTypesPage() {
                             onClick={() => { setFormError(''); setEditing({ id: t.id, name: t.name, description: t.description ?? '', sponsor: t.sponsor ?? '', defaultAmount: t.defaultAmount ?? '', scheduledDate: t.scheduledDate ? String(t.scheduledDate).slice(0, 10) : '' }); }}>
                             <Pencil size={14} style={{ color: 'var(--accent)' }} />
                           </button>
-                          {t.isActive ? (
-                            <button className="p-2 rounded-lg" title="Deactivate after release" aria-label={`Deactivate ${t.name}`} onClick={() => deactivate(t)}>
-                              <Power size={14} style={{ color: 'var(--tone-warn-fg)' }} />
-                            </button>
-                          ) : (
+                          {/* Deactivation happens on its own after the release day; only the way back is a button. */}
+                          {!t.isActive && (
                             <button className="p-2 rounded-lg" title="Reactivate" aria-label={`Reactivate ${t.name}`} onClick={() => reactivate(t)}>
                               <RotateCcw size={14} style={{ color: 'var(--tone-ok-fg)' }} />
                             </button>
@@ -234,10 +241,10 @@ export default function GrantTypesPage() {
               <NumericInput prefix="₱" allowDecimal maxLength={10} value={String(editing.defaultAmount ?? '')}
                 onChange={x => setEditing(v => ({ ...v, defaultAmount: x }))} />
             </Field>
-            <Field label="Release Date"
+            <Field label="Release Date (optional)"
               hint={editing.scheduledDate && editing.scheduledDate <= todayIso()
-                ? 'This date has arrived — every pending grant of this type will be marked released within a few minutes of saving.'
-                : 'The day grantees receive this grant. On that day every pending grant of this type is marked released automatically and shows as received on each grantee’s and scholar’s profile. Leave blank to release grants by hand.'}>
+                ? 'This date has arrived — every pending grant of this type will be marked released within a few minutes of saving, and the grantee accounts close once the day is over.'
+                : 'Leave blank if the date is not known yet — the type is flagged until it is set. Once set, every grantee under this type is sent an announcement with the date; on that day their grants are marked received, and when the day is over their accounts are deactivated automatically.'}>
               <input type="date" value={editing.scheduledDate} min="2000-01-01"
                 onChange={e => setEditing(v => ({ ...v, scheduledDate: e.target.value }))} className="clay-input" />
             </Field>

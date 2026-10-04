@@ -129,8 +129,15 @@ namespace PSUEISKOLARSystem.Server.Controllers
             var type = await db.ScholarshipTypes.FindAsync(scholarshipTypeId);
             if (type is null) return NotFound(new { message = "Scholarship type not found." });
 
-            var periodError = ValidatePeriod(type.Frequency, academicYear, semester, out var year);
-            if (periodError is not null) return BadRequest(new { message = periodError });
+            // "Semesters 1 & 2" looks at both semesters at once — for the times both are paid
+            // out together on one release day. Each semester is still its own release row.
+            var semesters = PeriodSemesters(semester);
+            var year = academicYear?.Trim() ?? string.Empty;
+            foreach (var sem in semesters)
+            {
+                var periodError = ValidatePeriod(type.Frequency, academicYear, sem, out year);
+                if (periodError is not null) return BadRequest(new { message = periodError });
+            }
 
             // The holders of the scholarship are the denormalised pointers on the profiles —
             // the same source the slot tracker counts, so the two never disagree.
@@ -152,46 +159,68 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     sp.CampusId,
                     CampusName = sp.Campus != null ? sp.Campus.Name : null,
                     sp.YearLevel,
-                    Release = db.ScholarshipReleases
-                        .Where(r => r.ScholarId == sp.UserId
-                                 && r.ScholarshipTypeId == scholarshipTypeId
-                                 && r.AcademicYear == year
-                                 && r.Semester == semester)
-                        .Select(r => new
-                        {
-                            r.Id,
-                            r.Amount,
-                            r.Status,
-                            r.ReleasedAt,
-                            r.ReferenceNo,
-                            r.Notes,
-                            r.ScheduledDate,
-                            r.YearLevel,
-                        })
-                        .FirstOrDefault(),
+                    Sex = sp.Personal.Sex,
                 })
                 .ToListAsync();
 
-            var scholars = rows.Select(r => new
+            var holderIds = rows.Select(r => r.ScholarId).ToList();
+            var releases = (await db.ScholarshipReleases
+                .Where(r => r.ScholarshipTypeId == scholarshipTypeId
+                         && r.AcademicYear == year
+                         && semesters.Contains(r.Semester)
+                         && holderIds.Contains(r.ScholarId))
+                .Select(r => new
+                {
+                    r.Id, r.ScholarId, r.Semester, r.Amount, r.Status, r.ReleasedAt,
+                    r.ReferenceNo, r.Notes, r.ScheduledDate, r.YearLevel,
+                })
+                .ToListAsync())
+                .ToLookup(r => r.ScholarId);
+
+            var scholars = rows.Select(r =>
             {
-                r.ScholarId,
-                r.ScholarName,
-                r.ScholarEmail,
-                r.StudentId,
-                r.LifecycleStatus,
-                r.CampusId,
-                r.CampusName,
-                ProfileYearLevel = r.YearLevel,
-                ReleaseYearLevel = r.Release?.YearLevel,
-                ScheduledDate = r.Release?.ScheduledDate,
-                // NotRecorded is its own state: nobody has even scheduled this scholar's payout.
-                Status = r.Release?.Status ?? "NotRecorded",
-                Received = r.Release != null && r.Release.Status == GrantReleaseStatuses.Released,
-                ReleaseId = r.Release?.Id,
-                Amount = r.Release?.Amount,
-                ReleasedAt = r.Release?.ReleasedAt,
-                ReferenceNo = r.Release?.ReferenceNo,
-                Notes = r.Release?.Notes,
+                var mine = releases[r.ScholarId].OrderBy(x => x.Semester).ToList();
+                var live = mine.Where(x => x.Status != GrantReleaseStatuses.Cancelled).ToList();
+
+                // One status for the row. With both semesters it is Received only once every
+                // semester has been released; anything still unpaid keeps it awaiting release.
+                string status =
+                    mine.Count == 0 ? "NotRecorded"
+                    : live.Count == 0 ? GrantReleaseStatuses.Cancelled
+                    : live.Any(x => x.Status == GrantReleaseStatuses.Pending) ? GrantReleaseStatuses.Pending
+                    : live.Count < semesters.Length ? GrantReleaseStatuses.Pending
+                    : GrantReleaseStatuses.Released;
+                var pendingIds = live.Where(x => x.Status == GrantReleaseStatuses.Pending).Select(x => x.Id).ToList();
+                int? releaseId = mine.Count == 1 ? mine[0].Id : pendingIds.Count > 0 ? pendingIds[0] : null;
+                var refs = string.Join(", ", live.Select(x => x.ReferenceNo).Where(x => x != null).Distinct());
+                var notes = string.Join(" · ", mine.Select(x => x.Notes).Where(x => x != null).Distinct());
+
+                return new
+                {
+                    r.ScholarId,
+                    r.ScholarName,
+                    r.ScholarEmail,
+                    r.StudentId,
+                    r.LifecycleStatus,
+                    r.CampusId,
+                    r.CampusName,
+                    r.Sex,
+                    ProfileYearLevel = r.YearLevel,
+                    ReleaseYearLevel = live.Select(x => x.YearLevel).FirstOrDefault(),
+                    ScheduledDate = live.Min(x => x.ScheduledDate),
+                    // NotRecorded is its own state: nobody has even scheduled this scholar's payout.
+                    Status = status,
+                    Received = status == GrantReleaseStatuses.Released,
+                    // Some, but not all, of the semesters in view have a release row.
+                    PartlyRecorded = mine.Count > 0 && mine.Count < semesters.Length,
+                    ReleaseId = releaseId,
+                    PendingReleaseIds = pendingIds,
+                    Amount = live.Count == 0 ? (decimal?)null : live.Sum(x => x.Amount),
+                    ReleasedAt = live.Max(x => x.ReleasedAt),
+                    ReferenceNo = refs.Length > 0 ? refs : null,
+                    Notes = notes.Length > 0 ? notes : null,
+                    Semesters = mine.Select(x => new { x.Id, x.Semester, x.Amount, x.Status, x.ReleasedAt, x.ScheduledDate }).ToList(),
+                };
             }).ToList();
 
             return Ok(new
@@ -205,10 +234,15 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 pending = scholars.Count(s => s.Status == GrantReleaseStatuses.Pending),
                 cancelled = scholars.Count(s => s.Status == GrantReleaseStatuses.Cancelled),
                 notRecorded = scholars.Count(s => s.Status == "NotRecorded"),
-                releasedAmount = scholars.Where(s => s.Received).Sum(s => s.Amount ?? 0m),
+                releasedAmount = releases.SelectMany(g => g)
+                    .Where(x => x.Status == GrantReleaseStatuses.Released).Sum(x => x.Amount),
                 scholars,
             });
         }
+
+        /// <summary>The semesters a period selection covers; "1 and 2" is both.</summary>
+        private static int[] PeriodSemesters(int semester) =>
+            semester == ScholarshipFrequencies.BothSemesters ? [1, 2] : [semester];
 
         /// <summary>
         /// GET /api/scholarship-releases/scholar/{scholarId} — every release on record for one
@@ -437,8 +471,14 @@ namespace PSUEISKOLARSystem.Server.Controllers
             var type = await db.ScholarshipTypes.FindAsync(dto.ScholarshipTypeId);
             if (type is null) return BadRequest(new { message = "Scholarship type not found." });
 
-            var periodError = ValidatePeriod(type.Frequency, dto.AcademicYear, dto.Semester, out var year);
-            if (periodError is not null) return BadRequest(new { message = periodError });
+            // Semesters 1 & 2 together schedules both on the same day, one release per semester.
+            var semesters = PeriodSemesters(dto.Semester);
+            var year = dto.AcademicYear?.Trim() ?? string.Empty;
+            foreach (var sem in semesters)
+            {
+                var periodError = ValidatePeriod(type.Frequency, dto.AcademicYear, sem, out year);
+                if (periodError is not null) return BadRequest(new { message = periodError });
+            }
 
             var amount = dto.Amount ?? type.Amount ?? 0m;
             var amountError = ValidateAmount(amount);
@@ -484,19 +524,22 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 return BadRequest(new { message = "No scholars holding this scholarship match the selected campuses and year level." });
 
             var ids = selected.Select(s => s.UserId).ToList();
-            var existing = await db.ScholarshipReleases
+            var existingRows = await db.ScholarshipReleases
                 .Where(r => r.ScholarshipTypeId == dto.ScholarshipTypeId
                          && r.AcademicYear == year
-                         && r.Semester == dto.Semester
+                         && semesters.Contains(r.Semester)
                          && ids.Contains(r.ScholarId))
-                .ToDictionaryAsync(r => r.ScholarId);
+                .ToListAsync();
+            var existing = existingRows.ToDictionary(r => (r.ScholarId, r.Semester));
 
             var recordedById = User.FindFirstValue(ClaimTypes.NameIdentifier);
             int created = 0, rescheduled = 0, skipped = 0;
+            var notified = new HashSet<string>();
 
+            foreach (var semester in semesters)
             foreach (var s in selected)
             {
-                if (existing.TryGetValue(s.UserId, out var row))
+                if (existing.TryGetValue((s.UserId, semester), out var row))
                 {
                     if (row.Status != GrantReleaseStatuses.Pending) { skipped++; continue; }
                     row.Amount = amount;
@@ -505,15 +548,17 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     row.YearLevel = dto.YearLevel ?? s.YearLevel;
                     if (!string.IsNullOrWhiteSpace(dto.Notes)) row.Notes = dto.Notes.Trim();
                     rescheduled++;
+                    notified.Add(s.UserId);
                     continue;
                 }
 
+                notified.Add(s.UserId);
                 db.ScholarshipReleases.Add(new ScholarshipRelease
                 {
                     ScholarId = s.UserId,
                     ScholarshipTypeId = dto.ScholarshipTypeId,
                     AcademicYear = year,
-                    Semester = dto.Semester,
+                    Semester = semester,
                     Amount = amount,
                     ScheduledDate = scheduledDate,
                     CampusId = s.CampusId,
@@ -531,11 +576,12 @@ namespace PSUEISKOLARSystem.Server.Controllers
             await db.SaveChangesAsync();
 
             // Tell each scholar when to expect it.
-            foreach (var s in selected.Where(s => !existing.TryGetValue(s.UserId, out var r) || r.Status == GrantReleaseStatuses.Pending))
+            var each = semesters.Length > 1 ? " per semester" : "";
+            foreach (var userId in notified)
                 await notifications.CreateAsync(
-                    s.UserId,
+                    userId,
                     "Scholarship release scheduled",
-                    $"Your {type.Name} for {PeriodLabel(year, dto.Semester)} (PHP {amount:N2}) is scheduled for release on {scheduledDate:MMMM d, yyyy}.",
+                    $"Your {type.Name} for {PeriodLabel(year, dto.Semester)} (PHP {amount:N2}{each}) is scheduled for release on {scheduledDate:MMMM d, yyyy}.",
                     NotificationCategories.Account,
                     "/my-profile");
 
@@ -552,7 +598,8 @@ namespace PSUEISKOLARSystem.Server.Controllers
         public async Task<IActionResult> ReleaseBatch(ReleaseBatchRequest dto)
         {
             var ids = (dto.ReleaseIds ?? []).Distinct().ToList();
-            if (ids.Count == 0) return BadRequest(new { message = "Select at least one release." });
+            if (ids.Count == 0 && (dto.ExemptReleaseIds?.Count ?? 0) == 0)
+                return BadRequest(new { message = "Select at least one release." });
 
             var releasedAt = dto.ReleasedAt ?? DateTime.UtcNow;
             if (releasedAt > DateTime.UtcNow.AddDays(1))
@@ -572,9 +619,21 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 if (!string.IsNullOrWhiteSpace(dto.ReferenceNo)) r.ReferenceNo = dto.ReferenceNo.Trim();
             }
 
-            if (releases.Count > 0)
+            /* Exemptions: scholars on the release day who did not collect their money. Their
+               release stays pending — "not yet received" — with a note saying why, so they can
+               be released individually once they claim it. */
+            var exemptIds = (dto.ExemptReleaseIds ?? []).Except(ids).Distinct().ToList();
+            var exempted = exemptIds.Count == 0 ? [] : await db.ScholarshipReleases
+                .Where(r => exemptIds.Contains(r.Id) && r.Status == GrantReleaseStatuses.Pending)
+                .ToListAsync();
+            var exemptNote = Trim(dto.ExemptReason) ?? "Not yet received — did not claim on the release day.";
+            foreach (var r in exempted)
+                r.Notes = exemptNote.Length > 500 ? exemptNote[..500] : exemptNote;
+
+            if (releases.Count > 0 || exempted.Count > 0)
                 db.Audit(this, "ReleaseScholarshipBatch",
                     $"Marked {releases.Count} scholarship release(s) as released" +
+                    (exempted.Count > 0 ? $"; {exempted.Count} exempted as not yet received" : "") +
                     (string.IsNullOrWhiteSpace(dto.ReferenceNo) ? "" : $" — ref {dto.ReferenceNo.Trim()}"));
             await db.SaveChangesAsync();
 
@@ -587,7 +646,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     "/my-profile");
 
             _ = notifications.BroadcastAsync("AnalyticsChanged");
-            return Ok(new { released = releases.Count, skipped = ids.Count - releases.Count });
+            return Ok(new { released = releases.Count, exempted = exempted.Count, skipped = ids.Count - releases.Count });
         }
 
         // PATCH /api/scholarship-releases/{id}/release
@@ -721,7 +780,9 @@ namespace PSUEISKOLARSystem.Server.Controllers
         private static string PeriodLabel(string academicYear, int semester) =>
             semester == ScholarshipFrequencies.WholeYearSemester
                 ? $"{academicYear} (whole year)"
-                : $"{academicYear} · Sem {semester}";
+                : semester == ScholarshipFrequencies.BothSemesters
+                    ? $"{academicYear} · Sem 1 & 2"
+                    : $"{academicYear} · Sem {semester}";
 
         /// <summary>
         /// Checks the period against the scholarship's own frequency — a per-year scholarship
@@ -816,7 +877,13 @@ namespace PSUEISKOLARSystem.Server.Controllers
         List<string>? ScholarIds,
         string? Notes);
 
-    public record ReleaseBatchRequest(List<int>? ReleaseIds, DateTime? ReleasedAt, string? ReferenceNo);
+    public record ReleaseBatchRequest(
+        List<int>? ReleaseIds,
+        DateTime? ReleasedAt,
+        string? ReferenceNo,
+        // Pending releases of scholars who did not collect; they stay "not yet received".
+        List<int>? ExemptReleaseIds = null,
+        [System.ComponentModel.DataAnnotations.MaxLength(500)] string? ExemptReason = null);
 
     public record CancelReleaseRequest(string Reason);
 }

@@ -51,9 +51,13 @@ export async function scheduleScholarshipReleases(data, token) {
 }
 
 /** Marks several pending releases as released in one step. */
-export async function releaseScholarshipBatch({ releaseIds, releasedAt, referenceNo }, token) {
+export async function releaseScholarshipBatch({ releaseIds, releasedAt, referenceNo, exemptReleaseIds, exemptReason }, token) {
   return apiSend(`${API}/release-batch`, 'POST',
-    { releaseIds, releasedAt: releasedAt || null, referenceNo: referenceNo || null },
+    {
+      releaseIds, releasedAt: releasedAt || null, referenceNo: referenceNo || null,
+      // Scholars who did not collect: their releases stay "not yet received".
+      exemptReleaseIds: exemptReleaseIds ?? null, exemptReason: exemptReason || null,
+    },
     token, 'Failed to mark the releases as released.');
 }
 

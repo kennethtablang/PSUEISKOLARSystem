@@ -21,6 +21,13 @@ namespace PSUEISKOLARSystem.Server.Models.Enums
         /// <summary>Semester 0 is the marker for a whole-year release, which has no semester.</summary>
         public const int WholeYearSemester = 0;
 
+        /// <summary>
+        /// Not a semester of its own: a period selection meaning "semesters 1 and 2 together",
+        /// for when both semesters of a per-semester scholarship are released on one day. Each
+        /// semester is still recorded as its own release.
+        /// </summary>
+        public const int BothSemesters = 12;
+
         /// <summary>The semesters a scholarship on this frequency is expected to pay out in.</summary>
         public static int[] SemestersFor(string frequency) => frequency switch
         {

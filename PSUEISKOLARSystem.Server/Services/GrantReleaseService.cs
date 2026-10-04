@@ -46,6 +46,9 @@ namespace PSUEISKOLARSystem.Server.Services
                     var released = await ReleaseDueAsync(db, notifications, stoppingToken);
                     if (released > 0)
                         logger.LogInformation("Released {Count} scheduled one-time grant(s).", released);
+                    var closed = await CloseFinishedTypesAsync(db, notifications, stoppingToken);
+                    if (closed > 0)
+                        logger.LogInformation("Closed {Count} grant type(s) whose release date has passed.", closed);
                 }
                 catch (OperationCanceledException) { break; }
                 catch (Exception ex)
@@ -115,6 +118,84 @@ namespace PSUEISKOLARSystem.Server.Services
             }
 
             return due.Count;
+        }
+
+        /// <summary>
+        /// Once a grant type's release day is over, the grantees under it have received what
+        /// they signed up for: the type is closed and every grantee account under it is
+        /// deactivated, automatically. Returns how many types were closed.
+        /// </summary>
+        public static async Task<int> CloseFinishedTypesAsync(
+            ApplicationDbContext db, INotificationService notifications, CancellationToken ct = default)
+        {
+            var today = PhilippineToday();
+            var finished = await db.GrantTypes
+                .Where(t => t.IsActive && t.AccountsClosedAt == null
+                         && t.ScheduledDate != null && t.ScheduledDate < today)
+                .ToListAsync(ct);
+
+            foreach (var type in finished)
+            {
+                var (closed, _) = await CloseGranteeAccountsAsync(db, type.Id, ct);
+                type.IsActive = false;
+                type.DeactivatedAt = DateTime.UtcNow;
+                type.AccountsClosedAt = DateTime.UtcNow;
+                db.AuditLogs.Add(new AuditLog
+                {
+                    UserId = "(system)",
+                    Action = "AutoCloseGrantType",
+                    Details = $"'{type.Name}' was released on {type.ScheduledDate:MMM d, yyyy}; " +
+                              $"the type and {closed} grantee account(s) under it were deactivated automatically",
+                });
+            }
+
+            if (finished.Count > 0)
+            {
+                await db.SaveChangesAsync(ct);
+                _ = notifications.BroadcastAsync("AnalyticsChanged");
+            }
+            return finished.Count;
+        }
+
+        /// <summary>
+        /// Deactivates the grantee accounts that hold a grant of this type. A grantee who is still
+        /// owed a pending grant under another, still-active type keeps their account. Scholars
+        /// are never touched — their account belongs to their scholarship. The caller saves.
+        /// </summary>
+        public static async Task<(int Closed, int KeptOpen)> CloseGranteeAccountsAsync(
+            ApplicationDbContext db, int grantTypeId, CancellationToken ct = default)
+        {
+            var granteeIds = await GranteeIdsAsync(db, grantTypeId, ct);
+
+            var stillOwed = await db.OneTimeGrants
+                .Where(g => granteeIds.Contains(g.ScholarId)
+                         && g.GrantTypeId != grantTypeId
+                         && g.ReleaseStatus == GrantReleaseStatuses.Pending
+                         && (g.GrantType == null || g.GrantType.IsActive))
+                .Select(g => g.ScholarId)
+                .Distinct()
+                .ToListAsync(ct);
+
+            var toClose = granteeIds.Except(stillOwed).ToList();
+            var users = await db.Users.Where(u => toClose.Contains(u.Id) && u.IsActive).ToListAsync(ct);
+            foreach (var u in users)
+            {
+                u.IsActive = false;
+                // Rotating the stamp ends any session the grantee still has open.
+                u.SecurityStamp = Guid.NewGuid().ToString();
+            }
+            return (users.Count, stillOwed.Count);
+        }
+
+        /// <summary>Accounts with the Grantee role holding a grant of this type.</summary>
+        public static async Task<List<string>> GranteeIdsAsync(ApplicationDbContext db, int grantTypeId, CancellationToken ct = default)
+        {
+            var granteeRoleId = await db.Roles.Where(r => r.Name == UserRoles.Grantee).Select(r => r.Id).FirstOrDefaultAsync(ct);
+            return await db.OneTimeGrants
+                .Where(g => g.GrantTypeId == grantTypeId && db.UserRoles.Any(ur => ur.UserId == g.ScholarId && ur.RoleId == granteeRoleId))
+                .Select(g => g.ScholarId)
+                .Distinct()
+                .ToListAsync(ct);
         }
     }
 }

@@ -9,6 +9,7 @@ import { PieChart, Pie, Cell, Tooltip } from 'recharts';
 import { useTheme } from '../context/ThemeContext';
 import { vizTokens, tooltipStyle } from '../constants/viz';
 import InfoTip from '../components/InfoTip';
+import DocumentTracker from '../components/DocumentTracker';
 import { GraduationCap, ClipboardList, AlertTriangle, BarChart2, Inbox, Clock, FileCheck, ArrowRight, RefreshCw, CalendarClock, MessageSquare, Megaphone, FolderOpen, User, Activity, UserCheck, Banknote, ShieldX, ShieldQuestion } from 'lucide-react';
 import { useTitle } from '../hooks/useTitle';
 import { useNow, daysUntil } from '../hooks/useNow';
@@ -226,7 +227,7 @@ export default function DashboardPage() {
         {user?.role !== 'Scholar' && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
             <QuickAction to="/document-review" Icon={FileCheck} label="Review Documents" />
-            <QuickAction to="/scholars" Icon={GraduationCap} label="Scholars" />
+            <QuickAction to="/scholarship-types" Icon={GraduationCap} label="Scholarship Types" />
             <QuickAction to="/announcements" Icon={Megaphone} label="Announcements" />
             <QuickAction to="/analytics" Icon={BarChart2} label="Data Visualization" />
           </div>
@@ -246,11 +247,11 @@ export default function DashboardPage() {
             />
             <DonutCard
               title="Document Submissions"
-              info="All document submissions by review outcome. 'Pending' is waiting on staff; 'Incomplete' was sent back to the scholar."
+              info="All document submissions by review outcome. 'Pending' is waiting on staff; 'Rejected' was sent back to the scholar to resubmit."
               data={[
                 { name: 'Verified', value: overview.submissions.verified, color: '#10a060' },
                 { name: 'Pending', value: overview.submissions.pending, color: '#e0a000' },
-                { name: 'Incomplete', value: overview.submissions.incomplete, color: '#e0603a' },
+                { name: 'Rejected', value: overview.submissions.incomplete, color: '#e0603a' },
               ]}
             />
           </div>
@@ -359,13 +360,48 @@ export default function DashboardPage() {
               <div className="flex gap-3 mt-4 flex-wrap">
                 <Pill label={`${verified} Verified`} tone="ok" Icon={FileCheck} />
                 {compliance.pendingCount > 0 && (
-                  <Pill label={`${compliance.pendingCount} Pending`} tone="warn" Icon={Clock} />
+                  <Pill label={`${compliance.pendingCount} Awaiting review`} tone="warn" Icon={Clock} />
                 )}
                 {compliance.incompleteItems.length > 0 && (
-                  <Pill label={`${compliance.incompleteItems.length} Incomplete`} tone="attention" Icon={AlertTriangle} />
+                  <Pill label={`${compliance.incompleteItems.length} Rejected`} tone="attention" Icon={AlertTriangle} />
                 )}
               </div>
             </div>
+
+            {/* Each document's progress: Submitted → Under Review → Verified, or → Rejected →
+                Need to resubmit; a missed deadline shows the slot as locked. */}
+            {compliance.documents?.length > 0 && (
+              <div className="clay-card p-5">
+                <p className="text-xs font-bold uppercase tracking-wider mb-4" style={{ color: 'var(--text-muted)' }}>
+                  Status of Each Document
+                </p>
+                <ul className="space-y-5">
+                  {compliance.documents.map(d => (
+                    <li key={d.requirementId}>
+                      <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
+                        <p className="text-sm font-bold" style={{ color: 'var(--text-strong)' }}>
+                          {d.name}
+                          {d.isRequired && <span className="text-[10px] font-bold ml-2 px-1.5 py-0.5 rounded-lg" style={{ background: 'var(--accent-soft-bg)', color: 'var(--accent)' }}>Required</span>}
+                        </p>
+                        <span className="text-[11px]" style={{ color: d.missed ? 'var(--danger)' : 'var(--text-muted)' }}>
+                          {d.missed
+                            ? `Locked — deadline was ${new Date(d.dueDate).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}`
+                            : d.submittedAt
+                              ? `Submitted ${new Date(d.submittedAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}`
+                              : d.dueDate ? `Due ${new Date(d.dueDate).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}` : 'Not submitted'}
+                        </span>
+                      </div>
+                      <DocumentTracker status={d.status} missed={d.missed} compact />
+                      {(d.status === 'Rejected' || d.status === 'Incomplete') && d.feedbackNote && (
+                        <p className="text-xs mt-2 px-3 py-2 rounded-xl" style={{ background: 'var(--danger-bg)', color: 'var(--danger)' }}>
+                          <strong>Feedback:</strong> {d.feedbackNote}
+                        </p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {/* Incomplete items list */}
             {compliance.incompleteItems.length > 0 && (

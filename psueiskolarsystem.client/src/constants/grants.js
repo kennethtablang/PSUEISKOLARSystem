@@ -31,19 +31,33 @@ export const WHOLE_YEAR_SEMESTER = 0;
 
 export const isRecurring = frequency => frequency === 'PerSemester' || frequency === 'PerYear';
 
+/**
+ * Not a semester of its own: "semesters 1 and 2 together", for when both semesters are
+ * released on one day. Matches ScholarshipFrequencies.BothSemesters on the server.
+ */
+export const BOTH_SEMESTERS = 12;
+
 /** The semesters a scholarship on this frequency is expected to pay out in. */
 export const semestersFor = frequency =>
   frequency === 'PerSemester' ? [1, 2]
   : frequency === 'PerYear' ? [WHOLE_YEAR_SEMESTER]
   : [];
 
+/** The period choices for a frequency: per-semester types may also pick both at once. */
+export const periodChoicesFor = frequency =>
+  frequency === 'PerSemester' ? [1, 2, BOTH_SEMESTERS] : semestersFor(frequency);
+
 export const semesterLabel = semester =>
-  semester === WHOLE_YEAR_SEMESTER ? 'Whole year' : `Semester ${semester}`;
+  semester === WHOLE_YEAR_SEMESTER ? 'Whole year'
+  : semester === BOTH_SEMESTERS ? 'Semesters 1 & 2'
+  : `Semester ${semester}`;
 
 export const periodLabel = (academicYear, semester) =>
   semester === WHOLE_YEAR_SEMESTER
     ? `${academicYear} (whole year)`
-    : `${academicYear} · Sem ${semester}`;
+    : semester === BOTH_SEMESTERS
+      ? `${academicYear} · Sem 1 & 2`
+      : `${academicYear} · Sem ${semester}`;
 
 /**
  * The academic year an unset picker should start on — the one that began in the current

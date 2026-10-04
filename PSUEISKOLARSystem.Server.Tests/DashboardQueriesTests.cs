@@ -179,7 +179,7 @@ public class DashboardQueriesTests
 
         db.DocumentSubmissions.Add(new PSUEISKOLARSystem.Server.Models.DocumentSubmission
         {
-            ScholarId = "me", RequirementId = 1, Status = DocumentStatus.Incomplete,
+            ScholarId = "me", RequirementId = 1, Status = DocumentStatus.Rejected,
             AcademicYear = "2025-2026", Semester = 1, SubmittedAt = DateTime.UtcNow.AddDays(-3),
             FileName = "old.pdf", StoredFileName = "old", ContentType = "application/pdf", FileSizeBytes = 1,
         });

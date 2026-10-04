@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
+using PSUEISKOLARSystem.Server.Interfaces;
 using PSUEISKOLARSystem.Server.Models;
 using PSUEISKOLARSystem.Server.Models.Enums;
 
@@ -114,6 +115,12 @@ namespace PSUEISKOLARSystem.Server.Data
                 if (scholarUserId is null)
                     return "this student already has a grantee account — it becomes their scholar account when they sign up";
 
+                // A scholar already holding a different scholarship matched again: a student may
+                // hold one scholarship at a time, so the line is left open and the office is told
+                // (see CrossMatchConflict) rather than the account being moved silently.
+                if (await FindConflictAsync(db, line) is { } conflict)
+                    return $"{conflict.ScholarName} already holds {conflict.CurrentScholarship} — flagged for the office to review";
+
                 // A scholar line for an existing scholar just links the two.
                 line.ClaimedByUserId = scholarUserId;
                 line.ClaimedAt = DateTime.UtcNow;
@@ -135,6 +142,103 @@ namespace PSUEISKOLARSystem.Server.Data
             return scholarUserId is not null
                 ? "grant recorded on the existing scholar's profile"
                 : "grant recorded on the existing grantee account";
+        }
+
+        /// <summary>
+        /// A scholar account matched again by the cross-matching of another scholarship type:
+        /// who the scholar is, the scholarship they hold, the one whose list they matched, and
+        /// the details that matched.
+        /// </summary>
+        public sealed record CrossMatchConflict(
+            int LineId,
+            string ScholarUserId,
+            string StudentId,
+            string ScholarName,
+            string CurrentScholarship,
+            int? MatchedScholarshipTypeId,
+            string MatchedScholarship,
+            string MatchedOn,
+            DateTime ListedAt);
+
+        /// <summary>
+        /// Null unless this scholar line belongs to a student who already has a scholar account
+        /// under a different scholarship type.
+        /// </summary>
+        public static async Task<CrossMatchConflict?> FindConflictAsync(ApplicationDbContext db, EligibilityRecord line)
+        {
+            if (line.Kind != EligibilityKinds.Scholar || line.ScholarshipTypeId is null) return null;
+            var holder = await db.ScholarProfiles
+                .Where(sp => sp.StudentId == line.StudentId
+                          && sp.ScholarshipTypeId != null
+                          && sp.ScholarshipTypeId != line.ScholarshipTypeId)
+                .Select(sp => new
+                {
+                    sp.UserId,
+                    sp.StudentId,
+                    Name = sp.User.LastName + ", " + sp.User.FirstName + (sp.User.MiddleName != null ? " " + sp.User.MiddleName : ""),
+                    Current = sp.ScholarshipType!.Name,
+                })
+                .FirstOrDefaultAsync();
+            if (holder is null) return null;
+
+            var matched = line.ScholarshipType?.Name
+                ?? await db.ScholarshipTypes.Where(t => t.Id == line.ScholarshipTypeId).Select(t => t.Name).FirstOrDefaultAsync()
+                ?? "another scholarship";
+            return new CrossMatchConflict(line.Id, holder.UserId, holder.StudentId, holder.Name, holder.Current,
+                line.ScholarshipTypeId, matched, await DescribeMatchAsync(db, line), line.CreatedAt);
+        }
+
+        /// <summary>Every open cross-match conflict — the report on the Scholarship Check page.</summary>
+        public static async Task<List<CrossMatchConflict>> FindAllConflictsAsync(ApplicationDbContext db)
+        {
+            var lines = await db.EligibilityRecords
+                .Include(e => e.ScholarshipType)
+                .Include(e => e.Campus)
+                .Where(e => e.ClaimedByUserId == null
+                         && e.Kind == EligibilityKinds.Scholar
+                         && db.ScholarProfiles.Any(sp => sp.StudentId == e.StudentId
+                                                      && sp.ScholarshipTypeId != null
+                                                      && sp.ScholarshipTypeId != e.ScholarshipTypeId))
+                .ToListAsync();
+            var result = new List<CrossMatchConflict>();
+            foreach (var line in lines)
+                if (await FindConflictAsync(db, line) is { } c) result.Add(c);
+            return result.OrderByDescending(c => c.ListedAt).ToList();
+        }
+
+        /// <summary>The data the office set on the line that the scholar matched.</summary>
+        private static async Task<string> DescribeMatchAsync(ApplicationDbContext db, EligibilityRecord line)
+        {
+            var parts = new List<string>
+            {
+                $"student no. {line.StudentId}",
+                $"name {line.LastName}, {line.FirstName}{(line.MiddleName is null ? "" : " " + line.MiddleName)}",
+            };
+            if (line.CampusId is int cid)
+            {
+                var campus = line.Campus?.Name ?? await db.Campuses.Where(c => c.Id == cid).Select(c => c.Name).FirstOrDefaultAsync();
+                parts.Add($"campus {campus}");
+            }
+            return string.Join(", ", parts);
+        }
+
+        /// <summary>Tells every administrator and coordinator about a cross-match conflict.</summary>
+        public static async Task NotifyConflictAsync(ApplicationDbContext db, INotificationService notifications, CrossMatchConflict c)
+        {
+            var staff = await (
+                from u in db.Users
+                join ur in db.UserRoles on u.Id equals ur.UserId
+                join r in db.Roles on ur.RoleId equals r.Id
+                where u.IsActive && (r.Name == UserRoles.Administrator || r.Name == UserRoles.ScholarshipCoordinator)
+                select u.Id).Distinct().ToListAsync();
+
+            await notifications.CreateForManyAsync(
+                staff,
+                "Scholar matched another scholarship",
+                $"{c.ScholarName} ({c.StudentId}) already holds {c.CurrentScholarship} but matched the cross-matching list of " +
+                $"{c.MatchedScholarship} on {c.MatchedOn}. A student may hold only one scholarship — review it on the Scholarship Check page.",
+                NotificationCategories.Account,
+                "/scholarship-verification");
         }
 
         /// <summary>

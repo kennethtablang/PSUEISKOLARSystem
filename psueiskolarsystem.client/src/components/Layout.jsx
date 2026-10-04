@@ -9,9 +9,9 @@ import GlobalSearch from './GlobalSearch';
 import Avatar from './Avatar';
 import Logo from './Logo';
 import {
-  LayoutDashboard, GraduationCap, FileCheck, Users, Bell,
+  LayoutDashboard, FileCheck, Users, Bell,
   FolderOpen, User, LogOut, BarChart2,
-  ChevronLeft, Settings, Menu, X, ClipboardList, Activity, Award, CalendarClock, MessageSquare,
+  ChevronLeft, Settings, Menu, X, ClipboardList, Activity, Award, MessageSquare,
   Sun, Moon, Monitor, HelpCircle, UserCheck, Banknote, ShieldCheck, Wallet,
   ListChecks, HandCoins, Gift, Building2,
 } from 'lucide-react';
@@ -24,18 +24,17 @@ const navByRole = {
   Administrator: [
     { to: '/dashboard',       label: 'Dashboard',       Icon: LayoutDashboard },
     { section: 'Manage' },
-    { to: '/scholars',        label: 'Scholars',         Icon: GraduationCap },
-    { to: '/grantees',        label: 'Grantees',         Icon: HandCoins },
+    // Scholars, grantees, cross-matching, documents and deadlines all live inside their
+    // scholarship or grant type, so the types are the way in rather than separate tabs.
+    { to: '/scholarship-types', label: 'Scholarship Types', Icon: Award },
+    { to: '/grant-types',     label: 'Grant Types',      Icon: Gift },
     { to: '/master-list',     label: 'Master List',      Icon: ListChecks },
     { to: '/scholar-approvals', label: 'Registrations',  Icon: UserCheck },
     { to: '/document-review', label: 'Document Review',  Icon: FileCheck, badge: 'documents' },
-    { to: '/deadlines',       label: 'Deadlines',        Icon: CalendarClock },
-    { to: '/scholarship-types', label: 'Scholarship Types', Icon: Award },
-    { to: '/grant-types',     label: 'Grant Types',      Icon: Gift },
     { to: '/scholarship-releases', label: 'Releases',    Icon: Wallet },
     { to: '/one-time-grants', label: 'One-Time Grants',  Icon: Banknote },
     { to: '/scholarship-verification', label: 'Scholarship Check', Icon: ShieldCheck },
-    { to: '/requirements',    label: 'Requirements',     Icon: ClipboardList },
+    { to: '/requirements',    label: 'Document Library', Icon: ClipboardList },
     { to: '/campuses',        label: 'Campuses & Programs', Icon: Building2 },
     { to: '/users',           label: 'Users',            Icon: Users },
     { section: 'Engage' },
@@ -50,13 +49,13 @@ const navByRole = {
   ScholarshipCoordinator: [
     { to: '/dashboard',       label: 'Dashboard',       Icon: LayoutDashboard },
     { section: 'Manage' },
-    { to: '/scholars',        label: 'Scholars',         Icon: GraduationCap },
-    { to: '/grantees',        label: 'Grantees',         Icon: HandCoins },
+    // Scholars, grantees, cross-matching, documents and deadlines all live inside their
+    // scholarship or grant type, so the types are the way in rather than separate tabs.
+    { to: '/scholarship-types', label: 'Scholarship Types', Icon: Award },
+    { to: '/grant-types',     label: 'Grant Types',      Icon: Gift },
     { to: '/master-list',     label: 'Master List',      Icon: ListChecks },
     { to: '/scholar-approvals', label: 'Registrations',  Icon: UserCheck },
     { to: '/document-review', label: 'Document Review',  Icon: FileCheck, badge: 'documents' },
-    { to: '/deadlines',       label: 'Deadlines',        Icon: CalendarClock },
-    { to: '/grant-types',     label: 'Grant Types',      Icon: Gift },
     { to: '/scholarship-releases', label: 'Releases',    Icon: Wallet },
     { to: '/one-time-grants', label: 'One-Time Grants',  Icon: Banknote },
     { to: '/scholarship-verification', label: 'Scholarship Check', Icon: ShieldCheck },
@@ -186,6 +185,9 @@ export default function Layout({ children }) {
 
   const navItems  = navByRole[user?.role] ?? [];
   const roleLabel = user?.role === 'ScholarshipCoordinator' ? 'Coordinator' : user?.role;
+  // Scholars and grantees already have "My Profile" in the menu (their scholar / grantee
+  // record), so the account page behind this button is their Settings.
+  const accountLabel = user?.role === 'Scholar' || user?.role === 'Grantee' ? 'Settings' : 'Profile';
   const isCollapsed = isDesktop && collapsed;
 
   /* ── Sidebar inner content ──────────────────────── */
@@ -429,7 +431,7 @@ export default function Layout({ children }) {
               radius={11}
               style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.22)' }}
             />
-            <IconBtn onClick={() => navigate('/profile')} title="My Profile">
+            <IconBtn onClick={() => navigate('/profile')} title={accountLabel === 'Settings' ? 'Account settings' : 'My Profile'}>
               <Settings size={13} strokeWidth={2.5} />
             </IconBtn>
             <IconBtn onClick={handleSignOut} title="Sign out" danger>
@@ -476,7 +478,7 @@ export default function Layout({ children }) {
                   fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap',
                 }}
               >
-                <Settings size={11} strokeWidth={2.5} /> Profile
+                <Settings size={11} strokeWidth={2.5} /> {accountLabel}
               </button>
               <button
                 onClick={handleSignOut}
@@ -604,7 +606,7 @@ export default function Layout({ children }) {
               hasAvatar={user?.hasAvatar}
               size={36}
               radius={11}
-              title="My Profile"
+              title={accountLabel === 'Settings' ? 'Account settings' : 'My Profile'}
               onClick={() => navigate('/profile')}
               style={{ boxShadow: '3px 3px 8px rgba(163,177,198,0.5), -2px -2px 5px rgba(255,255,255,0.85)' }}
             />

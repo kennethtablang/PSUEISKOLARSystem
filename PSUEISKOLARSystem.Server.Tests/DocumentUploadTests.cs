@@ -230,7 +230,7 @@ public class DocumentUploadTests
         controller.As(Scholar, UserRoles.Scholar);
 
         await controller.Upload(1, "2025-2026", 1, Fakes.File("first.pdf"));
-        db.DocumentSubmissions.Single().Status = DocumentStatus.Incomplete;
+        db.DocumentSubmissions.Single().Status = DocumentStatus.Rejected;
         db.SaveChanges();
 
         var result = await controller.Upload(1, "2025-2026", 1, Fakes.File("second.pdf"));

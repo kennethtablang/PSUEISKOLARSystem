@@ -46,7 +46,7 @@ namespace PSUEISKOLARSystem.Server.Services
                verified than are required. */
             var submissions = await db.DocumentSubmissions
                 .Where(s => s.ScholarId == userId && s.AcademicYear == academicYear && s.Semester == semester)
-                .Select(s => new { s.RequirementId, s.Status, s.SubmittedAt })
+                .Select(s => new { s.RequirementId, s.Status, s.SubmittedAt, s.ReviewedAt, s.FeedbackNote })
                 .ToListAsync(ct);
 
             /* A requirement can legitimately hold more than one row for a period — an
@@ -63,21 +63,38 @@ namespace PSUEISKOLARSystem.Server.Services
             DocumentStatus? LatestFor(int requirementId) =>
                 latestByRequirement.TryGetValue(requirementId, out var s) ? s : null;
 
+            var now = DateTime.UtcNow;
+            var dueByRequirement = await db.SubmissionDeadlines
+                .Where(d => d.AcademicYear == academicYear && d.Semester == semester && requirementIds.Contains(d.RequirementId))
+                .ToDictionaryAsync(d => d.RequirementId, d => d.DueDate, ct);
+
+            var documents = requirements.Select(r =>
+            {
+                var latest = submissions.Where(s => s.RequirementId == r.Id).OrderByDescending(s => s.SubmittedAt).FirstOrDefault();
+                DateTime? due = dueByRequirement.TryGetValue(r.Id, out var d) ? d : null;
+                return new DocumentTrackDto(
+                    r.Id, r.Name, r.IsRequired,
+                    latest?.Status.ToString(), latest?.SubmittedAt, latest?.ReviewedAt, latest?.FeedbackNote,
+                    due,
+                    Missed: latest is null && due is DateTime dd && dd < now);
+            }).ToList();
+
             // Counted per requirement from its latest row, and only over what applies to this
             // scholar — raw row counts included superseded rows and documents outside the
             // checklist, so "verified" could exceed "required".
             var compliance = new ComplianceDto(
                 TotalRequired: requirements.Count(r => r.IsRequired),
                 VerifiedCount: requirements.Count(r => r.IsRequired && LatestFor(r.Id) == DocumentStatus.Verified),
-                PendingCount: requirements.Count(r => LatestFor(r.Id) == DocumentStatus.Pending),
+                PendingCount: requirements.Count(r => LatestFor(r.Id) is DocumentStatus.Pending or DocumentStatus.UnderReview),
                 IncompleteItems: requirements
                     .Where(r => latestByRequirement.TryGetValue(r.Id, out var status)
-                                && status == DocumentStatus.Incomplete)
+                                && status == DocumentStatus.Rejected)
                     .Select(r => r.Name)
                     .ToList(),
                 ScholarshipTypeName: profile?.ScholarshipTypeName,
                 AcademicYear: academicYear,
-                Semester: semester);
+                Semester: semester,
+                Documents: documents);
 
             // Still open: applicable to this scholar, not yet verified, and not yet due.
             var verified = latestByRequirement
@@ -85,7 +102,6 @@ namespace PSUEISKOLARSystem.Server.Services
                 .Select(kv => kv.Key)
                 .ToHashSet();
 
-            var now = DateTime.UtcNow;
             var deadlines = await db.SubmissionDeadlines
                 .Where(d => d.AcademicYear == academicYear
                          && d.Semester == semester

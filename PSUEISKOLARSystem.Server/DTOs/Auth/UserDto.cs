@@ -27,5 +27,8 @@ namespace PSUEISKOLARSystem.Server.DTOs.Auth
 
         // True when a profile photo has been uploaded; fetch it from /api/users/{id}/avatar.
         public bool HasAvatar { get; set; }
+
+        // Sign-up only: a verification link was emailed and must be opened before signing in.
+        public bool EmailVerificationRequired { get; set; }
     }
 }

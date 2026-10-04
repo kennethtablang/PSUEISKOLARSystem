@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { registerScholar, checkEmailAvailable, checkEligibility, lookupGranteeAccount } from '../api/auth';
+import { registerScholar, checkEmailAvailable, checkEligibility, lookupGranteeAccount, resendVerification } from '../api/auth';
 import { getPrograms } from '../api/lookups';
 import { getCampuses } from '../api/campuses';
 import { useTitle } from '../hooks/useTitle';
 import { Lock, UserCheck, FolderUp, TrendingUp, Bell, ArrowRight, ArrowLeft, AlertTriangle, GraduationCap, CheckCircle2, XCircle, ShieldCheck, IdCard, BadgeCheck, RefreshCw } from 'lucide-react';
 import PasswordStrengthMeter, { getPasswordStrength } from '../components/PasswordStrengthMeter';
 import Logo from '../components/Logo';
+import AddressPicker from '../components/AddressPicker';
 import {
-  SectionTitle, UpperInput, ContactInput, InstitutionalEmailInput, BirthDateAge,
+  SectionTitle, NameInput, ContactInput, InstitutionalEmailInput, BirthDateAge,
   PersonalQuestions, FamilyQuestions,
 } from '../components/PersonalDetailsFields';
 import { EMPTY_PERSONAL, INSTITUTIONAL_DOMAIN, personalToApi, personalFromApi, localMobile } from '../constants/personal';
@@ -226,7 +227,12 @@ export default function RegisterPage() {
         personal:   personalToApi(form.personal),
         consentAccepted: form.consent,
       });
-      setSuccess({ role: user?.role || match?.kind, email: granteeAccount?.email ?? email, converted: !!granteeAccount });
+      setSuccess({
+        role: user?.role || match?.kind,
+        email: granteeAccount?.email ?? email,
+        converted: !!granteeAccount,
+        mustVerify: !!user?.emailVerificationRequired,
+      });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -382,13 +388,11 @@ export default function RegisterPage() {
                     ready. It was matched to the scholarship office&apos;s list, so no approval is needed.
                   </p>
 
-                  <div className="rounded-2xl p-4 mb-5 text-left"
-                    style={{ background: '#fffbea', border: '1px solid rgba(245,184,0,0.35)' }}>
-                    <p className="text-xs leading-relaxed" style={{ color: '#7a5c00' }}>
-                      If email verification is on, we sent a link to your inbox — click it before signing in.
-                      Can&apos;t find it? Check your <strong>spam</strong> or <strong>junk</strong> folder.
-                    </p>
-                  </div>
+                  {success.mustVerify ? (
+                    <VerifyEmailNotice email={success.email} />
+                  ) : (
+                    <p className="text-xs mb-5" style={{ color: 'var(--text-muted)' }}>You can sign in right away.</p>
+                  )}
                 </>)}
 
                 <button onClick={() => navigate('/login')}
@@ -468,19 +472,19 @@ export default function RegisterPage() {
                     <div className="grid sm:grid-cols-3 gap-3">
                       <div>
                         <label htmlFor="reg-last-name" className={LABEL} style={{ color: 'var(--text)' }}>Last Name</label>
-                        <UpperInput id="reg-last-name" required maxLength={100} value={form.lastName}
+                        <NameInput id="reg-last-name" required maxLength={100} value={form.lastName}
                           onChange={v => setIdentity('lastName', v)} placeholder="DELA CRUZ" />
                       </div>
                       <div>
                         <label htmlFor="reg-first-name" className={LABEL} style={{ color: 'var(--text)' }}>First Name</label>
-                        <UpperInput id="reg-first-name" required maxLength={100} value={form.firstName}
+                        <NameInput id="reg-first-name" required maxLength={100} value={form.firstName}
                           onChange={v => setIdentity('firstName', v)} placeholder="JUAN" />
                       </div>
                       <div>
                         <label htmlFor="reg-middle-name" className={LABEL} style={{ color: 'var(--text)' }}>
                           Middle Name <span style={{ color: 'var(--text-faint)', fontWeight: 400, textTransform: 'none' }}>(optional)</span>
                         </label>
-                        <UpperInput id="reg-middle-name" maxLength={100} value={form.middleName}
+                        <NameInput id="reg-middle-name" maxLength={100} value={form.middleName}
                           onChange={v => setIdentity('middleName', v)} placeholder="SANTOS" />
                       </div>
                     </div>
@@ -570,12 +574,7 @@ export default function RegisterPage() {
 
                     <BirthDateAge required value={form.birthDate} onChange={v => set('birthDate', v)} />
 
-                    <div>
-                      <label htmlFor="reg-address" className={LABEL} style={{ color: 'var(--text)' }}>Complete Address</label>
-                      <textarea id="reg-address" rows={2} required maxLength={500}
-                        value={form.address} onChange={e => set('address', e.target.value)}
-                        placeholder="House No., Street, Barangay, Municipality, Province" className="clay-input" />
-                    </div>
+                    <AddressPicker required value={form.address} onChange={v => set('address', v)} />
 
                     <div>
                       <label htmlFor="reg-contact" className={LABEL} style={{ color: 'var(--text)' }}>Contact Number</label>
@@ -724,6 +723,39 @@ function StepButtons({ onBack, label }) {
         className="clay-btn clay-btn-primary flex-1 py-3.5 text-sm flex items-center justify-center gap-2">
         {label} <ArrowRight size={15} strokeWidth={2.5} />
       </button>
+    </div>
+  );
+}
+
+/* Shown after sign-up while the account is waiting on its email address to be confirmed: the
+   account cannot sign in until the link in the verification email has been opened. */
+function VerifyEmailNotice({ email }) {
+  const [state, setState] = useState({ busy: false, msg: '' });
+  async function resend() {
+    setState({ busy: true, msg: '' });
+    try {
+      const data = await resendVerification(email);
+      setState({ busy: false, msg: data?.message || 'A new verification link has been sent.' });
+    } catch (err) {
+      setState({ busy: false, msg: err.message });
+    }
+  }
+  return (
+    <div className="rounded-2xl p-4 mb-5 text-left space-y-2"
+      style={{ background: '#fffbea', border: '1px solid rgba(245,184,0,0.35)' }}>
+      <p className="text-sm font-bold" style={{ color: '#7a5c00' }}>Verify your email to activate the account</p>
+      <p className="text-xs leading-relaxed" style={{ color: '#7a5c00' }}>
+        We sent a verification link to <strong>{email}</strong>. Open it to verify your email — you can sign in
+        once it is verified. Can&apos;t find it? Check your <strong>spam</strong> or <strong>junk</strong> folder.
+      </p>
+      {state.msg
+        ? <p className="text-xs font-semibold" role="status" style={{ color: '#7a5c00' }}>{state.msg}</p>
+        : (
+          <button type="button" onClick={resend} disabled={state.busy}
+            className="text-xs font-bold underline" style={{ color: 'var(--accent-strong)' }}>
+            {state.busy ? 'Sending…' : 'Resend verification email'}
+          </button>
+        )}
     </div>
   );
 }

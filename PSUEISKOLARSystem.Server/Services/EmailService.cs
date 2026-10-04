@@ -919,7 +919,7 @@ namespace PSUEISKOLARSystem.Server.Services
             feedback = feedback is null ? null : Enc(feedback);
             var (iconColor, statusLabel, statusDesc) = isVerified
                 ? ("#065f46", "Verified", "Your document has been reviewed and approved.")
-                : ("#991b1b", "Incomplete", "Your document needs attention. Please review the feedback below and resubmit.");
+                : ("#991b1b", "Rejected", "Your document was rejected and needs to be resubmitted. Please review the feedback below.");
 
             var feedbackBlock = !string.IsNullOrWhiteSpace(feedback)
                 ? $"""

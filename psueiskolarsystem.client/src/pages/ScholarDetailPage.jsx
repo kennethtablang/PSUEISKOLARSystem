@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { AlertTriangle, Printer, Award, Plus, BanknoteArrowUp, History, Camera, Wallet, FileCheck, Eye, Download, CalendarClock } from 'lucide-react';
+import { AlertTriangle, Printer, Award, Plus, BanknoteArrowUp, History, Camera, Wallet, FileCheck, Eye, Download, CalendarClock, Lock } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
@@ -9,6 +9,7 @@ import { getScholarProfile, upsertScholarProfile, getGrades, addGrade, updateGra
 import { getPrograms, getScholarshipTypes } from '../api/lookups';
 import { getOneTimeGrants } from '../api/oneTimeGrants';
 import { getScholarReleases } from '../api/scholarshipReleases';
+import { getMissedDeadlines } from '../api/deadlines';
 import { getCampuses } from '../api/campuses';
 import { getSubmissions, previewFile, downloadFile } from '../api/documents';
 import { uploadAvatarFor, clearAvatarCache } from '../api/avatars';
@@ -28,6 +29,7 @@ import {
   PersonalDetailsView, ContactInput, BirthDateAge, PersonalQuestions, FamilyQuestions, SectionTitle,
 } from '../components/PersonalDetailsFields';
 import { ageFrom, localMobile, personalFromApi, personalToApi } from '../constants/personal';
+import AddressPicker from '../components/AddressPicker';
 
 export default function ScholarDetailPage() {
   useTitle('Scholar Profile');
@@ -50,6 +52,7 @@ export default function ScholarDetailPage() {
   const [scholarshipHistory, setScholarshipHistory] = useState([]);
   const [grants, setGrants] = useState(null);         // { items, totalAmount, … }
   const [releases, setReleases] = useState([]);       // recurring per-period payouts
+  const [missed, setMissed] = useState([]);           // deadlines passed with nothing submitted
   const [showGrantModal, setShowGrantModal] = useState(false);
   const [campuses, setCampuses] = useState([]);
   const [showDocuments, setShowDocuments] = useState(false);
@@ -161,7 +164,7 @@ export default function ScholarDetailPage() {
     if (!profile) setLoading(true);
     setError('');
     try {
-      const [p, prog, st, g, hist, gr, rel, camp] = await Promise.all([
+      const [p, prog, st, g, hist, gr, rel, camp, miss] = await Promise.all([
         getScholarProfile(targetUserId, token),
         getPrograms(token),
         getScholarshipTypes(token),
@@ -170,6 +173,7 @@ export default function ScholarDetailPage() {
         getOneTimeGrants(token, { scholarId: targetUserId, pageSize: 50 }).catch(() => null),
         getScholarReleases(targetUserId, token).catch(() => []),
         getCampuses(token).catch(() => []),
+        getMissedDeadlines(token, targetUserId).catch(() => []),
       ]);
       setProfile(p);
       setPrograms(prog);
@@ -179,6 +183,7 @@ export default function ScholarDetailPage() {
       setGrants(gr);
       setReleases(rel ?? []);
       setCampuses(camp ?? []);
+      setMissed(miss ?? []);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -410,6 +415,7 @@ export default function ScholarDetailPage() {
 
             {/* Recurring per-period payouts. A scholar is told "Your scholarship has been
                 released" and sent here, so this is where the release has to be visible. */}
+            {missed.length > 0 && <MissedDeadlinesCard missed={missed} isAdminOrCoord={isAdminOrCoord} />}
             <ScholarshipReleasesCard releases={releases} isAdminOrCoord={isAdminOrCoord} />
 
             {/* One-time grants — one-off awards on top of the scholarship */}
@@ -651,6 +657,35 @@ function ScholarshipCard({ profile, history, isAdminOrCoord, onChange }) {
    Read-only here: recording and releasing are done from the Releases page, which has the
    period pickers and the batch generator. This card exists so the scholar can see the money
    they were notified about, and so staff see it beside the one-time grants. */
+/* Requirements whose deadline passed with nothing submitted. Uploading is locked for that
+   period, so the scholar sees here what they missed instead of a silent gap in the checklist. */
+function MissedDeadlinesCard({ missed, isAdminOrCoord }) {
+  return (
+    <div className="clay-card p-5 mb-6" style={{ border: '1.5px solid var(--danger-border)' }}>
+      <div className="flex items-center gap-2 mb-3">
+        <Lock size={15} style={{ color: 'var(--danger)' }} />
+        <h2 className="font-black text-sm" style={{ color: 'var(--text-strong)' }}>Missed Deadlines</h2>
+        <span className="status-badge tone-bad ml-auto">{missed.length} locked</span>
+      </div>
+      <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>
+        {isAdminOrCoord
+          ? 'Nothing was submitted before these deadlines, so the scholar can no longer upload them. You can still file a document for them from Document Review.'
+          : 'Nothing was submitted before these deadlines, so uploading is locked for them. Contact the scholarship office about any of these.'}
+      </p>
+      <ul className="space-y-2">
+        {missed.map(m => (
+          <li key={m.id} className="flex items-center justify-between gap-3 px-3 py-2 rounded-xl text-sm" style={{ background: 'var(--danger-bg)' }}>
+            <span className="font-semibold" style={{ color: 'var(--danger)' }}>{m.requirementName}</span>
+            <span className="text-xs shrink-0" style={{ color: 'var(--danger)' }}>
+              {m.academicYear} · Sem {m.semester} · due {new Date(m.dueDate).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function ScholarshipReleasesCard({ releases, isAdminOrCoord }) {
   const released = releases.filter(r => r.status === 'Released');
   const totalReleased = released.reduce((sum, r) => sum + r.amount, 0);
@@ -931,9 +966,7 @@ function EditProfileModal({ profile, userId, programs, campuses, scholarshipType
           <Field label="Contact Number">
             <ContactInput value={form.contactLocal} onChange={v => set('contactLocal', v)} />
           </Field>
-          <Field label="Complete Address">
-            <textarea value={form.address} onChange={e => set('address', e.target.value)} rows={3} maxLength={500} className="clay-input" />
-          </Field>
+          <AddressPicker value={form.address} onChange={v => set('address', v)} />
           <ModalButtons onClose={onClose} submitting={submitting} label="Save" />
         </form>
       </ClayModal>
@@ -999,9 +1032,7 @@ function EditProfileModal({ profile, userId, programs, campuses, scholarshipType
           </Field>
           <BirthDateAge value={form.birthDate} onChange={v => set('birthDate', v)} />
         </div>
-        <Field label="Complete Address">
-          <textarea value={form.address} onChange={e => set('address', e.target.value)} rows={2} maxLength={500} className="clay-input" />
-        </Field>
+        <AddressPicker value={form.address} onChange={v => set('address', v)} />
 
         <SectionTitle>Personal Information</SectionTitle>
         <PersonalQuestions value={form.personal} onChange={v => set('personal', v)} />
@@ -1056,7 +1087,7 @@ function ScholarDocumentsModal({ scholarId, name, token, onClose }) {
       ) : (
         <>
           <div className="flex gap-1.5 mb-4">
-            {[['Verified', 'Approved'], ['Pending', 'Pending'], ['Incomplete', 'Returned'], ['', 'All']].map(([v, label]) => (
+            {[['Verified', 'Approved'], ['Pending', 'Pending'], ['Rejected', 'Rejected'], ['', 'All']].map(([v, label]) => (
               <button key={label} onClick={() => setStatus(v)} className="px-3 py-1.5 rounded-xl text-xs font-bold"
                 style={status === v ? { background: '#002570', color: '#fff' } : { background: 'var(--surface-inset)', color: 'var(--text)' }}>
                 {label}

@@ -217,6 +217,46 @@ namespace PSUEISKOLARSystem.Server.Controllers
             return Ok(report);
         }
 
+        /// <summary>
+        /// GET /api/deadlines/missed?scholarId= — deadlines that passed with nothing submitted by
+        /// this scholar, across every period. Each one is a requirement locked for its period;
+        /// the scholar's profile lists them. Scholars may only ask about themselves.
+        /// </summary>
+        [HttpGet("missed")]
+        public async Task<IActionResult> Missed([FromQuery] string? scholarId)
+        {
+            var me = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            var isStaff = User.IsInRole(UserRoles.Administrator) || User.IsInRole(UserRoles.ScholarshipCoordinator);
+            var who = isStaff && !string.IsNullOrWhiteSpace(scholarId) ? scholarId : me;
+
+            var now = DateTime.UtcNow;
+            var past = await db.SubmissionDeadlines
+                .Where(d => d.DueDate < now && d.Requirement.IsActive)
+                .Select(d => new { d.Id, d.RequirementId, RequirementName = d.Requirement.Name, d.AcademicYear, d.Semester, d.DueDate })
+                .ToListAsync();
+            if (past.Count == 0) return Ok(Array.Empty<object>());
+
+            var applicable = await DeadlineHelper.GetApplicableScholarsBatchAsync(db, past.Select(d => d.RequirementId).Distinct().ToList());
+            var submitted = (await db.DocumentSubmissions
+                .Where(s => s.ScholarId == who)
+                .Select(s => new { s.RequirementId, s.AcademicYear, s.Semester })
+                .ToListAsync())
+                .Select(s => (s.RequirementId, s.AcademicYear, s.Semester))
+                .ToHashSet();
+
+            // Only periods since the scholar joined — a deadline from before they had an account
+            // was never theirs to meet.
+            var joined = await db.ScholarProfiles.Where(sp => sp.UserId == who).Select(sp => (DateTime?)sp.EnrolledAt).FirstOrDefaultAsync();
+
+            var missed = past
+                .Where(d => applicable.TryGetValue(d.RequirementId, out var list) && list.Any(s => s.Id == who))
+                .Where(d => joined is null || d.DueDate > joined)
+                .Where(d => !submitted.Contains((d.RequirementId, d.AcademicYear, d.Semester)))
+                .OrderByDescending(d => d.DueDate)
+                .ToList();
+            return Ok(missed);
+        }
+
         public record DeadlineRequest(int RequirementId, string AcademicYear, int Semester, DateTime DueDate);
         public record UpdateDeadlineRequest(DateTime DueDate);
     }

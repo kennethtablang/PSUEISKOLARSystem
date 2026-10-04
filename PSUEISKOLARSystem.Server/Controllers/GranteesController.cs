@@ -7,6 +7,7 @@ using PSUEISKOLARSystem.Server.Data;
 using PSUEISKOLARSystem.Server.DTOs;
 using PSUEISKOLARSystem.Server.DTOs.Scholars;
 using PSUEISKOLARSystem.Server.Models.Enums;
+using PSUEISKOLARSystem.Server.Services;
 
 namespace PSUEISKOLARSystem.Server.Controllers
 {
@@ -30,25 +31,19 @@ namespace PSUEISKOLARSystem.Server.Controllers
             [FromQuery] int? grantTypeId,
             [FromQuery] bool? active,
             [FromQuery] string? search,
+            [FromQuery] string? sex,
+            [FromQuery] int? yearLevel,
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 20)
         {
             page = Math.Max(1, page);
             pageSize = Math.Clamp(pageSize, 1, 100);
 
-            var query = db.GranteeProfiles.AsQueryable();
-            if (campusId is int cid) query = query.Where(g => g.CampusId == cid);
-            if (programId is int pid) query = query.Where(g => g.ProgramId == pid);
-            if (grantTypeId is int gt) query = query.Where(g => db.OneTimeGrants.Any(x => x.ScholarId == g.UserId && x.GrantTypeId == gt));
-            if (active is bool a) query = query.Where(g => g.User.IsActive == a);
-            if (!string.IsNullOrWhiteSpace(search))
+            var query = ListFilters.Grantees(db, new ListFilters.GranteeFilter
             {
-                var s = search.Trim();
-                query = query.Where(g =>
-                    g.StudentId.Contains(s) ||
-                    (g.User.FirstName + " " + g.User.LastName).Contains(s) ||
-                    (g.User.Email != null && g.User.Email.Contains(s)));
-            }
+                CampusId = campusId, ProgramId = programId, GrantTypeId = grantTypeId, Active = active,
+                Search = search, Sex = sex, YearLevel = yearLevel,
+            });
 
             var total = await query.CountAsync();
             var items = await query
@@ -67,11 +62,12 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     CampusName = g.Campus != null ? g.Campus.Name : null,
                     ProgramCode = g.Program != null ? g.Program.Code : null,
                     g.YearLevel,
+                    g.Personal.Sex,
                     g.CreatedAt,
                     Grants = db.OneTimeGrants
                         .Where(x => x.ScholarId == g.UserId)
                         .OrderByDescending(x => x.AwardedOn)
-                        .Select(x => new { x.Id, x.Title, x.Amount, x.ReleaseStatus, x.ReleasedAt })
+                        .Select(x => new { x.Id, x.GrantTypeId, x.Title, x.Amount, x.ReleaseStatus, x.ReleasedAt })
                         .ToList(),
                 })
                 .ToListAsync();
@@ -124,7 +120,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 g.CampusId,
                 CampusName = g.Campus?.Name,
                 g.ProgramId,
-                ProgramName = g.Program?.Name,
+                ProgramName = g.Program?.DisplayName,
                 ProgramCode = g.Program?.Code,
                 g.YearLevel,
                 g.ContactNumber,

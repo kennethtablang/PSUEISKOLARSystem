@@ -11,9 +11,10 @@
  * Refresh gives up on a module that mixes the two).
  */
 const TONE = {
-  // Documents
+  // Documents (Incomplete is the old name for Rejected, kept for older history rows)
   Verified: 'ok',
   Pending: 'warn',
+  UnderReview: 'info',
   Incomplete: 'bad',
 
   // Scholar approval

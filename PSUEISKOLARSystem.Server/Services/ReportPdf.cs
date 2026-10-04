@@ -183,7 +183,7 @@ namespace PSUEISKOLARSystem.Server.Services
         public static string StatusColor(string status) => status switch
         {
             "Verified"   => Green,
-            "Incomplete" => Red,
+            "Rejected" or "Incomplete" => Red,
             _            => Amber,
         };
 

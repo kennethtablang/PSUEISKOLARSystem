@@ -16,6 +16,7 @@ import InfoTip from '../components/InfoTip';
 import StatusBadge from '../components/StatusBadge';
 import { statusDot } from '../constants/statusTones';
 import { useMediaQuery } from '../hooks/useMediaQuery';
+import DocumentTracker from '../components/DocumentTracker';
 
 export default function MyDocumentsPage() {
   useTitle('My Documents');
@@ -504,7 +505,9 @@ function Badge({ tone, children }) {
 function RequirementRow({ requirement, submission, deadline, uploading, removing, loadingPreview, isPreviewing, onUpload, onDelete, onPreview, onViewSample, uploadLocked, accept, token }) {
   const toast = useToast();
   const inputId  = `file-${requirement.id}`;
-  const canUpload = !submission || submission.status === 'Incomplete';
+  // The deadline passed and nothing was submitted: the slot is locked for this period.
+  const missed = !submission && !!deadline && new Date(deadline.dueDate) < new Date();
+  const canUpload = !missed && (!submission || submission.status === 'Rejected' || submission.status === 'Incomplete');
   const [showHistory, setShowHistory] = useState(false);
   const [history, setHistory] = useState(null);
 
@@ -545,10 +548,27 @@ function RequirementRow({ requirement, submission, deadline, uploading, removing
 
         {submission ? (
           <StatusBadge status={submission.status} className="shrink-0" />
+        ) : missed ? (
+          <span className="shrink-0 status-badge tone-bad"><Lock size={11} strokeWidth={2.6} /> Locked</span>
         ) : (
           <span className="shrink-0 text-xs" style={{ color: 'var(--text-muted)' }}>Not submitted</span>
         )}
       </div>
+
+      <div className="mt-3">
+        <DocumentTracker status={submission?.status ?? null} missed={missed} compact />
+      </div>
+
+      {missed && (
+        <div className="mt-2 p-2 rounded-xl text-xs flex items-start gap-1.5"
+          style={{ background: 'var(--danger-bg)', border: '1px solid var(--danger-border)', color: 'var(--danger)' }}>
+          <Lock size={12} className="mt-px shrink-0" />
+          <span>
+            The deadline passed on {new Date(deadline.dueDate).toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' })} and
+            nothing was submitted, so this requirement is locked for the period. Contact the scholarship office.
+          </span>
+        </div>
+      )}
 
       {submission && (
         <div className="mt-3 flex items-center gap-3 text-sm">
@@ -648,7 +668,9 @@ function RequirementRow({ requirement, submission, deadline, uploading, removing
                     {i < history.length - 1 && <div className="w-px flex-1 mt-1" style={{ background: 'var(--hairline-strong)', minHeight: 12 }} />}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold" style={{ color: 'var(--text-strong)' }}>{h.status}</p>
+                    <p className="text-xs font-semibold" style={{ color: 'var(--text-strong)' }}>
+                      {h.status === 'Pending' ? 'Submitted' : h.status === 'UnderReview' ? 'Under Review' : h.status === 'Incomplete' ? 'Rejected' : h.status}
+                    </p>
                     {h.note && <p className="text-xs" style={{ color: 'var(--text)' }}>{h.note}</p>}
                     <p className="text-xs mt-0.5" style={{ color: 'var(--text-faint)' }}>
                       {new Date(h.changedAt).toLocaleString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}

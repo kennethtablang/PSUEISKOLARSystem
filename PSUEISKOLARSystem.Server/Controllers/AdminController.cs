@@ -44,6 +44,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 });
 
             var result = await SampleDataSeeder.SeedAsync(services);
+            await Revision4SampleSeeder.SeedAsync(services);
             if (!result.AlreadySeeded)
             {
                 db.Audit(this, "SeedSampleData",

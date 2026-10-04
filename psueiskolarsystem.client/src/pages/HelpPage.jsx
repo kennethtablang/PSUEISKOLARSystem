@@ -15,7 +15,7 @@ const FAQS = [
   },
   {
     q: 'What do the document statuses mean?',
-    a: 'Pending means a coordinator hasn’t reviewed it yet. Verified means it was accepted. Incomplete means it needs to be resubmitted — open the document to see the reviewer’s note.',
+    a: 'Submitted means the office has it but has not opened it yet; Under Review means a coordinator is checking it. Verified means it was accepted. Rejected means it needs to be resubmitted — open the document to see the reviewer’s note.',
     roles: ['Scholar'],
   },
   {

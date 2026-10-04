@@ -76,8 +76,22 @@ namespace PSUEISKOLARSystem.Server.DTOs.Scholars
             if (MotherEducation is not null && !PersonalOptions.Education.Contains(MotherEducation)) return "Select a valid educational attainment for your mother.";
             if (MainSupportSource is not null && !PersonalOptions.SupportSource.Contains(MainSupportSource)) return "Select a valid main source of educational support.";
             if (Siblings is int s && SiblingsStudying is int st && st > s) return "Siblings currently studying cannot be more than the number of siblings.";
+
+            // Names and occupations are words, never numbers.
+            foreach (var (value, what) in new[]
+            {
+                (FatherLastName, "Father's last name"), (FatherFirstName, "Father's first name"), (FatherMiddleName, "Father's middle name"),
+                (MotherLastName, "Mother's last name"), (MotherFirstName, "Mother's first name"), (MotherMiddleName, "Mother's middle name"),
+                (FatherOccupation, "Father's occupation"), (MotherOccupation, "Mother's occupation"),
+            })
+            {
+                if (value is not null && value.Any(char.IsDigit)) return $"{what} cannot contain numbers.";
+            }
             return null;
         }
+
+        /// <summary>What occupation reads as for a parent who has passed away.</summary>
+        public const string NotApplicable = "N/A";
 
         public void ApplyTo(PersonalDetails p)
         {
@@ -95,16 +109,17 @@ namespace PSUEISKOLARSystem.Server.DTOs.Scholars
             p.FatherName = FullName(p.FatherLastName, p.FatherFirstName, p.FatherMiddleName);
             p.FatherLiving = FatherLiving;
             p.FatherEducation = Blank(FatherEducation);
-            p.FatherOccupation = Upper(FatherOccupation);
-            p.FatherMonthlyIncome = FatherMonthlyIncome;
+            // A parent who has passed away has no occupation or income — only the education stays.
+            p.FatherOccupation = FatherLiving == false ? NotApplicable : Upper(FatherOccupation);
+            p.FatherMonthlyIncome = FatherLiving == false ? null : FatherMonthlyIncome;
             p.MotherLastName = Upper(MotherLastName);
             p.MotherFirstName = Upper(MotherFirstName);
             p.MotherMiddleName = Upper(MotherMiddleName);
             p.MotherName = FullName(p.MotherLastName, p.MotherFirstName, p.MotherMiddleName);
             p.MotherLiving = MotherLiving;
             p.MotherEducation = Blank(MotherEducation);
-            p.MotherOccupation = Upper(MotherOccupation);
-            p.MotherMonthlyIncome = MotherMonthlyIncome;
+            p.MotherOccupation = MotherLiving == false ? NotApplicable : Upper(MotherOccupation);
+            p.MotherMonthlyIncome = MotherLiving == false ? null : MotherMonthlyIncome;
             p.FamilyMembers = FamilyMembers;
             p.Siblings = Siblings;
             p.SiblingsStudying = SiblingsStudying;

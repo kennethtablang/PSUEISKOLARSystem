@@ -1,11 +1,14 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { useToast, useConfirm } from '../context/UIContext';
-import { getSubmissions, reviewDocument, batchReviewDocuments, downloadFile, previewFile, getSubmissionHistory, getRequirements, uploadDocument } from '../api/documents';
+import {
+  getSubmissions, reviewDocument, batchReviewDocuments, downloadFile, previewFile, getSubmissionHistory,
+  getRequirements, uploadDocument, startDocumentReview,
+} from '../api/documents';
 import { getActiveSemester } from '../api/settings';
 import { useTitle } from '../hooks/useTitle';
-import { CheckCircle2, XCircle, FilePlus2, Download, Loader } from 'lucide-react';
+import { CheckCircle2, XCircle, FilePlus2, Download, Loader, ChevronDown, ChevronRight } from 'lucide-react';
 import DocumentPreview from '../components/DocumentPreview';
 import Pagination from '../components/Pagination';
 import { TableSkeleton, EmptyState } from '../components/ListState';
@@ -18,8 +21,20 @@ import Field from '../components/Field';
 import { ErrorBox } from './UsersPage';
 import { getUploadPolicy, FALLBACK_UPLOAD_POLICY, acceptAttribute, describeExtensions, validateUpload } from '../api/uploadPolicy';
 
-const STATUSES = ['', 'Pending', 'Verified', 'Incomplete'];
+// "Pending" is every document still waiting on a decision — submitted or under review.
+const STATUSES = [
+  ['Pending', 'Awaiting decision'],
+  ['UnderReview', 'Under Review'],
+  ['Verified', 'Verified'],
+  ['Rejected', 'Rejected'],
+];
+const awaiting = s => s.status === 'Pending' || s.status === 'UnderReview';
 
+/**
+ * Document Review, one row per scholar. A scholar who handed in five documents used to appear
+ * five times; now their name is listed once, and opening it shows every document they sent in
+ * a single scrollable review — each with its own Verified / Rejected decision.
+ */
 export default function DocumentReviewPage() {
   useTitle('Document Review');
   const { token } = useAuth();
@@ -27,10 +42,10 @@ export default function DocumentReviewPage() {
   const confirm = useConfirm();
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [reviewing, setReviewing] = useState(null);
+  const [reviewing, setReviewing] = useState(null);   // scholarId being reviewed
   const [filing, setFiling] = useState(false);
   const [filters, setFilters] = useState({ status: 'Pending', academicYear: '', semester: '' });
-  const [selected, setSelected] = useState(new Set());
+  const [selected, setSelected] = useState(new Set()); // scholarIds
   const [bulkFeedback, setBulkFeedback] = useState('');
   const [bulkBusy, setBulkBusy] = useState(false);
   const [search, setSearch] = useState('');
@@ -66,6 +81,34 @@ export default function DocumentReviewPage() {
     }
   }
 
+  // One group per scholar, newest activity first.
+  const groups = useMemo(() => {
+    const map = new Map();
+    for (const s of submissions) {
+      let g = map.get(s.scholarId);
+      if (!g) {
+        g = {
+          scholarId: s.scholarId, scholarName: s.scholarName, scholarEmail: s.scholarEmail,
+          studentId: s.studentId, scholarshipTypeName: s.scholarshipTypeName, docs: [], latest: s.submittedAt,
+        };
+        map.set(s.scholarId, g);
+      }
+      g.docs.push(s);
+      if (s.submittedAt > g.latest) g.latest = s.submittedAt;
+    }
+    return [...map.values()].sort((a, b) => String(b.latest).localeCompare(String(a.latest)));
+  }, [submissions]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return groups;
+    return groups.filter(g =>
+      (g.scholarName ?? '').toLowerCase().includes(q) ||
+      (g.scholarEmail ?? '').toLowerCase().includes(q) ||
+      (g.studentId ?? '').toLowerCase().includes(q) ||
+      g.docs.some(d => (d.requirementName ?? '').toLowerCase().includes(q)));
+  }, [groups, search]);
+
   function toggle(id) {
     setSelected(prev => {
       const next = new Set(prev);
@@ -73,25 +116,32 @@ export default function DocumentReviewPage() {
       return next;
     });
   }
-  /* "Select all" means the rows the reviewer can see. It used to select every loaded
-     submission, including those the search box had hidden — so searching for one scholar,
-     ticking the header box and pressing Verify verified everybody's pending documents. */
+  /* "Select all" means the scholars the reviewer can see — never rows the search has hidden. */
   function toggleAll() {
-    setSelected(allVisibleSelected ? new Set() : new Set(filtered.map(s => s.id)));
+    setSelected(allVisibleSelected ? new Set() : new Set(filtered.map(g => g.scholarId)));
   }
 
+  // Bulk decisions apply to the documents still awaiting a decision of each ticked scholar.
+  const selectedDocIds = filtered
+    .filter(g => selected.has(g.scholarId))
+    .flatMap(g => g.docs.filter(awaiting).map(d => d.id));
+
   async function handleBatch(status) {
-    if (selected.size === 0) return;
-    if (status === 'Incomplete' && !bulkFeedback.trim()) {
-      toast('Please add feedback explaining what needs correcting before marking incomplete.', 'error');
+    if (selectedDocIds.length === 0) { toast('The selected scholars have no documents awaiting a decision.', 'error'); return; }
+    if (status === 'Rejected' && !bulkFeedback.trim()) {
+      toast('Please add feedback explaining what needs correcting before rejecting.', 'error');
       return;
     }
-    if (!(await confirm({ title: `Mark as ${status}`, message: `Mark ${selected.size} submission(s) as ${status}?`, confirmLabel: 'Confirm' }))) return;
+    if (!(await confirm({
+      title: status === 'Rejected' ? 'Reject documents' : 'Verify documents',
+      message: `Mark ${selectedDocIds.length} document(s) from ${selected.size} scholar(s) as ${status}?`,
+      confirmLabel: 'Confirm',
+    }))) return;
     setBulkBusy(true);
     try {
-      const result = await batchReviewDocuments([...selected], status, bulkFeedback.trim() || null, token);
-      const count = result?.reviewed ?? selected.size;
-      toast(`${count} submission${count !== 1 ? 's' : ''} marked ${status}.`, 'success');
+      const result = await batchReviewDocuments(selectedDocIds, status, bulkFeedback.trim() || null, token);
+      const count = result?.reviewed ?? selectedDocIds.length;
+      toast(`${count} document${count !== 1 ? 's' : ''} marked ${status}.`, 'success');
       setBulkFeedback('');
       await load();
     } catch (e) { toast(e.message, 'error'); }
@@ -106,11 +156,11 @@ export default function DocumentReviewPage() {
         load(initialFilters);
       })
       .catch(() => load());
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* Paging here is client-side over an already-loaded list, so the page reset belongs with
-     the thing that invalidates it rather than in an effect watching `filters` — that effect
-     re-fired on every render, because `filters` is a fresh object each time. */
+     the thing that invalidates it rather than in an effect watching `filters`. */
   function setFilter(k, v) {
     const next = { ...filters, [k]: v };
     setFilters(next);
@@ -122,17 +172,11 @@ export default function DocumentReviewPage() {
   function changeSearch(v) { setSearch(v); setPage(1); setSelected(new Set()); }
   function changePageSize(v) { setPageSize(v); setPage(1); }
 
-  const pending = submissions.filter(s => s.status === 'Pending').length;
-
-  const filtered = search
-    ? submissions.filter(s =>
-        (s.scholarName ?? '').toLowerCase().includes(search.toLowerCase()) ||
-        (s.requirementName ?? '').toLowerCase().includes(search.toLowerCase()) ||
-        (s.scholarEmail ?? '').toLowerCase().includes(search.toLowerCase()))
-    : submissions;
-  const allVisibleSelected = filtered.length > 0 && filtered.every(s => selected.has(s.id));
+  const waitingScholars = groups.filter(g => g.docs.some(awaiting)).length;
+  const allVisibleSelected = filtered.length > 0 && filtered.every(g => selected.has(g.scholarId));
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const paged = filtered.slice((page - 1) * pageSize, page * pageSize);
+  const reviewingGroup = reviewing ? groups.find(g => g.scholarId === reviewing) : null;
 
   return (
     <Layout>
@@ -140,7 +184,9 @@ export default function DocumentReviewPage() {
         <div className="page-head">
           <div>
             <h1 className="page-title">Document Review</h1>
-            <p className="page-subtitle">{pending} pending review{pending !== 1 ? 's' : ''}</p>
+            <p className="page-subtitle">
+              {waitingScholars} scholar{waitingScholars !== 1 ? 's' : ''} with documents awaiting a decision
+            </p>
             <span className="page-title-bar" />
           </div>
           <button
@@ -162,7 +208,7 @@ export default function DocumentReviewPage() {
           />
           <select value={filters.status} onChange={e => setFilter('status', e.target.value)} className="clay-input" style={{ ...ctlStyle, width: 'auto' }}>
             <option value="">All Statuses</option>
-            {STATUSES.filter(Boolean).map(s => <option key={s} value={s}>{s}</option>)}
+            {STATUSES.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
           </select>
           <input
             type="text"
@@ -184,23 +230,25 @@ export default function DocumentReviewPage() {
         {/* Bulk action bar */}
         {selected.size > 0 && (
           <div className="clay-card p-3 mb-4 flex items-center gap-3 flex-wrap" style={{ background: 'var(--accent-soft-bg)', border: '1.5px solid var(--accent-soft-border)' }}>
-            <span className="text-sm font-bold px-2" style={{ color: 'var(--accent)' }}>{selected.size} selected</span>
+            <span className="text-sm font-bold px-2" style={{ color: 'var(--accent)' }}>
+              {selected.size} scholar{selected.size === 1 ? '' : 's'} · {selectedDocIds.length} document{selectedDocIds.length === 1 ? '' : 's'} awaiting
+            </span>
             <input
               value={bulkFeedback}
               onChange={e => setBulkFeedback(e.target.value)}
-              placeholder="Feedback (required to mark incomplete)"
+              placeholder="Feedback (required to reject)"
               className="clay-input flex-1"
               style={{ minWidth: 200 }}
             />
             <button onClick={() => handleBatch('Verified')} disabled={bulkBusy}
               className="clay-btn px-4 py-2 text-sm flex items-center gap-1.5 font-bold"
               style={{ background: 'var(--tone-ok-bg)', color: 'var(--tone-ok-fg)', opacity: bulkBusy ? 0.6 : 1 }}>
-              <CheckCircle2 size={15} strokeWidth={2.4} /> Verify Selected
+              <CheckCircle2 size={15} strokeWidth={2.4} /> Verify All
             </button>
-            <button onClick={() => handleBatch('Incomplete')} disabled={bulkBusy}
+            <button onClick={() => handleBatch('Rejected')} disabled={bulkBusy}
               className="clay-btn px-4 py-2 text-sm flex items-center gap-1.5 font-bold"
               style={{ background: 'var(--tone-bad-bg)', color: 'var(--tone-bad-fg)', opacity: bulkBusy ? 0.6 : 1 }}>
-              <XCircle size={15} strokeWidth={2.4} /> Mark Incomplete
+              <XCircle size={15} strokeWidth={2.4} /> Reject All
             </button>
             <button onClick={() => setSelected(new Set())} className="text-xs hover:underline" style={{ color: 'var(--text-muted)' }}>Clear</button>
           </div>
@@ -212,59 +260,65 @@ export default function DocumentReviewPage() {
           ) : filtered.length === 0 ? (
             <EmptyState title="No submissions found" message="No submissions match the current filters." />
           ) : (
-            <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-sm">
+            <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-sm">
               <thead className="clay-table-head">
                 <tr>
                   <th className="px-4 py-3">
                     <input type="checkbox" checked={allVisibleSelected}
-                      onChange={toggleAll} aria-label="Select all shown submissions"
+                      onChange={toggleAll} aria-label="Select all shown scholars"
                       style={{ width: 16, height: 16, accentColor: 'var(--accent)' }} />
                   </th>
-                  {['Scholar', 'Document', 'File', 'Period', 'Status', ''].map(h => (
+                  {['Scholar', 'Scholarship', 'Documents', 'Status', 'Last Submitted', ''].map(h => (
                     <th key={h} className="text-left px-5 py-3 text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {paged.map(s => (
-                  <tr key={s.id} className="clay-table-row">
-                    <td className="px-4 py-3.5">
-                      <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggle(s.id)}
-                        aria-label={`Select ${s.scholarName} — ${s.requirementName}`}
-                        style={{ width: 16, height: 16, accentColor: 'var(--accent)' }} />
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <p className="font-semibold" style={{ color: 'var(--text-strong)' }}>{s.scholarName}</p>
-                      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{s.scholarEmail}</p>
-                    </td>
-                    <td className="px-5 py-3.5" style={{ color: 'var(--text)' }}>{s.requirementName}</td>
-                    <td className="px-5 py-3.5">
-                      <button
-                        onClick={() => setReviewing(s)}
-                        title="View document"
-                        className="text-xs hover:underline truncate max-w-[180px] block text-left"
-                        style={{ color: 'var(--accent)' }}
-                      >
-                        {s.fileName}
-                      </button>
-                    </td>
-                    <td className="px-5 py-3.5 text-xs whitespace-nowrap" style={{ color: 'var(--text)' }}>
-                      {s.academicYear} · Sem {s.semester}
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <StatusBadge status={s.status} />
-                    </td>
-                    <td className="px-5 py-3.5 text-right">
-                      <button
-                        onClick={() => setReviewing(s)}
-                        className="text-xs font-medium hover:underline"
-                        style={{ color: s.status === 'Pending' ? 'var(--accent)' : 'var(--text-muted)' }}
-                      >
-                        {s.status === 'Pending' ? 'Review' : 'Update'}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {paged.map(g => {
+                  const waiting = g.docs.filter(awaiting).length;
+                  const counts = g.docs.reduce((acc, d) => ({ ...acc, [d.status]: (acc[d.status] ?? 0) + 1 }), {});
+                  return (
+                    <tr key={g.scholarId} className="clay-table-row">
+                      <td className="px-4 py-3.5">
+                        <input type="checkbox" checked={selected.has(g.scholarId)} onChange={() => toggle(g.scholarId)}
+                          aria-label={`Select ${g.scholarName}`}
+                          style={{ width: 16, height: 16, accentColor: 'var(--accent)' }} />
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <button onClick={() => setReviewing(g.scholarId)} className="font-semibold hover:underline text-left" style={{ color: 'var(--text-strong)' }}>
+                          {g.scholarName}
+                        </button>
+                        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{g.studentId ? `${g.studentId} · ` : ''}{g.scholarEmail}</p>
+                      </td>
+                      <td className="px-5 py-3.5 text-xs" style={{ color: 'var(--text)' }}>{g.scholarshipTypeName ?? '—'}</td>
+                      <td className="px-5 py-3.5" style={{ color: 'var(--text)' }}>
+                        <p className="font-semibold">{g.docs.length} document{g.docs.length === 1 ? '' : 's'}</p>
+                        <p className="text-xs truncate max-w-[260px]" style={{ color: 'var(--text-muted)' }} title={g.docs.map(d => d.requirementName).join(', ')}>
+                          {g.docs.map(d => d.requirementName).join(', ')}
+                        </p>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <div className="flex flex-wrap gap-1">
+                          {['Pending', 'UnderReview', 'Verified', 'Rejected'].filter(st => counts[st]).map(st => (
+                            <StatusBadge key={st} status={st} label={`${counts[st]} ${st === 'Pending' ? 'Submitted' : st === 'UnderReview' ? 'Under Review' : st}`} icon={false} />
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5 text-xs whitespace-nowrap" style={{ color: 'var(--text)' }}>
+                        {new Date(g.latest).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </td>
+                      <td className="px-5 py-3.5 text-right">
+                        <button
+                          onClick={() => setReviewing(g.scholarId)}
+                          className="text-xs font-bold hover:underline"
+                          style={{ color: waiting ? 'var(--accent)' : 'var(--text-muted)' }}
+                        >
+                          {waiting ? `Review ${waiting}` : 'View'}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table></div>
           )}
@@ -278,17 +332,17 @@ export default function DocumentReviewPage() {
             pageSize={pageSize}
             onPageChange={setPage}
             onPageSizeChange={changePageSize}
-            label="submissions"
+            label="scholars"
           />
         )}
       </div>
 
-      {reviewing && (
-        <ReviewModal
-          submission={reviewing}
+      {reviewingGroup && (
+        <ScholarReviewModal
+          group={reviewingGroup}
           token={token}
-          onClose={() => setReviewing(null)}
-          onSaved={status => { setReviewing(null); toast(`Document marked ${status}.`, 'success'); load(); }}
+          onClose={() => { setReviewing(null); load(); }}
+          onSaved={count => { setReviewing(null); toast(`${count} decision${count === 1 ? '' : 's'} saved — the scholar has been notified.`, 'success'); load(); }}
         />
       )}
 
@@ -419,21 +473,100 @@ function FileForScholarModal({ token, defaultPeriod, onClose, onSaved }) {
   );
 }
 
-function ReviewModal({ submission, token, onClose, onSaved }) {
-  const toast = useToast();
-  // Updating a document already marked Incomplete starts from that decision, not Verified.
-  const [status, setStatus] = useState(submission.status === 'Incomplete' ? 'Incomplete' : 'Verified');
-  const [feedback, setFeedback] = useState(submission.feedbackNote ?? '');
+/**
+ * Every document one scholar handed in, reviewed in one place. The list scrolls; each document
+ * shows its file beside its own Verified / Rejected decision, so the reviewer can verify some
+ * and reject others in a single pass. Opening it moves the scholar's submitted documents to
+ * Under Review, which is what their tracker shows.
+ */
+function ScholarReviewModal({ group, token, onClose, onSaved }) {
+  // { [submissionId]: { status, feedback } } — only documents the reviewer has decided on.
+  const [decisions, setDecisions] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [history, setHistory] = useState([]);
 
+  const docs = useMemo(() => [...group.docs].sort((a, b) =>
+    Number(awaiting(b)) - Number(awaiting(a)) || String(a.requirementName).localeCompare(String(b.requirementName))),
+  [group.docs]);
+
+  // Opening the review is the office "looking at" the documents.
+  useEffect(() => {
+    const ids = group.docs.filter(d => d.status === 'Pending').map(d => d.id);
+    if (ids.length) startDocumentReview(ids, token).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const decided = Object.entries(decisions).filter(([, d]) => d?.status);
+
+  function setDecision(id, patch) {
+    setDecisions(prev => ({ ...prev, [id]: { ...(prev[id] ?? { feedback: '' }), ...patch } }));
+  }
+
+  async function handleSave() {
+    setError('');
+    const missing = decided.find(([, d]) => d.status === 'Rejected' && !d.feedback?.trim());
+    if (missing) {
+      const doc = docs.find(d => String(d.id) === missing[0]);
+      setError(`Add feedback for "${doc?.requirementName}" explaining what needs to be corrected.`);
+      return;
+    }
+    setSubmitting(true);
+    try {
+      for (const [id, d] of decided)
+        await reviewDocument(Number(id), d.status, d.feedback?.trim() || null, token);
+      onSaved(decided.length);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal
+      title="Review Documents"
+      subtitle={`${group.scholarName}${group.studentId ? ` · ${group.studentId}` : ''}${group.scholarshipTypeName ? ` · ${group.scholarshipTypeName}` : ''} · ${docs.length} document${docs.length === 1 ? '' : 's'}`}
+      onClose={onClose}
+      width={1080}
+      dismissible={!submitting}
+    >
+      {error && <ErrorBox>{error}</ErrorBox>}
+      <div className="space-y-4 overflow-y-auto pr-1" style={{ maxHeight: 'min(70vh, 820px)' }}>
+        {docs.map((d, i) => (
+          <DocReviewCard
+            key={d.id}
+            index={i + 1}
+            submission={d}
+            token={token}
+            decision={decisions[d.id]}
+            onDecision={patch => setDecision(d.id, patch)}
+          />
+        ))}
+      </div>
+      <div className="flex items-center gap-3 pt-4 mt-4 flex-wrap" style={{ borderTop: '1.5px solid var(--hairline)' }}>
+        <p className="text-xs flex-1" style={{ color: 'var(--text-muted)' }}>
+          {decided.length === 0
+            ? 'Choose Verified or Rejected on each document you have checked.'
+            : `${decided.length} decision${decided.length === 1 ? '' : 's'} ready to save.`}
+        </p>
+        <button type="button" onClick={onClose} disabled={submitting} className="clay-btn clay-btn-ghost px-5 py-2.5 text-sm">Close</button>
+        <button type="button" onClick={handleSave} disabled={submitting || decided.length === 0}
+          className="clay-btn clay-btn-primary px-5 py-2.5 text-sm" style={{ opacity: submitting || decided.length === 0 ? 0.6 : 1 }}>
+          {submitting ? 'Saving…' : `Save ${decided.length || ''} Decision${decided.length === 1 ? '' : 's'}`}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+function DocReviewCard({ index, submission, token, decision, onDecision }) {
+  const toast = useToast();
   const [preview, setPreview] = useState(null);   // { url, contentType, fileName }
   const [previewError, setPreviewError] = useState('');
-
-  useEffect(() => {
-    getSubmissionHistory(submission.id, token).then(setHistory).catch(() => {});
-  }, [submission.id]);
+  const [history, setHistory] = useState(null);
+  const [showHistory, setShowHistory] = useState(false);
+  const status = decision?.status ?? '';
+  const isRejected = status === 'Rejected';
 
   useEffect(() => {
     let url;
@@ -451,138 +584,126 @@ function ReviewModal({ submission, token, onClose, onSaved }) {
     };
   }, [submission.id, submission.fileName, token]);
 
-  async function handleSubmit(e) {
-    e.preventDefault();
-    setError('');
-    // `required` accepts a note of only spaces; the server refuses it, so say so here first.
-    if (status === 'Incomplete' && !feedback.trim()) {
-      setError('Add feedback explaining what needs to be corrected.');
-      return;
-    }
-    setSubmitting(true);
-    try {
-      await reviewDocument(submission.id, status, feedback.trim() || null, token);
-      onSaved(status);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSubmitting(false);
-    }
+  function toggleHistory() {
+    setShowHistory(v => !v);
+    if (!history) getSubmissionHistory(submission.id, token).then(setHistory).catch(() => setHistory([]));
   }
 
   return (
-    <Modal
-      title="Review Document"
-      subtitle={`${submission.scholarName} · ${submission.requirementName}`}
-      onClose={onClose}
-      width={1040}
-      dismissible={!submitting}
-    >
-      {/* The document opens beside the decision, so the reviewer reads it without a
-          download-and-open round trip for every submission. */}
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="flex flex-col min-w-0">
-          <div className="flex items-center justify-between gap-3 mb-2">
-            <p className="text-xs font-semibold truncate" style={{ color: 'var(--text)' }} title={submission.fileName}>
-              {submission.fileName}
-            </p>
-            <button
-              type="button"
-              onClick={() => downloadFile(submission.id, submission.fileName, token).catch(e => toast(e.message, 'error'))}
-              className="text-xs font-medium hover:underline flex items-center gap-1 shrink-0"
-              style={{ color: 'var(--accent)' }}
-            >
-              <Download size={13} strokeWidth={2.4} /> Download
-            </button>
-          </div>
-          <div className="rounded-2xl overflow-hidden"
-            style={{ background: 'var(--surface-inset)', border: '1.5px solid var(--hairline)', height: 'min(62vh, 640px)' }}>
-            {preview ? (
-              <DocumentPreview preview={preview} />
-            ) : previewError ? (
-              <div className="w-full h-full flex items-center justify-center p-6 text-center text-xs" style={{ color: 'var(--danger)' }}>
-                {previewError}
-              </div>
-            ) : (
-              <div className="w-full h-full flex items-center justify-center gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
-                <Loader size={14} className="animate-spin" /> Loading document…
-              </div>
-            )}
-          </div>
+    <section className="rounded-2xl p-4" style={{ background: 'var(--surface-inset)', border: '1.5px solid var(--hairline)' }}
+      aria-label={`${index}. ${submission.requirementName}`}>
+      <div className="flex items-start justify-between gap-3 mb-3 flex-wrap">
+        <div className="min-w-0">
+          <p className="font-black text-sm" style={{ color: 'var(--text-strong)' }}>
+            {index}. {submission.requirementName}
+          </p>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            {submission.fileName} · {submission.academicYear} Sem {submission.semester} · submitted{' '}
+            {new Date(submission.submittedAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
+            {submission.isLate && <span style={{ color: 'var(--tone-attention-fg)' }}> · late</span>}
+          </p>
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          <StatusBadge status={submission.status === 'Pending' ? 'UnderReview' : submission.status} />
+          <button
+            type="button"
+            onClick={() => downloadFile(submission.id, submission.fileName, token).catch(e => toast(e.message, 'error'))}
+            className="text-xs font-medium hover:underline flex items-center gap-1"
+            style={{ color: 'var(--accent)' }}
+          >
+            <Download size={13} strokeWidth={2.4} /> Download
+          </button>
+        </div>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
+        <div className="rounded-xl overflow-hidden"
+          style={{ background: 'var(--surface)', border: '1.5px solid var(--hairline)', height: 'min(48vh, 460px)' }}>
+          {preview ? (
+            <DocumentPreview preview={preview} />
+          ) : previewError ? (
+            <div className="w-full h-full flex items-center justify-center p-6 text-center text-xs" style={{ color: 'var(--danger)' }}>
+              {previewError}
+            </div>
+          ) : (
+            <div className="w-full h-full flex items-center justify-center gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+              <Loader size={14} className="animate-spin" /> Loading document…
+            </div>
+          )}
         </div>
 
-        <div className="min-w-0">
-        {error && <ErrorBox>{error}</ErrorBox>}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* A radio group is labelled by a <legend>, not a <label> — a label with no control
-              to point at is announced as a label for nothing. The options carry their own
-              wrapping labels, which associates each with its radio implicitly. */}
+        <div className="space-y-3 min-w-0">
           <fieldset style={{ border: 'none', padding: 0, margin: 0 }}>
             <legend className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
               Decision
             </legend>
-            <div className="flex gap-3">
-              {['Verified', 'Incomplete'].map(s => (
+            <div className="flex gap-2">
+              {['Verified', 'Rejected'].map(s => (
                 <label
                   key={s}
-                  className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-2xl cursor-pointer text-sm font-bold transition-colors${
+                  className={`relative flex-1 flex items-center justify-center gap-1.5 p-2.5 rounded-2xl cursor-pointer text-sm font-bold transition-colors${
                     status === s ? ` status-badge tone-${s === 'Verified' ? 'ok' : 'bad'}` : ''}`}
                   style={status === s
                     ? { borderRadius: 16, borderWidth: 2 }
-                    : { background: 'var(--surface-inset)', color: 'var(--text-muted)', border: '2px solid var(--hairline-strong)' }}
+                    : { background: 'var(--surface)', color: 'var(--text-muted)', border: '2px solid var(--hairline-strong)' }}
                 >
-                  <input type="radio" name="status" value={s} checked={status === s} onChange={() => setStatus(s)} className="sr-only" />
-                  {s}
+                  <input type="radio" name={`status-${submission.id}`} value={s} checked={status === s}
+                    onChange={() => onDecision({ status: s, feedback: decision?.feedback ?? submission.feedbackNote ?? '' })} className="sr-only" />
+                  {s === 'Verified' ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
+                  {s === 'Verified' ? 'Verify' : 'Reject'}
                 </label>
               ))}
             </div>
+            {submission.status !== 'Pending' && submission.status !== 'UnderReview' && !status && (
+              <p className="text-[11px] mt-1.5" style={{ color: 'var(--text-muted)' }}>
+                Already {submission.status === 'Rejected' || submission.status === 'Incomplete' ? 'rejected' : 'verified'}
+                {submission.reviewedBy ? ` by ${submission.reviewedBy}` : ''}. Choose a decision only to change it.
+              </p>
+            )}
           </fieldset>
 
-          <Field label={<>Feedback {status === 'Incomplete' && <span style={{ color: 'var(--danger)' }}>*</span>}</>}>
+          <Field label={<>Feedback {isRejected && <span style={{ color: 'var(--danger)' }}>*</span>}</>}>
             <textarea
               rows={3}
-              required={status === 'Incomplete'}
-              value={feedback}
+              value={decision?.feedback ?? (status ? '' : submission.feedbackNote ?? '')}
               maxLength={1000}
-              onChange={e => setFeedback(e.target.value)}
-              placeholder={status === 'Incomplete' ? 'Explain what needs to be corrected…' : 'Optional notes for the scholar'}
+              onChange={e => onDecision({ feedback: e.target.value, status: status || undefined })}
+              placeholder={isRejected ? 'Explain what needs to be corrected…' : 'Optional notes for the scholar'}
               className="clay-input"
             />
           </Field>
 
-          <div className="flex gap-3 pt-2">
-            <button type="button" onClick={onClose} disabled={submitting} className="clay-btn clay-btn-ghost flex-1 py-2.5 text-sm">Cancel</button>
-            <button type="submit" disabled={submitting} className="clay-btn clay-btn-primary flex-1 py-2.5 text-sm" style={{ opacity: submitting ? 0.65 : 1 }}>
-              {submitting ? 'Saving…' : 'Submit Review'}
-            </button>
-          </div>
-        </form>
-
-        {history.length > 0 && (
-          <div className="mt-6 pt-5" style={{ borderTop: '1.5px solid var(--hairline)' }}>
-            <p className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: 'var(--text-muted)' }}>Status History</p>
-            <ol className="space-y-3">
-              {history.map((h, i) => (
-                <li key={h.id} className="flex items-start gap-3">
-                  <div className="flex flex-col items-center shrink-0">
-                    <div className="w-2.5 h-2.5 rounded-full mt-0.5" style={{ background: statusDot(h.status) }} />
-                    {i < history.length - 1 && <div className="w-px flex-1 mt-1" style={{ background: 'var(--hairline-strong)', minHeight: 16 }} />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold" style={{ color: 'var(--text-strong)' }}>{h.status}</p>
-                    {h.note && <p className="text-xs mt-0.5" style={{ color: 'var(--text)' }}>{h.note}</p>}
-                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-faint)' }}>
-                      {h.changedBy} · {new Date(h.changedAt).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ol>
-          </div>
-        )}
+          <button type="button" onClick={toggleHistory} className="text-xs font-semibold flex items-center gap-1 hover:underline"
+            style={{ color: 'var(--text-muted)' }}>
+            {showHistory ? <ChevronDown size={12} /> : <ChevronRight size={12} />} Status history
+          </button>
+          {showHistory && (
+            history === null ? (
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Loading…</p>
+            ) : (
+              <ol className="space-y-2.5">
+                {history.map((h, i) => (
+                  <li key={h.id} className="flex items-start gap-2.5">
+                    <div className="flex flex-col items-center shrink-0">
+                      <div className="w-2 h-2 rounded-full mt-1" style={{ background: statusDot(h.status) }} />
+                      {i < history.length - 1 && <div className="w-px flex-1 mt-1" style={{ background: 'var(--hairline-strong)', minHeight: 12 }} />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold" style={{ color: 'var(--text-strong)' }}>
+                        {h.status === 'UnderReview' ? 'Under Review' : h.status === 'Incomplete' ? 'Rejected' : h.status === 'Pending' ? 'Submitted' : h.status}
+                      </p>
+                      {h.note && <p className="text-xs mt-0.5" style={{ color: 'var(--text)' }}>{h.note}</p>}
+                      <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-faint)' }}>
+                        {h.changedBy} · {new Date(h.changedAt).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            )
+          )}
         </div>
       </div>
-    </Modal>
+    </section>
   );
 }

@@ -23,8 +23,9 @@ const ROLE_BADGE = {
 };
 
 export default function ProfilePage() {
-  useTitle('Profile');
   const { user, token, refreshUser, renewSession } = useAuth();
+  const isStudent = user?.role === 'Scholar' || user?.role === 'Grantee';
+  useTitle(isStudent ? 'Settings' : 'Profile');
   const { openTutorial } = useTutorial();
   const toast = useToast();
 
@@ -203,7 +204,7 @@ export default function ProfilePage() {
 
         <div className="page-head">
           <div>
-            <h1 className="page-title">My Profile</h1>
+            <h1 className="page-title">{isStudent ? 'Account Settings' : 'My Profile'}</h1>
             <p className="page-subtitle">Manage your account information and security</p>
             <span className="page-title-bar" />
           </div>

@@ -1,6 +1,6 @@
 import {
   ShieldCheck, ShieldX, Clock, CircleCheckBig, Ban, AlertTriangle,
-  GraduationCap, RefreshCw, PauseCircle, FileQuestion,
+  GraduationCap, RefreshCw, PauseCircle, FileQuestion, Eye,
 } from 'lucide-react';
 import { toneOf } from '../constants/statusTones';
 
@@ -20,6 +20,7 @@ import { toneOf } from '../constants/statusTones';
 const ICON = {
   Verified: CircleCheckBig,
   Pending: Clock,
+  UnderReview: Eye,
   Incomplete: AlertTriangle,
   Approved: ShieldCheck,
   Rejected: ShieldX,
@@ -31,6 +32,13 @@ const ICON = {
   Lapsed: AlertTriangle,
   Suspended: PauseCircle,
   Graduated: GraduationCap,
+};
+
+// Statuses whose stored value is not how they read.
+const STATUS_TEXT = {
+  UnderReview: 'Under Review',
+  Incomplete: 'Rejected',
+  NotRecorded: 'Not recorded',
 };
 
 /**
@@ -46,7 +54,7 @@ export default function StatusBadge({ status, label, icon = true, tone, classNam
   return (
     <span className={`status-badge tone-${resolved} ${className}`}>
       {icon && Icon && <Icon size={11} strokeWidth={2.6} aria-hidden="true" />}
-      {label ?? status}
+      {label ?? STATUS_TEXT[status] ?? status}
     </span>
   );
 }

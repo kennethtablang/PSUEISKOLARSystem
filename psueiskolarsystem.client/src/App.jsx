@@ -27,6 +27,8 @@ import DeadlinesPage from './pages/DeadlinesPage';
 import MessagesPage from './pages/MessagesPage';
 import NotificationsPage from './pages/NotificationsPage';
 import ScholarshipTypesPage from './pages/ScholarshipTypesPage';
+import ScholarshipTypeDetailPage from './pages/ScholarshipTypeDetailPage';
+import GrantTypeDetailPage from './pages/GrantTypeDetailPage';
 import ScholarApprovalsPage from './pages/ScholarApprovalsPage';
 import ScholarshipVerificationPage from './pages/ScholarshipVerificationPage';
 import OneTimeGrantsPage from './pages/OneTimeGrantsPage';
@@ -91,7 +93,9 @@ export default function App() {
           <Route path="/document-review" element={<ProtectedRoute roles={adminCoord}><DocumentReviewPage /></ProtectedRoute>} />
           <Route path="/deadlines" element={<ProtectedRoute roles={adminCoord}><DeadlinesPage /></ProtectedRoute>} />
           <Route path="/requirements"       element={<ProtectedRoute roles={admin}><RequirementsPage /></ProtectedRoute>} />
-          <Route path="/scholarship-types"  element={<ProtectedRoute roles={admin}><ScholarshipTypesPage /></ProtectedRoute>} />
+          <Route path="/scholarship-types"  element={<ProtectedRoute roles={adminCoord}><ScholarshipTypesPage /></ProtectedRoute>} />
+          <Route path="/scholarship-types/:id" element={<ProtectedRoute roles={adminCoord}><ScholarshipTypeDetailPage /></ProtectedRoute>} />
+          <Route path="/grant-types/:id" element={<ProtectedRoute roles={adminCoord}><GrantTypeDetailPage /></ProtectedRoute>} />
           <Route path="/settings"      element={<ProtectedRoute roles={admin}><SettingsPage /></ProtectedRoute>} />
           <Route path="/activity-log" element={<ProtectedRoute roles={admin}><ActivityLogPage /></ProtectedRoute>} />
           <Route path="/announcements" element={<ProtectedRoute roles={adminCoord}><AnnouncementsPage /></ProtectedRoute>} />

@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { getScholarshipVerification } from '../api/scholars';
+import { getCrossMatchConflicts, deleteMasterListLine } from '../api/masterList';
+import { useToast, useConfirm } from '../context/UIContext';
 import { TableSkeleton, EmptyState } from '../components/ListState';
 import { useTitle } from '../hooks/useTitle';
 import { ShieldCheck, AlertTriangle, AlertOctagon, Info, RefreshCw, Users, GraduationCap, HelpCircle } from 'lucide-react';
@@ -20,12 +22,17 @@ export default function ScholarshipVerificationPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [crossMatches, setCrossMatches] = useState([]);
+  const toast = useToast();
+  const confirm = useConfirm();
 
   async function load() {
     setLoading(true);
     setError('');
     try {
-      setData(await getScholarshipVerification(token));
+      const [report, cross] = await Promise.all([getScholarshipVerification(token), getCrossMatchConflicts(token).catch(() => [])]);
+      setData(report);
+      setCrossMatches(cross ?? []);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -55,6 +62,59 @@ export default function ScholarshipVerificationPage() {
         </div>
 
         {error && <p className="text-sm mb-4" style={{ color: 'var(--danger)' }}>{error}</p>}
+
+        {/* Scholars who already hold one scholarship and matched another type's cross-matching
+            list. The account is left as it is until the office decides. */}
+        {crossMatches.length > 0 && (
+          <div className="clay-card p-5 mb-6" style={{ border: '1.5px solid var(--danger-border)' }}>
+            <div className="flex items-center gap-2 mb-1">
+              <AlertOctagon size={16} style={{ color: 'var(--danger)' }} />
+              <h2 className="font-black text-sm" style={{ color: 'var(--text-strong)' }}>Matched Another Scholarship</h2>
+              <span className="status-badge tone-bad ml-auto">{crossMatches.length}</span>
+            </div>
+            <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>
+              These scholars already have an account under one scholarship but were matched again by another
+              scholarship type&apos;s cross-matching list. A student may hold only one scholarship — remove the extra line
+              from that type, or transfer the scholar from their profile.
+            </p>
+            <div className="overflow-x-auto"><table className="w-full min-w-[820px] text-sm">
+              <thead className="clay-table-head">
+                <tr>
+                  {['Scholar', 'Holds', 'Matched', 'Matched on', ''].map(h => (
+                    <th key={h} className="text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {crossMatches.map(c => (
+                  <tr key={c.lineId} className="clay-table-row">
+                    <td className="px-4 py-3">
+                      <button onClick={() => navigate(`/scholars/${c.scholarUserId}`)} className="font-semibold hover:underline text-left" style={{ color: 'var(--text-strong)' }}>{c.scholarName}</button>
+                      <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{c.studentId}</p>
+                    </td>
+                    <td className="px-4 py-3 text-xs font-semibold" style={{ color: 'var(--text)' }}>{c.currentScholarship}</td>
+                    <td className="px-4 py-3 text-xs">
+                      <button onClick={() => navigate(`/scholarship-types/${c.matchedScholarshipTypeId}?tab=crossmatch`)} className="font-semibold hover:underline" style={{ color: 'var(--danger)' }}>
+                        {c.matchedScholarship}
+                      </button>
+                    </td>
+                    <td className="px-4 py-3 text-xs" style={{ color: 'var(--text)' }}>{c.matchedOn}</td>
+                    <td className="px-4 py-3 text-right">
+                      <button className="text-xs font-bold hover:underline" style={{ color: 'var(--danger)' }}
+                        onClick={async () => {
+                          if (!(await confirm({ title: 'Remove the extra line?', message: `${c.scholarName} will be taken off the ${c.matchedScholarship} list and keeps ${c.currentScholarship}.`, confirmLabel: 'Remove', danger: true }))) return;
+                          try { await deleteMasterListLine(c.lineId, token); toast('Line removed.', 'success'); load(); }
+                          catch (e) { toast(e.message, 'error'); }
+                        }}>
+                        Remove line
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table></div>
+          </div>
+        )}
 
         {data && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">

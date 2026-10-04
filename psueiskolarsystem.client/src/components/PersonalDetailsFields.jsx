@@ -175,19 +175,33 @@ export function InstitutionalEmailInput({ value, onChange, id, required }) {
   );
 }
 
-/** A name field that is upper-cased as it is typed. */
-export function UpperInput({ value, onChange, ...rest }) {
+/**
+ * A name field that is upper-cased as it is typed. `lettersOnly` drops digits as they are
+ * typed — names and occupations are words, never numbers.
+ */
+export function UpperInput({ value, onChange, lettersOnly = false, ...rest }) {
   return (
     <input
       type="text"
       value={value}
-      onChange={e => onChange(e.target.value.toUpperCase())}
+      onChange={e => {
+        const v = e.target.value.toUpperCase();
+        onChange(lettersOnly ? v.replace(/[0-9]/g, '') : v);
+      }}
       className="clay-input"
       style={{ textTransform: 'uppercase' }}
       {...rest}
     />
   );
 }
+
+/** Upper-case, letters-only input for a person's name or an occupation. */
+export function NameInput(props) {
+  return <UpperInput lettersOnly {...props} />;
+}
+
+/** What occupation reads as for a parent who has passed away (matches the server). */
+export const NOT_APPLICABLE = 'N/A';
 
 function Select({ id, value, onChange, options, placeholder, required }) {
   return (
@@ -257,40 +271,63 @@ export function PersonalQuestions({ value, onChange, required = false }) {
 
 function ParentBlock({ who, prefix, value, onChange }) {
   const set = (k, v) => onChange({ ...value, [prefix + k]: v });
+  // A parent who has passed away has no occupation or income: both lock to N/A and only the
+  // educational attainment is asked.
+  const deceased = value[prefix + 'Living'] === false;
+  const setLiving = living => onChange({
+    ...value,
+    [prefix + 'Living']: living,
+    ...(living === false
+      ? { [prefix + 'Occupation']: NOT_APPLICABLE, [prefix + 'MonthlyIncome']: '' }
+      : value[prefix + 'Occupation'] === NOT_APPLICABLE ? { [prefix + 'Occupation']: '' } : {}),
+  });
   const lastId = useId(), firstId = useId(), middleId = useId(), eduId = useId(), occId = useId(), incId = useId();
   return (
     <div className="rounded-2xl p-4 space-y-3" style={{ background: 'var(--surface-inset)' }}>
       <p className="text-xs font-black" style={{ color: 'var(--text-strong)' }}>{who}&apos;s Name</p>
       <div className="grid sm:grid-cols-3 gap-3">
         <Labelled label="Last Name" htmlFor={lastId}>
-          <UpperInput id={lastId} value={value[prefix + 'LastName']} onChange={v => set('LastName', v)}
+          <NameInput id={lastId} value={value[prefix + 'LastName']} onChange={v => set('LastName', v)}
             placeholder="DELA CRUZ" maxLength={100} />
         </Labelled>
         <Labelled label="First Name" htmlFor={firstId}>
-          <UpperInput id={firstId} value={value[prefix + 'FirstName']} onChange={v => set('FirstName', v)}
+          <NameInput id={firstId} value={value[prefix + 'FirstName']} onChange={v => set('FirstName', v)}
             placeholder="JUAN" maxLength={100} />
         </Labelled>
         <Labelled label="Middle Name" htmlFor={middleId}>
-          <UpperInput id={middleId} value={value[prefix + 'MiddleName']} onChange={v => set('MiddleName', v)}
+          <NameInput id={middleId} value={value[prefix + 'MiddleName']} onChange={v => set('MiddleName', v)}
             placeholder="SANTOS" maxLength={100} />
         </Labelled>
       </div>
-      <ChoiceChecks label="Living" options={YES_NO} value={value[prefix + 'Living']} onChange={v => set('Living', v)} />
+      <ChoiceChecks label="Living" options={YES_NO} value={value[prefix + 'Living']} onChange={setLiving} />
       <div className="grid sm:grid-cols-2 gap-3">
         <Labelled label="Highest Educational Attainment" htmlFor={eduId}>
           <Select id={eduId} value={value[prefix + 'Education']} onChange={v => set('Education', v)}
             options={EDUCATION_OPTIONS} placeholder="— Select —" />
         </Labelled>
         <Labelled label="Occupation" htmlFor={occId}>
-          <UpperInput id={occId} maxLength={100} value={value[prefix + 'Occupation']}
-            onChange={v => set('Occupation', v)} placeholder="E.G. FARMER" />
+          {deceased
+            ? <NotApplicable id={occId} />
+            : <NameInput id={occId} maxLength={100} value={value[prefix + 'Occupation']}
+                onChange={v => set('Occupation', v)} placeholder="E.G. FARMER" />}
         </Labelled>
       </div>
-      <Labelled label="Estimated Monthly Income" htmlFor={incId}>
-        <NumericInput id={incId} prefix="₱" allowDecimal maxLength={10}
-          value={value[prefix + 'MonthlyIncome']} onChange={v => set('MonthlyIncome', v)} placeholder="0" />
+      <Labelled label="Estimated Monthly Income" htmlFor={incId}
+        hint={deceased ? `Not asked — your ${who.toLowerCase()} is no longer living.` : undefined}>
+        {deceased
+          ? <NotApplicable id={incId} />
+          : <NumericInput id={incId} prefix="₱" allowDecimal maxLength={10}
+              value={value[prefix + 'MonthlyIncome']} onChange={v => set('MonthlyIncome', v)} placeholder="0" />}
       </Labelled>
     </div>
+  );
+}
+
+/** A locked field showing N/A, for questions that do not apply. */
+function NotApplicable({ id }) {
+  return (
+    <input id={id} type="text" value={NOT_APPLICABLE} readOnly disabled tabIndex={-1}
+      className="clay-input" style={{ background: 'var(--surface-inset)', cursor: 'not-allowed', color: 'var(--text-muted)' }} />
   );
 }
 
@@ -365,8 +402,8 @@ export function PersonalDetailsView({ personal, birthDate }) {
             <Row label="Middle Name" value={p[k + 'MiddleName'] || '—'} />
             <Row label="Living" value={yn(p[k + 'Living'])} />
             <Row label="Education" value={p[k + 'Education'] || '—'} />
-            <Row label="Occupation" value={p[k + 'Occupation'] || '—'} />
-            <Row label="Monthly Income" value={peso(p[k + 'MonthlyIncome'])} />
+            <Row label="Occupation" value={p[k + 'Living'] === false ? NOT_APPLICABLE : (p[k + 'Occupation'] || '—')} />
+            <Row label="Monthly Income" value={p[k + 'Living'] === false ? NOT_APPLICABLE : peso(p[k + 'MonthlyIncome'])} />
           </div>
         </div>
       ))}

@@ -108,7 +108,7 @@ export default function CampusesPage() {
     setFormError('');
     setSaving(true);
     try {
-      const body = { name: programForm.name.trim(), code: programForm.code.trim(), campusIds: programForm.id ? null : (selectedId ? [selectedId] : []) };
+      const body = { name: programForm.name.trim(), code: programForm.code.trim(), major: programForm.major?.trim() || null, campusIds: programForm.id ? null : (selectedId ? [selectedId] : []) };
       if (programForm.id) await updateProgram(programForm.id, body, token);
       else await createProgram(body, token);
       toast('Program saved.', 'success');
@@ -143,7 +143,7 @@ export default function CampusesPage() {
             <span className="page-title-bar" />
           </div>
           <div className="flex gap-2">
-            <button onClick={() => { setFormError(''); setProgramForm({ name: '', code: '' }); }} className="clay-btn clay-btn-ghost text-sm px-4 flex items-center gap-2">
+            <button onClick={() => { setFormError(''); setProgramForm({ name: '', code: '', major: '' }); }} className="clay-btn clay-btn-ghost text-sm px-4 flex items-center gap-2">
               <BookOpen size={15} /> Add Program
             </button>
             <button onClick={() => { setFormError(''); setCampusForm({ name: '', code: '', isActive: true }); }} className="clay-btn clay-btn-primary text-sm px-4 flex items-center gap-2">
@@ -215,7 +215,7 @@ export default function CampusesPage() {
                           </span>
                         </button>
                         <button className="p-1 rounded" aria-label={`Edit ${p.code}`} title="Edit program"
-                          onClick={() => { setFormError(''); setProgramForm({ id: p.id, name: p.name, code: p.code }); }}>
+                          onClick={() => { setFormError(''); setProgramForm({ id: p.id, name: p.baseName ?? p.name, code: p.code, major: p.major ?? '' }); }}>
                           <Pencil size={12} style={{ color: 'var(--accent)' }} />
                         </button>
                         <button className="p-1 rounded" aria-label={`Delete ${p.code}`} title="Delete program" onClick={() => removeProgram(p)}>
@@ -256,6 +256,14 @@ export default function CampusesPage() {
           <form onSubmit={saveProgram} className="space-y-4">
             {formError && <p role="alert" className="text-sm p-3 rounded-2xl" style={{ background: 'var(--danger-bg)', color: 'var(--danger)' }}>{formError}</p>}
             <Field label="Program Name"><input required maxLength={200} value={programForm.name} onChange={e => setProgramForm(v => ({ ...v, name: e.target.value }))} className="clay-input" placeholder="BS Information Technology" /></Field>
+            <Field label="Major (optional)">
+              <input maxLength={150} value={programForm.major ?? ''} onChange={e => setProgramForm(v => ({ ...v, major: e.target.value }))} className="clay-input" placeholder="Operations Management" />
+              <p className="text-xs mt-1.5" style={{ color: 'var(--text-muted)' }}>
+                Only for programs offered in several majors. It is shown as
+                {' '}<strong>{(programForm.name || 'BS Business Administration').trim()} (Major in {(programForm.major || 'Operations Management').trim()})</strong>.
+                Add each major as its own program with its own code, e.g. BSBA-OM.
+              </p>
+            </Field>
             <Field label="Code"><input required maxLength={20} value={programForm.code} onChange={e => setProgramForm(v => ({ ...v, code: e.target.value.toUpperCase() }))} className="clay-input" placeholder="BSIT" /></Field>
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" onClick={() => setProgramForm(null)} className="clay-btn clay-btn-ghost text-sm px-4">Cancel</button>

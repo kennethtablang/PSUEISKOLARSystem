@@ -25,7 +25,8 @@ namespace PSUEISKOLARSystem.Server.Services
         IOptions<JwtSettings> jwtOptions,
         IOptions<EmailSettings> emailOptions,
         IEmailService emailService,
-        BackgroundEmailer mail) : IAuthService
+        BackgroundEmailer mail,
+        INotificationService notifications) : IAuthService
     {
         private readonly JwtSettings _jwtSettings = jwtOptions.Value;
         private readonly EmailSettings _emailSettings = emailOptions.Value;
@@ -352,11 +353,18 @@ namespace PSUEISKOLARSystem.Server.Services
                 throw;
             }
 
-            if (policy.RequireEmailVerification && policy.EmailEnabled)
+            if (policy.RequireEmailVerification && policy.EmailEnabled && !user.EmailConfirmed)
                 await QueueVerificationEmailAsync(user);
+
+            // Matched more than one scholarship's list: the account holds the first, and the
+            // office is told about each other one so it can decide.
+            foreach (var other in matches.Where(m => m.Kind == EligibilityKinds.Scholar && m != scholarLine))
+                if (await MasterList.FindConflictAsync(dbContext, other) is { } conflict)
+                    await MasterList.NotifyConflictAsync(dbContext, notifications, conflict);
 
             var userDto = mapper.Map<UserDto>(user);
             userDto.Role = role;
+            userDto.EmailVerificationRequired = policy.RequireEmailVerification && !user.EmailConfirmed;
             return userDto;
         }
 

@@ -35,7 +35,24 @@ namespace PSUEISKOLARSystem.Server.DTOs.Dashboard
         IReadOnlyList<string> IncompleteItems,
         string? ScholarshipTypeName,
         string AcademicYear,
-        int Semester);
+        int Semester,
+        IReadOnlyList<DocumentTrackDto>? Documents = null);
+
+    /// <summary>
+    /// One document on the scholar's checklist for the active period, for the tracker on the
+    /// dashboard: where it stands (null when nothing was submitted) and whether its deadline
+    /// passed with nothing submitted — in which case uploading is locked.
+    /// </summary>
+    public sealed record DocumentTrackDto(
+        int RequirementId,
+        string Name,
+        bool IsRequired,
+        string? Status,
+        DateTime? SubmittedAt,
+        DateTime? ReviewedAt,
+        string? FeedbackNote,
+        DateTime? DueDate,
+        bool Missed);
 
     public sealed record ScholarGwaDto(
         decimal LatestGwa,

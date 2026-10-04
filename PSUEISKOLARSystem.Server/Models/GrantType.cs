@@ -36,6 +36,14 @@ namespace PSUEISKOLARSystem.Server.Models
 
         public bool IsActive { get; set; } = true;
 
+        /// <summary>
+        /// When the grantee accounts under this type were closed — automatically, the day after
+        /// <see cref="ScheduledDate"/> (see <see cref="Services.GrantReleaseService"/>). Kept so
+        /// the sweep closes a type once: an administrator who reactivates it afterwards is not
+        /// overruled on the next pass. Moving the release date clears it.
+        /// </summary>
+        public DateTime? AccountsClosedAt { get; set; }
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? DeactivatedAt { get; set; }
     }

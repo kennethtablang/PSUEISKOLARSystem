@@ -6,25 +6,29 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PSUEISKOLARSystem.Server.Data;
 using PSUEISKOLARSystem.Server.DTOs;
+using PSUEISKOLARSystem.Server.Interfaces;
 using PSUEISKOLARSystem.Server.Models;
 using PSUEISKOLARSystem.Server.Models.Enums;
+using PSUEISKOLARSystem.Server.Services;
 
 namespace PSUEISKOLARSystem.Server.Controllers
 {
     /// <summary>
-    /// The master list of scholars and grantees that sign-ups are cross-matched against
-    /// (see <see cref="MasterList"/>). The office maintains it here — one line at a time or by
-    /// uploading a spreadsheet — and a student can only create an account once their line is on it.
+    /// The lists of scholars and grantees that sign-ups are cross-matched against
+    /// (see <see cref="MasterList"/>). Each scholarship type and grant type keeps its own list,
+    /// managed from inside that type — one line at a time or by uploading a spreadsheet — and a
+    /// student can only create an account once their line is on one. The Master List page reads
+    /// <c>GET /people</c>: everyone across all the lists, one row per student.
     /// </summary>
     [ApiController]
     [Route("api/master-list")]
     [Authorize(Roles = $"{UserRoles.Administrator},{UserRoles.ScholarshipCoordinator}")]
-    public class MasterListController(ApplicationDbContext db) : ControllerBase
+    public class MasterListController(ApplicationDbContext db, INotificationService notifications) : ControllerBase
     {
         private const int MaxRows = 2000;
 
         private static readonly string[] TemplateHeaders =
-            ["Kind", "StudentId", "LastName", "FirstName", "MiddleName", "CampusCode", "ScholarshipType", "GrantType", "GrantAmount", "Notes"];
+            ["Kind", "StudentId", "LastName", "FirstName", "MiddleName", "Sex", "CampusCode", "ScholarshipType", "GrantType", "GrantAmount", "Notes"];
 
         // GET /api/master-list?kind=&status=claimed|unclaimed&campusId=&search=&page=&pageSize=
         [HttpGet]
@@ -75,6 +79,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     e.LastName,
                     e.FirstName,
                     e.MiddleName,
+                    e.Sex,
                     e.CampusId,
                     CampusName = e.Campus != null ? e.Campus.Name : null,
                     e.ScholarshipTypeId,
@@ -107,7 +112,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
         public async Task<IActionResult> Create(MasterListRequest dto)
         {
             var (line, error) = await BuildAsync(dto.Kind, dto.StudentId, dto.LastName, dto.FirstName, dto.MiddleName,
-                dto.CampusId, dto.ScholarshipTypeId, dto.GrantTypeId, dto.GrantAmount, dto.Notes);
+                dto.CampusId, dto.ScholarshipTypeId, dto.GrantTypeId, dto.GrantAmount, dto.Notes, sex: dto.Sex);
             if (error is not null) return BadRequest(new { message = error });
 
             var applied = await MasterList.ApplyToExistingAccountAsync(db, line!, ActorId);
@@ -116,8 +121,9 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 $"Added {line!.Kind} {line.LastName}, {line.FirstName} ({line.StudentId}) to the master list" +
                 (applied is null ? "" : $" — {applied}"));
             await db.SaveChangesAsync();
+            var conflict = await NotifyIfConflictAsync(line);
 
-            return Ok(new { line.Id, applied });
+            return Ok(new { line.Id, applied, conflict });
         }
 
         // PUT /api/master-list/{id} — only an unclaimed line can be edited; a claimed one is history.
@@ -130,7 +136,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 return BadRequest(new { message = "This line has already been used to open an account and can no longer be edited." });
 
             var (updated, error) = await BuildAsync(dto.Kind, dto.StudentId, dto.LastName, dto.FirstName, dto.MiddleName,
-                dto.CampusId, dto.ScholarshipTypeId, dto.GrantTypeId, dto.GrantAmount, dto.Notes, excludingId: id);
+                dto.CampusId, dto.ScholarshipTypeId, dto.GrantTypeId, dto.GrantAmount, dto.Notes, excludingId: id, sex: dto.Sex);
             if (error is not null) return BadRequest(new { message = error });
 
             line.Kind = updated!.Kind;
@@ -138,6 +144,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             line.LastName = updated.LastName;
             line.FirstName = updated.FirstName;
             line.MiddleName = updated.MiddleName;
+            line.Sex = updated.Sex;
             line.CampusId = updated.CampusId;
             line.ScholarshipTypeId = updated.ScholarshipTypeId;
             line.GrantTypeId = updated.GrantTypeId;
@@ -152,7 +159,8 @@ namespace PSUEISKOLARSystem.Server.Controllers
             db.Audit(this, "UpdateMasterListLine", $"Updated master-list line for {line.LastName}, {line.FirstName} ({line.StudentId})" +
                 (applied is null ? "" : $" — {applied}"));
             await db.SaveChangesAsync();
-            return Ok(new { line.Id, applied });
+            var conflict = await NotifyIfConflictAsync(line);
+            return Ok(new { line.Id, applied, conflict });
         }
 
         // DELETE /api/master-list/{id} — removing a claimed line leaves the account alone.
@@ -170,7 +178,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
         // GET /api/master-list/template.xlsx
         [HttpGet("template.xlsx")]
-        public async Task<IActionResult> Template()
+        public async Task<IActionResult> Template([FromQuery] int? scholarshipTypeId, [FromQuery] int? grantTypeId)
         {
             using var wb = new XLWorkbook();
             var ws = wb.Worksheets.Add("Master List");
@@ -182,11 +190,22 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#002570");
                 cell.Style.Font.FontColor = XLColor.White;
             }
-            ws.Cell(2, 1).Value = "Scholar"; ws.Cell(2, 2).Value = "23-LN-0001"; ws.Cell(2, 3).Value = "DELA CRUZ";
-            ws.Cell(2, 4).Value = "JUAN"; ws.Cell(2, 5).Value = "SANTOS"; ws.Cell(2, 6).Value = "LIN";
-            ws.Cell(2, 7).Value = "CHED Scholarship";
-            ws.Cell(3, 1).Value = "Grantee"; ws.Cell(3, 2).Value = "23-LN-0002"; ws.Cell(3, 3).Value = "REYES";
-            ws.Cell(3, 4).Value = "ANA"; ws.Cell(3, 6).Value = "LIN"; ws.Cell(3, 8).Value = "Tulong Dunong"; ws.Cell(3, 9).Value = 5000;
+            // Downloaded from inside a type, the sample rows are already for that type.
+            var forType = scholarshipTypeId is int stId ? await db.ScholarshipTypes.Where(t => t.Id == stId).Select(t => t.Name).FirstOrDefaultAsync() : null;
+            var forGrant = grantTypeId is int gtId ? await db.GrantTypes.Where(t => t.Id == gtId).Select(t => t.Name).FirstOrDefaultAsync() : null;
+            int r = 2;
+            if (forGrant is null)
+            {
+                ws.Cell(r, 1).Value = "Scholar"; ws.Cell(r, 2).Value = "23-LN-0001"; ws.Cell(r, 3).Value = "DELA CRUZ";
+                ws.Cell(r, 4).Value = "JUAN"; ws.Cell(r, 5).Value = "SANTOS"; ws.Cell(r, 6).Value = "Male"; ws.Cell(r, 7).Value = "LIN";
+                ws.Cell(r, 8).Value = forType ?? "CHED Scholarship";
+                r++;
+            }
+            if (forType is null)
+            {
+                ws.Cell(r, 1).Value = "Grantee"; ws.Cell(r, 2).Value = "23-LN-0002"; ws.Cell(r, 3).Value = "REYES";
+                ws.Cell(r, 4).Value = "ANA"; ws.Cell(r, 6).Value = "Female"; ws.Cell(r, 7).Value = "LIN"; ws.Cell(r, 9).Value = forGrant ?? "Tulong Dunong"; ws.Cell(r, 10).Value = 5000;
+            }
             ws.Columns().AdjustToContents();
 
             var reference = wb.Worksheets.Add("Reference");
@@ -208,8 +227,9 @@ namespace PSUEISKOLARSystem.Server.Controllers
         }
 
         // POST /api/master-list/import (multipart, field "file") — .xlsx or .csv
+        // From inside a scholarship or grant type, every row is put on that type's list.
         [HttpPost("import")]
-        public async Task<IActionResult> Import(IFormFile file)
+        public async Task<IActionResult> Import(IFormFile file, [FromQuery] int? scholarshipTypeId, [FromQuery] int? grantTypeId)
         {
             if (file is null || file.Length == 0)
                 return BadRequest(new { message = "No file uploaded." });
@@ -234,6 +254,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             var grantByName = await db.GrantTypes.ToDictionaryAsync(t => t.Name.ToUpper(), t => t.Id);
 
             var results = new List<ImportRowResult>();
+            var addedLines = new List<EligibilityRecord>();
             var created = 0;
 
             for (int i = 0; i < rows.Count; i++)
@@ -279,10 +300,12 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 }
 
                 var kind = Get("Kind");
+                if (scholarshipTypeId is int forcedType) { typeId = forcedType; grantId = null; kind = EligibilityKinds.Scholar; }
+                else if (grantTypeId is int forcedGrant) { grantId = forcedGrant; typeId = null; kind = EligibilityKinds.Grantee; }
                 if (kind.Length == 0) kind = grantId is not null ? EligibilityKinds.Grantee : EligibilityKinds.Scholar;
 
                 var (line, error) = await BuildAsync(kind, sid, Get("LastName"), Get("FirstName"), Get("MiddleName"),
-                    campusId, typeId, grantId, amount, Get("Notes"));
+                    campusId, typeId, grantId, amount, Get("Notes"), sex: Get("Sex"));
 
                 // Lines added earlier in this same file are not in the database yet.
                 if (error is null && db.ChangeTracker.Entries<EligibilityRecord>().Any(e =>
@@ -298,6 +321,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
                 var applied = await MasterList.ApplyToExistingAccountAsync(db, line!, ActorId);
                 db.EligibilityRecords.Add(line!);
+                addedLines.Add(line!);
                 created++;
                 results.Add(new ImportRowResult(rowNo, line!.StudentId, true, applied is null ? "Added" : $"Added — {applied}"));
             }
@@ -306,6 +330,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             {
                 db.Audit(this, "ImportMasterList", $"Imported {created} master-list line(s) from {file.FileName}");
                 await db.SaveChangesAsync();
+                foreach (var added in addedLines) await NotifyIfConflictAsync(added);
             }
 
             return Ok(new { total = rows.Count, created, failed = rows.Count - created, results });
@@ -318,8 +343,13 @@ namespace PSUEISKOLARSystem.Server.Controllers
         private async Task<(EligibilityRecord?, string?)> BuildAsync(
             string? kind, string? studentId, string? lastName, string? firstName, string? middleName,
             int? campusId, int? scholarshipTypeId, int? grantTypeId, decimal? grantAmount, string? notes,
-            int? excludingId = null)
+            int? excludingId = null, string? sex = null)
         {
+            var sexValue = string.IsNullOrWhiteSpace(sex) ? null
+                : PersonalOptions.Sex.FirstOrDefault(x => string.Equals(x, sex.Trim(), StringComparison.OrdinalIgnoreCase)
+                                                       || (sex.Trim().Length == 1 && char.ToUpperInvariant(sex.Trim()[0]) == x[0]));
+            if (!string.IsNullOrWhiteSpace(sex) && sexValue is null) return (null, "Sex must be Male or Female.");
+
             kind = EligibilityKinds.All.FirstOrDefault(k => string.Equals(k, kind?.Trim(), StringComparison.OrdinalIgnoreCase));
             if (kind is null) return (null, "Kind must be Scholar or Grantee.");
 
@@ -368,6 +398,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 LastName = last,
                 FirstName = first,
                 MiddleName = MasterList.NormalizeOptionalName(middleName),
+                Sex = sexValue,
                 CampusId = campusId,
                 ScholarshipTypeId = scholarshipTypeId,
                 GrantTypeId = grantTypeId,
@@ -378,6 +409,44 @@ namespace PSUEISKOLARSystem.Server.Controllers
         }
 
         public record ImportRowResult(int Row, string StudentId, bool Success, string Message);
+
+        /// <summary>
+        /// A line for a scholar who already holds another scholarship: the office is notified with
+        /// who it is, what they hold, and what they matched. Returns the conflict, or null.
+        /// </summary>
+        private async Task<MasterList.CrossMatchConflict?> NotifyIfConflictAsync(EligibilityRecord line)
+        {
+            var conflict = await MasterList.FindConflictAsync(db, line);
+            if (conflict is not null) await MasterList.NotifyConflictAsync(db, notifications, conflict);
+            return conflict;
+        }
+
+        // GET /api/master-list/conflicts — scholars matched again by another scholarship's list.
+        [HttpGet("conflicts")]
+        public async Task<IActionResult> Conflicts() => Ok(await MasterList.FindAllConflictsAsync(db));
+
+        // GET /api/master-list/people?kind=&status=&campusId=&sex=&search=&page=&pageSize=
+        // The Master List page: everyone on any list, one row per student, with every scholarship
+        // and grant they are listed for in a single column.
+        [HttpGet("people")]
+        public async Task<IActionResult> People([FromQuery] ListFilters.MasterListFilter filter, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+        {
+            page = Math.Max(1, page);
+            pageSize = Math.Clamp(pageSize, 1, 100);
+            var people = await ListFilters.MasterListPeopleAsync(db, filter);
+            return Ok(new
+            {
+                total = people.Count,
+                page,
+                pageSize,
+                totalPages = PagedResult<object>.PageCount(people.Count, pageSize),
+                withAccount = people.Count(p => p.HasAccount),
+                withoutAccount = people.Count(p => !p.HasAccount),
+                scholars = people.Count(p => p.Entries.Any(e => e.Kind == EligibilityKinds.Scholar)),
+                grantees = people.Count(p => p.Entries.Any(e => e.Kind == EligibilityKinds.Grantee)),
+                items = people.Skip((page - 1) * pageSize).Take(pageSize),
+            });
+        }
     }
 
     public record MasterListRequest(
@@ -390,5 +459,6 @@ namespace PSUEISKOLARSystem.Server.Controllers
         int? ScholarshipTypeId,
         int? GrantTypeId,
         decimal? GrantAmount,
-        [MaxLength(300)] string? Notes);
+        [MaxLength(300)] string? Notes,
+        [MaxLength(10)] string? Sex = null);
 }

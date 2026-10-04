@@ -7,7 +7,7 @@ import { getScholarshipTypes } from '../api/lookups';
 import { getCampuses } from '../api/campuses';
 import {
   getReleaseMonitor, getReleasePeriods, recordScholarshipRelease,
-  scheduleScholarshipReleases, releaseScholarshipBatch, releaseScholarship, cancelScholarshipRelease,
+  scheduleScholarshipReleases, releaseScholarshipBatch, cancelScholarshipRelease,
 } from '../api/scholarshipReleases';
 import Modal from '../components/Modal';
 import { ErrorBox, ModalButtons } from './UsersPage';
@@ -16,12 +16,12 @@ import { TableSkeleton, EmptyState } from '../components/ListState';
 import { useTitle } from '../hooks/useTitle';
 import { ctlStyle, localDateInput } from '../constants/ui';
 import {
-  peso, isRecurring, semestersFor, semesterLabel,
-  currentAcademicYear, WHOLE_YEAR_SEMESTER, FREQUENCY_LABELS,
+  peso, isRecurring, periodChoicesFor, semesterLabel, periodLabel,
+  currentAcademicYear, BOTH_SEMESTERS, FREQUENCY_LABELS,
 } from '../constants/grants';
 import {
   BanknoteArrowUp, CircleCheckBig, Clock, CircleAlert,
-  Users, CalendarPlus, Search, Check,
+  Users, CalendarPlus, Search, Check, HandCoins,
 } from 'lucide-react';
 import StatusBadge from '../components/StatusBadge';
 
@@ -31,7 +31,7 @@ const fmtDay = d => (d
 
 const STATUS_LABEL = {
   Released: 'Received',
-  Pending: 'Awaiting release',
+  Pending: 'Not yet received',
   Cancelled: 'Cancelled',
   NotRecorded: 'Not recorded',
 };
@@ -67,8 +67,9 @@ export default function ScholarshipReleasesPage() {
   const [recording, setRecording] = useState(null);   // scholar row being scheduled
   const [releasing, setReleasing] = useState(null);   // row being marked released
   const [scheduling, setScheduling] = useState(false);
-  const [selected, setSelected] = useState(new Set()); // releaseIds ticked for bulk release
+  const [selected, setSelected] = useState(new Set()); // scholarIds ticked for bulk release
   const [batchReleasing, setBatchReleasing] = useState(false);
+  const [releasingAll, setReleasingAll] = useState(false);
 
   const recurringTypes = useMemo(() => types.filter(t => isRecurring(t.frequency)), [types]);
   const selectedType = recurringTypes.find(t => String(t.id) === String(typeId));
@@ -95,7 +96,7 @@ export default function ScholarshipReleasesPage() {
   // A per-year scholarship has no semester 1 or 2, so the picker has to follow the type.
   useEffect(() => {
     if (!selectedType) return;
-    const allowed = semestersFor(selectedType.frequency);
+    const allowed = periodChoicesFor(selectedType.frequency);
     if (!allowed.includes(semester)) setSemester(allowed[0]);
   }, [selectedType, semester]);
 
@@ -141,7 +142,9 @@ export default function ScholarshipReleasesPage() {
     if (!ok) return;
     setCancellingId(row.releaseId);
     try {
-      await cancelScholarshipRelease(row.releaseId, 'Cancelled by staff from the release monitor.', token);
+      // With both semesters in view a row can hold two pending releases; cancel each.
+      for (const id of row.pendingReleaseIds?.length ? row.pendingReleaseIds : [row.releaseId])
+        await cancelScholarshipRelease(id, 'Cancelled by staff from the release monitor.', token);
       toast('Release cancelled.', 'success');
       await load();
     } catch (e) {
@@ -164,10 +167,16 @@ export default function ScholarshipReleasesPage() {
     return list;
   }, [monitor, statusFilter, search]);
 
-  const allowedSemesters = selectedType ? semestersFor(selectedType.frequency) : [1, 2];
+  const allowedSemesters = selectedType ? periodChoicesFor(selectedType.frequency) : [1, 2];
 
-  const pendingRows = rows.filter(r => r.status === 'Pending');
-  const allPendingSelected = pendingRows.length > 0 && pendingRows.every(r => selected.has(r.releaseId));
+  // A row can be released only when it has a scheduled payout still waiting.
+  const releasable = r => r.status === 'Pending' && (r.pendingReleaseIds?.length ?? 0) > 0;
+  const pendingRows = rows.filter(releasable);
+  const allPendingSelected = pendingRows.length > 0 && pendingRows.every(r => selected.has(r.scholarId));
+  const selectedReleaseIds = (monitor?.scholars ?? [])
+    .filter(r => selected.has(r.scholarId) && releasable(r))
+    .flatMap(r => r.pendingReleaseIds);
+  const awaitingAll = (monitor?.scholars ?? []).filter(releasable);
 
   function toggleRow(id) {
     setSelected(prev => {
@@ -178,7 +187,7 @@ export default function ScholarshipReleasesPage() {
   }
 
   function toggleAllPending() {
-    setSelected(allPendingSelected ? new Set() : new Set(pendingRows.map(r => r.releaseId)));
+    setSelected(allPendingSelected ? new Set() : new Set(pendingRows.map(r => r.scholarId)));
   }
 
   return (
@@ -194,14 +203,28 @@ export default function ScholarshipReleasesPage() {
             <span className="page-title-bar" />
           </div>
           {selectedType && (
-            <button
-              onClick={() => setScheduling(true)}
-              disabled={!yearComplete}
-              className="clay-btn clay-btn-primary px-4 py-2.5 text-sm flex items-center gap-1.5"
-            >
-              <CalendarPlus size={15} strokeWidth={2.6} />
-              Schedule Release
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setScheduling(true)}
+                disabled={!yearComplete}
+                className="clay-btn clay-btn-ghost px-4 py-2.5 text-sm flex items-center gap-1.5"
+              >
+                <CalendarPlus size={15} strokeWidth={2.6} />
+                Schedule Release
+              </button>
+              {/* Released: every scheduled scholar is marked as having received the money in one
+                  step; anyone who did not collect is left out as an exemption. */}
+              <button
+                onClick={() => setReleasingAll(true)}
+                disabled={awaitingAll.length === 0}
+                title={awaitingAll.length === 0 ? 'Nobody is waiting on a scheduled release for this period.' : undefined}
+                className="clay-btn clay-btn-primary px-4 py-2.5 text-sm flex items-center gap-1.5"
+                style={{ opacity: awaitingAll.length === 0 ? 0.6 : 1 }}
+              >
+                <HandCoins size={15} strokeWidth={2.6} />
+                Released
+              </button>
+            </div>
           )}
         </div>
 
@@ -301,7 +324,7 @@ export default function ScholarshipReleasesPage() {
               >
                 <option value="">All scholars</option>
                 <option value="Released">Received</option>
-                <option value="Pending">Awaiting release</option>
+                <option value="Pending">Not yet received</option>
                 <option value="NotRecorded">Not recorded</option>
                 <option value="Cancelled">Cancelled</option>
               </select>
@@ -314,7 +337,7 @@ export default function ScholarshipReleasesPage() {
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                 <Tile label="Scholars on this scholarship" value={monitor.totalScholars} Icon={Users} bg="#dce8ff" iconColor="#003087" />
                 <Tile label="Received" value={monitor.received} sub={peso(monitor.releasedAmount)} Icon={CircleCheckBig} bg="#d4f5e2" iconColor="#108050" />
-                <Tile label="Awaiting release" value={monitor.pending} Icon={Clock} bg="#fff3cd" iconColor="#c07800" />
+                <Tile label="Not yet received" value={monitor.pending} Icon={Clock} bg="#fff3cd" iconColor="#c07800" />
                 <Tile label="Not recorded" value={monitor.notRecorded} sub="No payout scheduled" Icon={CircleAlert} bg="#ffe0e0" iconColor="#b02020" />
               </div>
             )}
@@ -368,9 +391,9 @@ export default function ScholarshipReleasesPage() {
                     {rows.map(s => (
                       <tr key={s.scholarId} className="clay-table-row">
                         <td className="pl-5 py-3.5">
-                          {s.status === 'Pending' && (
+                          {releasable(s) && (
                             <input type="checkbox" aria-label={`Select ${s.scholarName}`}
-                              checked={selected.has(s.releaseId)} onChange={() => toggleRow(s.releaseId)} />
+                              checked={selected.has(s.scholarId)} onChange={() => toggleRow(s.scholarId)} />
                           )}
                         </td>
                         <td className="px-5 py-3.5">
@@ -388,6 +411,15 @@ export default function ScholarshipReleasesPage() {
                           {/* The monitor renames the states for its own question — "has this
                               grantee received it?" — so it passes a label but keeps the tone. */}
                           <StatusBadge status={s.status} label={STATUS_LABEL[s.status]} />
+                          {semester === BOTH_SEMESTERS && s.semesters?.length > 0 && (
+                            <p className="text-[11px] mt-1" style={{ color: 'var(--text-muted)' }}>
+                              {s.semesters.map(x => `Sem ${x.semester}: ${STATUS_LABEL[x.status] ?? x.status}`).join(' · ')}
+                              {s.partlyRecorded ? ' · other semester not scheduled' : ''}
+                            </p>
+                          )}
+                          {s.status === 'Pending' && s.notes && (
+                            <p className="text-[11px] mt-1 max-w-[220px]" style={{ color: 'var(--tone-attention-fg)' }}>{s.notes}</p>
+                          )}
                         </td>
                         <td className="px-5 py-3.5 text-xs" style={{ color: 'var(--text)' }}>{fmtDay(s.scheduledDate)}</td>
                         <td className="px-5 py-3.5 text-xs" style={{ color: 'var(--text)' }}>
@@ -411,13 +443,13 @@ export default function ScholarshipReleasesPage() {
                             )}
                             {s.status === 'Pending' && (
                               <>
-                                <button
+                                {releasable(s) && <button
                                   onClick={() => setReleasing(s)}
                                   className="text-xs font-bold hover:underline flex items-center gap-1"
                                   style={{ color: 'var(--tone-ok-fg)' }}
                                 >
                                   <BanknoteArrowUp size={12} strokeWidth={2.6} /> Release
-                                </button>
+                                </button>}
                                 <button
                                   onClick={() => setRecording(s)}
                                   className="text-xs font-medium hover:underline"
@@ -490,11 +522,27 @@ export default function ScholarshipReleasesPage() {
         />
       )}
 
+      {releasingAll && (
+        <ReleaseAllModal
+          rows={awaitingAll}
+          typeName={selectedType?.name ?? 'Scholarship'}
+          period={monitor?.periodLabel ?? ''}
+          token={token}
+          onClose={() => setReleasingAll(false)}
+          onSaved={res => {
+            setReleasingAll(false);
+            toast(`${res.released} release${res.released === 1 ? '' : 's'} marked as received` +
+              (res.exempted ? `; ${res.exempted} left as not yet received.` : '.'), 'success');
+            load();
+          }}
+        />
+      )}
+
       {batchReleasing && (
         <BatchReleaseModal
           count={selected.size}
           typeName={selectedType?.name ?? 'Scholarship'}
-          ids={[...selected]}
+          ids={selectedReleaseIds}
           token={token}
           onClose={() => setBatchReleasing(false)}
           onSaved={res => {
@@ -557,14 +605,19 @@ function RecordReleaseModal({ scholar, type, academicYear, semester, token, onCl
     if (!canSubmit) return;
     setSubmitting(true);
     try {
-      await recordScholarshipRelease({
-        scholarId: scholar.scholarId,
-        scholarshipTypeId: type.id,
-        academicYear,
-        semester,
-        amount: amountVal,
-        notes: notes.trim() || null,
-      }, token);
+      // "Semesters 1 & 2" records each semester's release; one already released is left alone.
+      const semesters = semester === BOTH_SEMESTERS
+        ? [1, 2].filter(n => !(scholar.semesters ?? []).some(x => x.semester === n && x.status !== 'Pending'))
+        : [semester];
+      for (const sem of semesters)
+        await recordScholarshipRelease({
+          scholarId: scholar.scholarId,
+          scholarshipTypeId: type.id,
+          academicYear,
+          semester: sem,
+          amount: amountVal,
+          notes: notes.trim() || null,
+        }, token);
       onSaved();
     } catch (err) {
       setError(err.message);
@@ -576,8 +629,7 @@ function RecordReleaseModal({ scholar, type, academicYear, semester, token, onCl
   return (
     <Modal
       title={scholar.status === 'NotRecorded' ? 'Schedule release' : 'Edit release'}
-      subtitle={`${type.name} · ${scholar.scholarName} · ${academicYear} ${
-        semester === WHOLE_YEAR_SEMESTER ? '(whole year)' : `Sem ${semester}`}`}
+      subtitle={`${type.name} · ${scholar.scholarName} · ${periodLabel(academicYear, semester)}`}
       onClose={onClose}
       width={460}
       dismissible={!submitting}
@@ -629,7 +681,8 @@ function ReleasePayoutModal({ row, typeName, token, onClose, onSaved }) {
     setError('');
     setSubmitting(true);
     try {
-      await releaseScholarship(row.releaseId, {
+      await releaseScholarshipBatch({
+        releaseIds: row.pendingReleaseIds?.length ? row.pendingReleaseIds : [row.releaseId],
         referenceNo: referenceNo.trim() || null,
         releasedAt: releasedAt ? new Date(releasedAt).toISOString() : null,
       }, token);
@@ -755,7 +808,7 @@ function ScheduleReleaseModal({ type, academicYear, semester, campuses, initialC
   return (
     <Modal
       title="Schedule release"
-      subtitle={`${type.name} · ${academicYear} ${semester === WHOLE_YEAR_SEMESTER ? '(whole year)' : `Sem ${semester}`}`}
+      subtitle={`${type.name} · ${periodLabel(academicYear, semester)}`}
       onClose={onClose}
       width={720}
       dismissible={!submitting}
@@ -781,11 +834,17 @@ function ScheduleReleaseModal({ type, academicYear, semester, campuses, initialC
           </div>
         </div>
 
+        {semester === BOTH_SEMESTERS && (
+          <p className="text-xs rounded-xl px-3 py-2" style={{ background: 'var(--surface-inset)', color: 'var(--text)' }}>
+            Semesters 1 and 2 are released together on this date. Each semester is still recorded as
+            its own release of the amount below.
+          </p>
+        )}
         <div className="grid sm:grid-cols-2 gap-4">
           <Field label="Release date">
             <input required type="date" value={scheduledDate} onChange={e => setScheduledDate(e.target.value)} className="clay-input" />
           </Field>
-          <Field label="Amount per scholar (PHP)">
+          <Field label={semester === BOTH_SEMESTERS ? 'Amount per scholar, per semester (PHP)' : 'Amount per scholar (PHP)'}>
             <NumericInput required prefix="₱" allowDecimal maxLength={11}
               value={amount} onChange={setAmount} placeholder="10,000.00" />
           </Field>
@@ -896,6 +955,115 @@ function BatchReleaseModal({ count, typeName, ids, token, onClose, onSaved }) {
           Releasing is final. Each scholar is notified, and the date and amount are saved to their profile.
         </p>
         <ModalButtons onClose={onClose} submitting={submitting} label={`Release ${count}`} />
+      </form>
+    </Modal>
+  );
+}
+
+/**
+ * "Released" for the whole scholarship: everyone scheduled for this period is marked as having
+ * received the money in one step. A scholar who did not collect on the day is unticked — an
+ * exemption — and stays "not yet received" with a note, to be released once they claim it.
+ */
+function ReleaseAllModal({ rows, typeName, period, token, onClose, onSaved }) {
+  const [exempt, setExempt] = useState(() => new Set());
+  const [referenceNo, setReferenceNo] = useState('');
+  const [releasedAt, setReleasedAt] = useState(localDateInput);
+  const [reason, setReason] = useState('');
+  const [query, setQuery] = useState('');
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const shown = query.trim()
+    ? rows.filter(r => `${r.scholarName} ${r.studentId ?? ''}`.toLowerCase().includes(query.trim().toLowerCase()))
+    : rows;
+  const receiving = rows.filter(r => !exempt.has(r.scholarId));
+
+  function toggle(id) {
+    setExempt(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError('');
+    setSubmitting(true);
+    try {
+      const res = await releaseScholarshipBatch({
+        releaseIds: receiving.flatMap(r => r.pendingReleaseIds),
+        exemptReleaseIds: rows.filter(r => exempt.has(r.scholarId)).flatMap(r => r.pendingReleaseIds),
+        exemptReason: reason.trim() || null,
+        referenceNo: referenceNo.trim() || null,
+        releasedAt: releasedAt ? new Date(releasedAt).toISOString() : null,
+      }, token);
+      onSaved(res);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal title={`Release ${typeName}`} subtitle={`${period} · ${rows.length} scholar${rows.length === 1 ? '' : 's'} scheduled`}
+      onClose={onClose} width={640} dismissible={!submitting}>
+      {error && <ErrorBox>{error}</ErrorBox>}
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <p className="text-xs leading-relaxed" style={{ color: 'var(--text)' }}>
+          Everyone ticked is marked as having <strong>received</strong> the scholarship, and it shows on their
+          profile at once. Untick anyone who did not get their money — they are exempted and stay
+          <strong> not yet received</strong> until you release them individually.
+        </p>
+
+        <div>
+          <div className="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
+            <p className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text)' }}>
+              Received ({receiving.length}) · Exempted ({exempt.size})
+            </p>
+            <div className="flex gap-3">
+              <button type="button" className="text-xs font-semibold hover:underline" style={{ color: 'var(--accent)' }} onClick={() => setExempt(new Set())}>Tick all</button>
+              <button type="button" className="text-xs font-semibold hover:underline" style={{ color: 'var(--text-muted)' }} onClick={() => setExempt(new Set(rows.map(r => r.scholarId)))}>Untick all</button>
+            </div>
+          </div>
+          <input type="search" value={query} onChange={e => setQuery(e.target.value)} className="clay-input mb-2"
+            placeholder="Find a scholar…" aria-label="Find a scholar" />
+          <div className="rounded-2xl p-2 max-h-64 overflow-y-auto" style={{ background: 'var(--surface-inset)' }}>
+            {shown.map(r => {
+              const on = !exempt.has(r.scholarId);
+              return (
+                <label key={r.scholarId} className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg cursor-pointer text-sm">
+                  <input type="checkbox" checked={on} onChange={() => toggle(r.scholarId)} />
+                  <span className="flex-1 min-w-0 truncate" style={{ color: 'var(--text-strong)' }}>{r.scholarName}</span>
+                  <span className="text-xs shrink-0" style={{ color: on ? 'var(--tone-ok-fg)' : 'var(--tone-attention-fg)' }}>
+                    {on ? 'Received' : 'Not yet received'}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+
+        {exempt.size > 0 && (
+          <Field label="Why the exempted scholars did not receive it (optional)">
+            <input value={reason} onChange={e => setReason(e.target.value)} maxLength={500} className="clay-input"
+              placeholder="e.g. Did not claim at the cashier on the release day" />
+          </Field>
+        )}
+
+        <div className="grid sm:grid-cols-2 gap-4">
+          <Field label="Date received">
+            <input required type="date" value={releasedAt} onChange={e => setReleasedAt(e.target.value)} className="clay-input" />
+          </Field>
+          <Field label="Reference number (optional)">
+            <input value={referenceNo} onChange={e => setReferenceNo(e.target.value)} className="clay-input" placeholder="Payroll / disbursement no." />
+          </Field>
+        </div>
+
+        <ModalButtons onClose={onClose} submitting={submitting} disabled={rows.length === 0}
+          label={receiving.length > 0 ? `Mark ${receiving.length} as received` : 'Save exemptions'} />
       </form>
     </Modal>
   );

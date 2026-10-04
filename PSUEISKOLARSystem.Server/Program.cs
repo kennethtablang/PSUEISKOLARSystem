@@ -204,6 +204,11 @@ namespace PSUEISKOLARSystem.Server
                 var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
                 await dbContext.Database.MigrateAsync();
                 await DbSeeder.SeedAsync(scope.ServiceProvider);
+
+                // Sample scholars, grantees, documents and releases for trying the pages out.
+                // Development only — the sample accounts share a published password.
+                if (app.Environment.IsDevelopment())
+                    await Revision4SampleSeeder.SeedAsync(scope.ServiceProvider);
             }
 
             // First in the pipeline so the headers reach static assets and error responses too.

@@ -26,6 +26,8 @@ namespace PSUEISKOLARSystem.Server.Controllers
             [FromQuery] bool? meetsRequirement,
             [FromQuery] string? lifecycleStatus,
             [FromQuery] string? approvalStatus,
+            [FromQuery] string? sex,
+            [FromQuery] int? yearLevel,
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 20)
         {
@@ -42,6 +44,10 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
             if (campusId.HasValue)
                 query = query.Where(sp => sp.CampusId == campusId);
+            if (!string.IsNullOrWhiteSpace(sex))
+                query = query.Where(sp => sp.Personal.Sex == sex);
+            if (yearLevel.HasValue)
+                query = query.Where(sp => sp.YearLevel == yearLevel);
 
             if (!string.IsNullOrWhiteSpace(lifecycleStatus))
                 query = query.Where(sp => sp.LifecycleStatus == lifecycleStatus);
@@ -420,7 +426,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 {
                     profile.StudentId,
                     Campus = profile.Campus?.Name,
-                    Program = profile.Program?.Name,
+                    Program = profile.Program?.DisplayName,
                     ScholarshipType = profile.ScholarshipType?.Name,
                     profile.YearLevel,
                     profile.LifecycleStatus,
@@ -716,7 +722,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 CampusId = sp.CampusId,
                 CampusName = sp.Campus?.Name,
                 ProgramId = sp.ProgramId,
-                ProgramName = sp.Program?.Name,
+                ProgramName = sp.Program?.DisplayName,
                 ProgramCode = sp.Program?.Code,
                 ScholarshipTypeId = sp.ScholarshipTypeId,
                 ScholarshipTypeName = sp.ScholarshipType?.Name,

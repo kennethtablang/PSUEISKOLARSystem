@@ -30,6 +30,10 @@ namespace PSUEISKOLARSystem.Server.Models
         [MaxLength(100)]
         public string? MiddleName { get; set; }
 
+        /// <summary>Male or Female, when the office's list gives it. Not part of the match.</summary>
+        [MaxLength(10)]
+        public string? Sex { get; set; }
+
         /// <summary>When set, the student must also have picked this campus.</summary>
         public int? CampusId { get; set; }
         public Campus? Campus { get; set; }

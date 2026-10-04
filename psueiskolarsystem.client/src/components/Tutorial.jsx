@@ -46,7 +46,7 @@ const SCHOLAR_STEPS = [
   },
   {
     target: '/my-documents', route: '/my-documents', Icon: FileCheck, title: 'Uploading and what happens next',
-    body: 'Upload a file and it goes to your coordinator as Pending. They mark it Verified, or Incomplete with a note telling you what to fix. Re-upload as many times as you need until it clears.',
+    body: 'Upload a file and it goes to your coordinator as Pending. They mark it Under Review while checking it, then Verified, or Rejected with a note telling you what to fix. Re-upload as many times as you need until it clears.',
   },
   {
     target: '/my-documents', route: '/my-documents', Icon: CalendarClock, title: 'Deadlines',
@@ -92,19 +92,15 @@ const COORDINATOR_STEPS = [
     body: 'Documents several scholarships ask for live here once. Group and reorder them and the scholar checklist follows. Documents unique to one scholarship are edited on that scholarship instead.',
   },
   {
-    target: '/scholars', route: '/scholars', Icon: GraduationCap, title: 'Step 3 — the roster',
-    body: 'Filter by program, scholarship, compliance, or lifecycle status. Open anyone to see their profile, grade history, GWA trend, scholarship ledger, and grants — all on one page.',
+    target: '/master-list', route: '/master-list', Icon: GraduationCap, title: 'Step 3 — the roster',
+    body: 'Every scholar and grantee once, with all their scholarships and grants. Each scholarship type also lists its own scholars, its cross-matching list of who may sign up, and its documents with their deadline — open the type to work in it.',
   },
   {
-    target: '/deadlines', route: '/deadlines', Icon: CalendarClock, title: 'Step 4 — set the window',
-    body: 'Give each requirement a due date per period. The compliance report then tells you exactly who submitted on time, who was late, and who never submitted at all.',
+    target: '/document-review', route: '/document-review', Icon: FileCheck, title: 'Step 4 — review what comes in',
+    body: 'Open a scholar to see every document they sent; verify each, or reject it with feedback the scholar sees and can act on. Tick several and clear them in one pass when the batch is straightforward.',
   },
   {
-    target: '/document-review', route: '/document-review', Icon: FileCheck, title: 'Step 5 — review what comes in',
-    body: 'Verify a submission, or mark it Incomplete with feedback the scholar sees and can act on. Tick several and clear them in one pass when the batch is straightforward.',
-  },
-  {
-    target: '/scholarship-releases', route: '/scholarship-releases', Icon: BanknoteArrowUp, title: 'Step 6 — pay the scholars',
+    target: '/scholarship-releases', route: '/scholarship-releases', Icon: BanknoteArrowUp, title: 'Step 5 — pay the scholars',
     body: 'Pick a scholarship and a period to see every holder and whether they have actually been paid. “Not recorded” means nobody has even scheduled their payout — the state you most need to catch.',
   },
   {
@@ -124,7 +120,7 @@ const COORDINATOR_STEPS = [
     body: 'Threads with individual scholars, optionally tied to a requirement so the context is obvious. They get your reply in-app and by email.',
   },
   {
-    target: '/analytics', route: '/analytics', Icon: BarChart2, title: 'Step 7 — see the whole picture',
+    target: '/analytics', route: '/analytics', Icon: BarChart2, title: 'Step 6 — see the whole picture',
     body: 'Compliance, submissions, scholar distribution, semester-over-semester comparison, and disbursement coverage — updating live as work happens. Export any of it to Excel or PDF.',
   },
   {

@@ -89,8 +89,8 @@ namespace PSUEISKOLARSystem.Server.Services
                     g.Key.Semester,
                     Total = g.Count(),
                     Verified = g.Count(s => s.Status == DocumentStatus.Verified),
-                    Pending = g.Count(s => s.Status == DocumentStatus.Pending),
-                    Incomplete = g.Count(s => s.Status == DocumentStatus.Incomplete),
+                    Pending = g.Count(s => s.Status == DocumentStatus.Pending || s.Status == DocumentStatus.UnderReview),
+                    Incomplete = g.Count(s => s.Status == DocumentStatus.Rejected),
                 })
                 .ToListAsync(ct);
 

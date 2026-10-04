@@ -62,6 +62,11 @@ export async function batchReviewDocuments(ids, status, feedbackNote, token) {
   return apiSend(`${API}/batch-review`, 'POST', { ids, status, feedbackNote }, token, 'Batch review failed.');
 }
 
+/** Marks documents a reviewer has opened as Under Review (only those still Submitted move). */
+export async function startDocumentReview(ids, token) {
+  return apiSend(`/api/documents/start-review`, 'POST', { ids }, token, 'Failed to start the review.');
+}
+
 export async function getSubmissionHistory(id, token) {
   return apiGet(`${API}/${id}/history`, token, 'Failed to load history.');
 }

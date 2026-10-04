@@ -28,13 +28,33 @@ export async function deleteMasterListLine(id, token) {
   return apiDelete(`${API}/${id}`, token, 'Failed to remove the line.');
 }
 
-export async function downloadMasterListTemplate(token) {
-  const res = await apiFetch(`${API}/template.xlsx`, { token, fallback: 'Failed to download template.' });
-  triggerDownload(await res.blob(), 'master_list_template.xlsx');
+/** Excel template; from inside a type (`{ scholarshipTypeId }` or `{ grantTypeId }`) it is for that type. */
+export async function downloadMasterListTemplate(token, scope = {}) {
+  const params = new URLSearchParams();
+  if (scope.scholarshipTypeId) params.set('scholarshipTypeId', scope.scholarshipTypeId);
+  if (scope.grantTypeId) params.set('grantTypeId', scope.grantTypeId);
+  const res = await apiFetch(`${API}/template.xlsx?${params}`, { token, fallback: 'Failed to download template.' });
+  triggerDownload(await res.blob(), 'cross_matching_template.xlsx');
 }
 
-export async function importMasterList(file, token) {
+/** Imports lines; with a scope every row goes on that scholarship / grant type's list. */
+export async function importMasterList(file, token, scope = {}) {
   const body = new FormData();
   body.append('file', file);
-  return apiForm(`${API}/import`, body, token, 'Import failed.');
+  const params = new URLSearchParams();
+  if (scope.scholarshipTypeId) params.set('scholarshipTypeId', scope.scholarshipTypeId);
+  if (scope.grantTypeId) params.set('grantTypeId', scope.grantTypeId);
+  return apiForm(`${API}/import?${params}`, body, token, 'Import failed.');
+}
+
+/** The Master List page: one row per student across every scholarship and grant list. */
+export async function getMasterListPeople(token, { page = 1, pageSize = 20, ...filters } = {}) {
+  const params = new URLSearchParams({ page, pageSize });
+  for (const [k, v] of Object.entries(filters)) if (v !== '' && v != null) params.set(k, v);
+  return apiGet(`${API}/people?${params}`, token, 'Failed to load the master list.');
+}
+
+/** Scholars matched again by another scholarship type's cross-matching list. */
+export async function getCrossMatchConflicts(token) {
+  return apiGet(`${API}/conflicts`, token, 'Failed to load cross-matching alerts.');
 }

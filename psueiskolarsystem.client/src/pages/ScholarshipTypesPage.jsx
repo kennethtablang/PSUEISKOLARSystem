@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { NumericInput } from '../components/PersonalDetailsFields';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
@@ -20,8 +21,11 @@ import { SCHOLARSHIP_FREQUENCIES, FREQUENCY_LABELS, peso } from '../constants/gr
 const CATEGORIES = ['Government', 'Private', 'Institutional', 'Local (LGU)', 'International', 'Other'];
 
 export default function ScholarshipTypesPage() {
+  const navigate = useNavigate();
   useTitle('Scholarship Types');
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  // Coordinators open types to work in them; only an administrator defines them.
+  const isAdmin = user?.role === 'Administrator';
   const toast = useToast();
   const confirm = useConfirm();
   const [types, setTypes] = useState([]);
@@ -100,13 +104,15 @@ export default function ScholarshipTypesPage() {
           <div>
             <h1 className="page-title">Scholarship Types</h1>
             <p className="page-subtitle">
-              Define scholarship types, the shared documents they require, and any documents unique to them.
+              Every scholarship type the office manages. Open one to see its scholars, the cross-matching list of who may sign up under it, and the documents it requires with their deadlines.
             </p>
             <span className="page-title-bar" />
           </div>
-          <button onClick={openCreate} className="clay-btn clay-btn-primary px-4 py-2.5 text-sm flex items-center gap-1.5">
-            <Plus size={15} strokeWidth={2.6} /> New Scholarship Type
-          </button>
+          {isAdmin && (
+            <button onClick={openCreate} className="clay-btn clay-btn-primary px-4 py-2.5 text-sm flex items-center gap-1.5">
+              <Plus size={15} strokeWidth={2.6} /> New Scholarship Type
+            </button>
+          )}
         </div>
 
         <div className="mb-4">
@@ -142,7 +148,7 @@ export default function ScholarshipTypesPage() {
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-2 flex-wrap">
                           <button
-                            onClick={() => setViewingId(st.id)}
+                            onClick={() => navigate(`/scholarship-types/${st.id}`)}
                             className="font-semibold text-left hover:underline"
                             style={{ color: 'var(--text-strong)' }}
                           >
@@ -207,12 +213,13 @@ export default function ScholarshipTypesPage() {
                       <td className="px-5 py-3.5 text-right">
                         <div className="flex items-center gap-3 justify-end">
                           <button
-                            onClick={() => setViewingId(st.id)}
+                            onClick={() => navigate(`/scholarship-types/${st.id}`)}
                             className="text-xs font-medium hover:underline flex items-center gap-1"
                             style={{ color: '#6030b0' }}
                           >
-                            <Eye size={12} strokeWidth={2.4} /> View
+                            <Eye size={12} strokeWidth={2.4} /> Open
                           </button>
+                          {isAdmin && <>
                           <button
                             onClick={() => openEdit(st)}
                             className="text-xs font-medium hover:underline"
@@ -234,6 +241,7 @@ export default function ScholarshipTypesPage() {
                           >
                             Delete
                           </button>
+                          </>}
                         </div>
                       </td>
                     </tr>
@@ -468,7 +476,7 @@ function DocList({ docs, emptyNote, accent }) {
 }
 
 /* ── Create / edit ─────────────────────────────────────── */
-function ScholarshipTypeModal({ initial, allRequirements, defaultGwa = '2.50', token, onClose, onSaved }) {
+export function ScholarshipTypeModal({ initial, allRequirements, defaultGwa = '2.50', token, onClose, onSaved }) {
   const [form, setForm] = useState({
     name:           initial?.name ?? '',
     description:    initial?.description ?? '',

@@ -11,6 +11,8 @@ export async function getScholars(token, filters = {}) {
   if (filters.meetsRequirement !== undefined && filters.meetsRequirement !== '') params.set('meetsRequirement', filters.meetsRequirement);
   if (filters.lifecycleStatus) params.set('lifecycleStatus', filters.lifecycleStatus);
   if (filters.approvalStatus) params.set('approvalStatus', filters.approvalStatus);
+  if (filters.sex) params.set('sex', filters.sex);
+  if (filters.yearLevel) params.set('yearLevel', filters.yearLevel);
   if (filters.page) params.set('page', filters.page);
   if (filters.pageSize) params.set('pageSize', filters.pageSize);
   // Returns { total, page, pageSize, totalPages, items }

@@ -10,7 +10,7 @@ namespace PSUEISKOLARSystem.Server.Models
         public DocumentSubmission Submission { get; set; } = null!;
 
         [MaxLength(20)]
-        public string Status { get; set; } = string.Empty;   // Pending / Verified / Incomplete
+        public string Status { get; set; } = string.Empty;   // Pending / UnderReview / Verified / Rejected (older rows: Incomplete)
 
         [MaxLength(1000)]
         public string? Note { get; set; }

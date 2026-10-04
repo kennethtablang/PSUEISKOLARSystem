@@ -126,7 +126,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             if (await db.AcademicPrograms.AnyAsync(p => p.Code == code))
                 return BadRequest(new { message = $"A program with code {code} already exists." });
 
-            var program = new AcademicProgram { Name = dto.Name.Trim(), Code = code };
+            var program = new AcademicProgram { Name = dto.Name.Trim(), Code = code, Major = Major(dto.Major) };
             foreach (var cid in (dto.CampusIds ?? []).Distinct())
                 program.Campuses.Add(new CampusProgram { CampusId = cid });
 
@@ -149,6 +149,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
             program.Name = dto.Name.Trim();
             program.Code = code;
+            program.Major = Major(dto.Major);
             db.Audit(this, "UpdateProgram", $"Updated program {program.Name} ({code})");
             await db.SaveChangesAsync();
             return NoContent();
@@ -171,6 +172,15 @@ namespace PSUEISKOLARSystem.Server.Controllers
             await db.SaveChangesAsync();
             return NoContent();
         }
+
+        // The major is optional; "Major in" is added when it is shown, so a typed prefix is dropped.
+        private static string? Major(string? major)
+        {
+            if (string.IsNullOrWhiteSpace(major)) return null;
+            var m = major.Trim();
+            if (m.StartsWith("major in ", StringComparison.OrdinalIgnoreCase)) m = m[9..].Trim();
+            return m.Length == 0 ? null : m;
+        }
     }
 
     public record CampusRequest(
@@ -183,5 +193,6 @@ namespace PSUEISKOLARSystem.Server.Controllers
     public record ProgramRequest(
         [Required, MaxLength(200)] string Name,
         [Required, MaxLength(20)] string Code,
-        List<int>? CampusIds);
+        List<int>? CampusIds,
+        [MaxLength(150)] string? Major = null);
 }

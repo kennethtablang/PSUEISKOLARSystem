@@ -96,7 +96,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     sp.StudentId,
                     sp.YearLevel,
                     sp.ContactNumber,
-                    ProgramName = sp.Program != null ? sp.Program.Name : null,
+                    ProgramName = sp.Program != null ? (sp.Program.Major == null ? sp.Program.Name : sp.Program.Name + " (Major in " + sp.Program.Major + ")") : null,
                     ProgramCode = sp.Program != null ? sp.Program.Code : null,
                     sp.ScholarshipTypeId,
                     ScholarshipTypeName = sp.ScholarshipType != null ? sp.ScholarshipType.Name : null,

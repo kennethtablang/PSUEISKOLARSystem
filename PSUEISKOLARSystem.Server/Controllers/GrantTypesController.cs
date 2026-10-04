@@ -21,7 +21,10 @@ namespace PSUEISKOLARSystem.Server.Controllers
     [ApiController]
     [Route("api/grant-types")]
     [Authorize(Roles = $"{UserRoles.Administrator},{UserRoles.ScholarshipCoordinator}")]
-    public class GrantTypesController(ApplicationDbContext db, INotificationService notifications) : ControllerBase
+    public class GrantTypesController(
+        ApplicationDbContext db,
+        INotificationService notifications,
+        IAnnouncementDelivery announcements) : ControllerBase
     {
         // GET /api/grant-types
         [HttpGet]
@@ -43,6 +46,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     t.IsActive,
                     t.CreatedAt,
                     t.DeactivatedAt,
+                    t.AccountsClosedAt,
                     GrantCount = db.OneTimeGrants.Count(g => g.GrantTypeId == t.Id),
                     ReleasedCount = db.OneTimeGrants.Count(g => g.GrantTypeId == t.Id && g.ReleaseStatus == GrantReleaseStatuses.Released),
                     PendingCount = db.OneTimeGrants.Count(g => g.GrantTypeId == t.Id && g.ReleaseStatus == GrantReleaseStatuses.Pending),
@@ -76,8 +80,10 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 ScheduledDate = dto.ScheduledDate?.Date,
             };
             db.GrantTypes.Add(type);
-            db.Audit(this, "CreateGrantType", $"Added grant type '{type.Name}'");
+            db.Audit(this, "CreateGrantType", $"Added grant type '{type.Name}'" +
+                (type.ScheduledDate is DateTime d ? $" — release on {d:MMM d, yyyy}" : " — release date not set yet"));
             await db.SaveChangesAsync();
+            await AnnounceReleaseDateAsync(type);
             return Ok(new { type.Id });
         }
 
@@ -100,29 +106,52 @@ namespace PSUEISKOLARSystem.Server.Controllers
             var newDate = dto.ScheduledDate?.Date;
             var rescheduled = newDate != type.ScheduledDate;
             type.ScheduledDate = newDate;
+            // A new release date means a new release day to close the accounts after.
+            if (rescheduled) type.AccountsClosedAt = null;
 
             db.Audit(this, "UpdateGrantType", $"Updated grant type '{type.Name}'" +
                 (rescheduled ? $" — release {(newDate is DateTime d ? $"scheduled for {d:MMM d, yyyy}" : "schedule cleared")}" : ""));
             await db.SaveChangesAsync();
 
             // Tell everyone still waiting for this grant when it will arrive.
-            if (rescheduled && newDate is DateTime date && date >= GrantReleaseService.PhilippineToday())
-            {
-                var waiting = await db.OneTimeGrants
-                    .Where(g => g.GrantTypeId == id && g.ReleaseStatus == GrantReleaseStatuses.Pending)
-                    .Select(g => new { g.ScholarId, IsGrantee = db.GranteeProfiles.Any(gp => gp.UserId == g.ScholarId) })
-                    .Distinct()
-                    .ToListAsync();
-                foreach (var r in waiting)
-                    await notifications.CreateAsync(
-                        r.ScholarId,
-                        "Grant release scheduled",
-                        $"Your '{type.Name}' grant is scheduled for release on {date:MMMM d, yyyy}.",
-                        NotificationCategories.Account,
-                        GrantReleaseService.GrantsLink(r.IsGrantee));
-            }
+            if (rescheduled) await AnnounceReleaseDateAsync(type);
 
             return NoContent();
+        }
+
+        /// <summary>
+        /// Once the release date is known, the system announces it on its own to every account
+        /// waiting on a grant of this type — an announcement addressed to exactly those people,
+        /// so it sits in their announcements feed as well as ringing the bell.
+        /// </summary>
+        private async Task AnnounceReleaseDateAsync(GrantType type)
+        {
+            if (type.ScheduledDate is not DateTime date || date < GrantReleaseService.PhilippineToday()) return;
+
+            var waiting = await db.OneTimeGrants
+                .Where(g => g.GrantTypeId == type.Id && g.ReleaseStatus == GrantReleaseStatuses.Pending)
+                .Select(g => g.ScholarId)
+                .Distinct()
+                .ToListAsync();
+            if (waiting.Count == 0) return;
+
+            var actorId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (actorId is null) return;
+
+            var announcement = new Announcement
+            {
+                Title = $"{type.Name}: release on {date:MMMM d, yyyy}",
+                Content = $"The release date of your '{type.Name}' grant has been set to {date:dddd, MMMM d, yyyy}." +
+                          (type.Sponsor is null ? "" : $" Sponsor: {type.Sponsor}.") +
+                          " Please be ready to receive it on that day. Grantee accounts under this grant are closed " +
+                          "automatically once the release day is over.",
+                CreatedById = actorId,
+                Recipients = waiting.Select(id => new AnnouncementRecipient { ScholarId = id }).ToList(),
+            };
+            db.Announcements.Add(announcement);
+            db.Audit(this, "AnnounceGrantRelease", $"Announced the {date:MMM d, yyyy} release of '{type.Name}' to {waiting.Count} account(s)");
+            await db.SaveChangesAsync();
+            await announcements.PublishAsync(announcement);
         }
 
         /// <summary>
@@ -138,48 +167,27 @@ namespace PSUEISKOLARSystem.Server.Controllers
             if (type is null) return NotFound();
             if (!type.IsActive) return BadRequest(new { message = $"'{type.Name}' is already deactivated." });
 
-            var granteeRoleId = await RoleIdAsync(UserRoles.Grantee);
-
-            var granteeIds = await db.OneTimeGrants
-                .Where(g => g.GrantTypeId == id && db.UserRoles.Any(ur => ur.UserId == g.ScholarId && ur.RoleId == granteeRoleId))
-                .Select(g => g.ScholarId)
-                .Distinct()
-                .ToListAsync();
-
-            var stillOwed = await db.OneTimeGrants
-                .Where(g => granteeIds.Contains(g.ScholarId)
-                         && g.GrantTypeId != id
-                         && g.ReleaseStatus == GrantReleaseStatuses.Pending
-                         && (g.GrantType == null || g.GrantType.IsActive))
-                .Select(g => g.ScholarId)
-                .Distinct()
-                .ToListAsync();
-
-            var toClose = granteeIds.Except(stillOwed).ToList();
-            var users = await db.Users.Where(u => toClose.Contains(u.Id) && u.IsActive).ToListAsync();
-            foreach (var u in users)
-            {
-                u.IsActive = false;
-                // Rotating the stamp ends any session the grantee still has open.
-                u.SecurityStamp = Guid.NewGuid().ToString();
-            }
+            var (closed, keptOpen) = await GrantReleaseService.CloseGranteeAccountsAsync(db, id);
 
             type.IsActive = false;
             type.DeactivatedAt = DateTime.UtcNow;
+            type.AccountsClosedAt = DateTime.UtcNow;
 
             var pending = await db.OneTimeGrants.CountAsync(g => g.GrantTypeId == id && g.ReleaseStatus == GrantReleaseStatuses.Pending);
 
             db.Audit(this, "DeactivateGrantType",
-                $"Deactivated grant type '{type.Name}' and {users.Count} grantee account(s)" +
+                $"Deactivated grant type '{type.Name}' and {closed} grantee account(s)" +
                 (pending > 0 ? $" ({pending} grant(s) were still pending)" : ""));
             await db.SaveChangesAsync();
 
             _ = notifications.BroadcastAsync("AnalyticsChanged");
-            return Ok(new { deactivatedAccounts = users.Count, keptOpen = stillOwed.Count, pendingGrants = pending });
+            return Ok(new { deactivatedAccounts = closed, keptOpen, pendingGrants = pending });
         }
 
-        // PATCH /api/grant-types/{id}/activate — reopens the type. Accounts stay as they are;
-        // an administrator reactivates individual grantees from Users if needed.
+        // PATCH /api/grant-types/{id}/activate — reopens the type and the grantee accounts that
+        // were closed with it. Grantee accounts close automatically after the release day, so
+        // this is the way back when the office needs them open again (e.g. someone did not
+        // receive their grant). The automatic close does not run again for the same date.
         [HttpPatch("{id:int}/activate")]
         [Authorize(Roles = UserRoles.Administrator)]
         public async Task<IActionResult> Activate(int id)
@@ -187,11 +195,16 @@ namespace PSUEISKOLARSystem.Server.Controllers
             var type = await db.GrantTypes.FindAsync(id);
             if (type is null) return NotFound();
 
+            var granteeIds = await GrantReleaseService.GranteeIdsAsync(db, id);
+            var users = await db.Users.Where(u => granteeIds.Contains(u.Id) && !u.IsActive).ToListAsync();
+            foreach (var u in users) u.IsActive = true;
+
             type.IsActive = true;
             type.DeactivatedAt = null;
-            db.Audit(this, "ActivateGrantType", $"Reactivated grant type '{type.Name}'");
+            db.Audit(this, "ActivateGrantType", $"Reactivated grant type '{type.Name}' and {users.Count} grantee account(s)");
             await db.SaveChangesAsync();
-            return NoContent();
+            _ = notifications.BroadcastAsync("AnalyticsChanged");
+            return Ok(new { reactivatedAccounts = users.Count });
         }
 
         // DELETE /api/grant-types/{id} — only while nothing has been recorded under it.

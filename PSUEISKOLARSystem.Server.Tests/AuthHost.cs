@@ -61,6 +61,7 @@ public sealed class AuthHost : IDisposable
             ExpiryMinutes = 60,
         }));
         services.AddSingleton(Options.Create(new EmailSettings { AppBaseUrl = "https://localhost" }));
+        services.AddScoped<INotificationService, FakeNotifications>();
         services.AddScoped<IAuthService, AuthService>();
 
         _provider = services.BuildServiceProvider();

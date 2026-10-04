@@ -23,7 +23,7 @@ public class MigrationAssumptionTests
            reconciliation having marked rows with a status nobody meant. */
         Assert.Equal(0, (int)DocumentStatus.Pending);
         Assert.Equal(1, (int)DocumentStatus.Verified);
-        Assert.Equal(2, (int)DocumentStatus.Incomplete);
+        Assert.Equal(2, (int)DocumentStatus.Rejected);
     }
 
     [Fact]

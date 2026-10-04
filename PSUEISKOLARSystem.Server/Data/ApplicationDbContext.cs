@@ -141,13 +141,13 @@ namespace PSUEISKOLARSystem.Server.Data
                 .OnDelete(DeleteBehavior.ClientSetNull);
 
             /* One live submission per requirement per period — the invariant Upload has always
-               described in a comment and enforced with a chain of `if`s. Incomplete rows are
+               described in a comment and enforced with a chain of `if`s. Rejected rows are
                excluded because a rejected attempt is kept as history and the scholar is
                expected to submit again alongside it, which is why the filter matches the
-               `Status != Incomplete` predicate Upload uses to find the existing row. */
+               `Status != Rejected` predicate Upload uses to find the existing row. */
             builder.Entity<DocumentSubmission>()
                 .HasIndex(ds => new { ds.ScholarId, ds.RequirementId, ds.AcademicYear, ds.Semester })
-                .HasFilter($"[Status] <> {(int)DocumentStatus.Incomplete}")
+                .HasFilter($"[Status] <> {(int)DocumentStatus.Rejected}")
                 .IsUnique();
 
             // The largest table in the system, and analytics, the deadline report, and every

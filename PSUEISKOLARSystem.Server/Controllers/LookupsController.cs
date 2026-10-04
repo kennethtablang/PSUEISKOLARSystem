@@ -22,8 +22,17 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 query = query.Where(p => p.Campuses.Any(c => c.CampusId == cid));
 
             var programs = await query
-                .OrderBy(p => p.Name)
-                .Select(p => new { p.Id, p.Name, p.Code, CampusIds = p.Campuses.Select(c => c.CampusId).ToList() })
+                .OrderBy(p => p.Name).ThenBy(p => p.Major)
+                .Select(p => new
+                {
+                    p.Id,
+                    // Shown everywhere a program is picked; carries the major when there is one.
+                    Name = p.Major == null ? p.Name : p.Name + " (Major in " + p.Major + ")",
+                    BaseName = p.Name,
+                    p.Major,
+                    p.Code,
+                    CampusIds = p.Campuses.Select(c => c.CampusId).ToList(),
+                })
                 .ToListAsync();
             return Ok(programs);
         }

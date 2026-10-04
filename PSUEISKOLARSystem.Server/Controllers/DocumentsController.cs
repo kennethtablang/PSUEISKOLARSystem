@@ -53,8 +53,12 @@ namespace PSUEISKOLARSystem.Server.Controllers
             if (requirementId.HasValue)
                 query = query.Where(ds => ds.RequirementId == requirementId);
 
-            if (!string.IsNullOrEmpty(status) && Enum.TryParse<DocumentStatus>(status, out var parsedStatus))
-                query = query.Where(ds => ds.Status == parsedStatus);
+            // "Pending" in the review queue means "still waiting on a decision", which includes
+            // documents a reviewer has opened but not decided yet.
+            if (!string.IsNullOrEmpty(status) && DocumentStatuses.TryParse(status, out var parsedStatus))
+                query = parsedStatus == DocumentStatus.Pending
+                    ? query.Where(ds => ds.Status == DocumentStatus.Pending || ds.Status == DocumentStatus.UnderReview)
+                    : query.Where(ds => ds.Status == parsedStatus);
 
             if (!string.IsNullOrEmpty(academicYear))
                 query = query.Where(ds => ds.AcademicYear == academicYear);
@@ -88,6 +92,9 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     ds.SubmittedAt,
                     ds.AcademicYear,
                     ds.Semester,
+                    StudentId = db.ScholarProfiles.Where(sp => sp.UserId == ds.ScholarId).Select(sp => sp.StudentId).FirstOrDefault(),
+                    ScholarshipTypeName = db.ScholarProfiles.Where(sp => sp.UserId == ds.ScholarId)
+                        .Select(sp => sp.ScholarshipType != null ? sp.ScholarshipType.Name : null).FirstOrDefault(),
                     // On-time / late vs the requirement's deadline for this period (FR-16.3)
                     DueDate = db.SubmissionDeadlines
                         .Where(dl => dl.RequirementId == ds.RequirementId &&
@@ -223,7 +230,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 ds.RequirementId == requirementId &&
                 ds.AcademicYear == academicYear &&
                 ds.Semester == semester &&
-                ds.Status != DocumentStatus.Incomplete);
+                ds.Status != DocumentStatus.Rejected);
 
             /* Whether this upload is allowed to stand in for the existing one.
 
@@ -246,8 +253,31 @@ namespace PSUEISKOLARSystem.Server.Controllers
                         ? "This document has already been verified and can no longer be replaced. " +
                           "Message your coordinator if it needs to be changed."
                         : "A submission already exists for this requirement and period. Remove it or " +
-                          "wait for the coordinator to mark it Incomplete before resubmitting.",
+                          "wait for the coordinator to review it — you can resubmit if it is rejected.",
                 });
+
+            /* A deadline that passed with nothing submitted locks the requirement for the period:
+               the scholar missed it, and the slot shows as locked on their profile. A scholar who
+               did submit in time can still resubmit a rejected document. Staff may still file
+               on the scholar's behalf. */
+            if (!isStaff)
+            {
+                var missedDue = await db.SubmissionDeadlines
+                    .Where(d => d.RequirementId == requirementId
+                             && d.AcademicYear == academicYear
+                             && d.Semester == semester
+                             && d.DueDate < DateTime.UtcNow)
+                    .Select(d => (DateTime?)d.DueDate)
+                    .FirstOrDefaultAsync();
+                if (missedDue is DateTime missed && !await db.DocumentSubmissions.AnyAsync(ds =>
+                        ds.ScholarId == scholarId && ds.RequirementId == requirementId &&
+                        ds.AcademicYear == academicYear && ds.Semester == semester))
+                    return BadRequest(new
+                    {
+                        message = $"Submission for this requirement is locked — the deadline passed on {missed:d MMMM yyyy} " +
+                                  "and nothing was submitted. Contact the scholarship office."
+                    });
+            }
 
             // Late submissions: the deadline for this requirement and period, if one is set.
             if (!policy.AllowLateSubmissions && !isStaff)
@@ -374,7 +404,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
         [Authorize(Roles = $"{UserRoles.Administrator},{UserRoles.ScholarshipCoordinator}")]
         public async Task<IActionResult> PendingCount()
         {
-            var count = await db.DocumentSubmissions.CountAsync(ds => ds.Status == DocumentStatus.Pending);
+            var count = await db.DocumentSubmissions.CountAsync(ds => ds.Status == DocumentStatus.Pending || ds.Status == DocumentStatus.UnderReview);
             return Ok(new { count });
         }
 
@@ -473,7 +503,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             // Real-time in-app notification (FR-13/FR-14)
             await notifications.CreateAsync(
                 submission.ScholarId,
-                $"Document {status}",
+                status == DocumentStatus.Rejected ? "Document rejected — please resubmit" : $"Document {status}",
                 $"Your \"{requirementName}\" submission was marked {status}." +
                     (feedback is null ? "" : $" Note: {feedback}"),
                 NotificationCategories.DocumentStatus,
@@ -539,7 +569,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 var requirementName = submission.Requirement?.Name ?? "Document";
                 await notifications.CreateAsync(
                     submission.ScholarId,
-                    $"Document {status}",
+                    status == DocumentStatus.Rejected ? "Document rejected — please resubmit" : $"Document {status}",
                     $"Your \"{requirementName}\" submission was marked {status}." +
                         (feedback is null ? "" : $" Note: {feedback}"),
                     NotificationCategories.DocumentStatus,
@@ -560,7 +590,41 @@ namespace PSUEISKOLARSystem.Server.Controllers
         }
 
         /// <summary>
-        /// Shared rules for a review decision. Marking a document Incomplete without saying
+        /// POST /api/documents/start-review — a reviewer has opened these documents. Each one
+        /// still waiting moves from Submitted to Under review, so the scholar's tracker shows the
+        /// office is looking at it.
+        /// </summary>
+        [HttpPost("start-review")]
+        [Authorize(Roles = $"{UserRoles.Administrator},{UserRoles.ScholarshipCoordinator}")]
+        public async Task<IActionResult> StartReview(StartReviewRequest dto)
+        {
+            var ids = (dto.Ids ?? []).Distinct().ToList();
+            if (ids.Count == 0) return Ok(new { started = 0 });
+
+            var reviewerId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            var now = DateTime.UtcNow;
+            var submissions = await db.DocumentSubmissions
+                .Where(s => ids.Contains(s.Id) && s.Status == DocumentStatus.Pending)
+                .ToListAsync();
+
+            foreach (var submission in submissions)
+            {
+                submission.Status = DocumentStatus.UnderReview;
+                db.DocumentStatusHistories.Add(new DocumentStatusHistory
+                {
+                    SubmissionId = submission.Id,
+                    Status = nameof(DocumentStatus.UnderReview),
+                    Note = "The scholarship office is reviewing this document.",
+                    ChangedById = reviewerId,
+                    ChangedAt = now,
+                });
+            }
+            if (submissions.Count > 0) await db.SaveChangesAsync();
+            return Ok(new { started = submissions.Count });
+        }
+
+        /// <summary>
+        /// Shared rules for a review decision. Rejecting a document without saying
         /// what is wrong leaves the scholar unable to fix it, and that rule was only enforced
         /// by the review form — the API accepted a blank note. The note is also bounded to the
         /// 1000-character column, which otherwise failed at SaveChanges.
@@ -569,10 +633,10 @@ namespace PSUEISKOLARSystem.Server.Controllers
         {
             feedback = string.IsNullOrWhiteSpace(rawFeedback) ? null : rawFeedback.Trim();
 
-            if (!Enum.TryParse(rawStatus, out status) || status == DocumentStatus.Pending)
-                return BadRequest(new { message = "Status must be 'Verified' or 'Incomplete'." });
-            if (status == DocumentStatus.Incomplete && feedback is null)
-                return BadRequest(new { message = "Add feedback explaining what needs to be corrected before marking a document incomplete." });
+            if (!DocumentStatuses.TryParse(rawStatus, out status) || DocumentStatuses.AwaitingDecision(status))
+                return BadRequest(new { message = "Status must be 'Verified' or 'Rejected'." });
+            if (status == DocumentStatus.Rejected && feedback is null)
+                return BadRequest(new { message = "Add feedback explaining what needs to be corrected before rejecting a document." });
             if (feedback?.Length > 1000)
                 return BadRequest(new { message = "Feedback must be 1000 characters or fewer." });
             return null;
@@ -644,4 +708,5 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
     public record ReviewRequest(string Status, string? FeedbackNote);
     public record BatchReviewRequest(List<int> Ids, string Status, string? FeedbackNote);
+    public record StartReviewRequest(List<int>? Ids);
 }

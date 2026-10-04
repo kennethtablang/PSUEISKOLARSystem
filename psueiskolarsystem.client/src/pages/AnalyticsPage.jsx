@@ -13,11 +13,14 @@ import { GraduationCap, FileCheck, Clock, AlertTriangle, TrendingUp, Download, L
 import { useTitle } from '../hooks/useTitle';
 import { exportScholars, exportSubmissions } from '../api/reports';
 import { getAnalyticsTrends, getAnalyticsDisbursements, getAnalyticsDemographics, getAnalyticsGrantees } from '../api/analytics';
-import { getScholarshipTypes } from '../api/lookups';
+import { getScholarshipTypes, getPrograms } from '../api/lookups';
 import { getCampuses } from '../api/campuses';
 import { vizTokens, tooltipStyle } from '../constants/viz';
 import { peso, FREQUENCY_LABELS } from '../constants/grants';
 import InfoTip from '../components/InfoTip';
+import { downloadListReport } from '../api/listReports';
+import { getGrantTypes } from '../api/grantTypes';
+import { SEX_OPTIONS } from '../constants/personal';
 import { useNow } from '../hooks/useNow';
 
 /* Recharts reserves 60px for the Y axis and these charts count small integers, so the
@@ -237,7 +240,7 @@ export default function AnalyticsPage() {
                 stats={[
                   { label: 'Verified',   value: submissions.verified,   color: '#d4f5e2', text: '#0a5a3a' },
                   { label: 'Pending',    value: submissions.pending,    color: '#fff3cd', text: '#7d5a00' },
-                  { label: 'Incomplete', value: submissions.incomplete, color: '#ffe8d6', text: '#c05000' },
+                  { label: 'Rejected', value: submissions.incomplete, color: '#ffe8d6', text: '#c05000' },
                 ]}
               />
             </div>
@@ -289,7 +292,7 @@ export default function AnalyticsPage() {
                 subtitle="Document outcomes per academic semester"
                 info="Submissions in the selected period range, stacked by review outcome. Use the Semester Comparison below to see the trend across all periods at once."
                 table={{
-                  columns: ['Period', 'Verified', 'Pending', 'Incomplete'],
+                  columns: ['Period', 'Verified', 'Pending', 'Rejected'],
                   rows: byPeriod.map(p => [p.period, p.verified, p.pending, p.incomplete]),
                 }}
               >
@@ -303,7 +306,7 @@ export default function AnalyticsPage() {
                     {/* A 2px surface-coloured stroke keeps adjacent segments from fusing. */}
                     <Bar dataKey="verified"   name="Verified"   stackId="a" fill={t.status.verified}   stroke={t.gap} strokeWidth={2} maxBarSize={64} />
                     <Bar dataKey="pending"    name="Pending"    stackId="a" fill={t.status.pending}    stroke={t.gap} strokeWidth={2} maxBarSize={64} />
-                    <Bar dataKey="incomplete" name="Incomplete" stackId="a" fill={t.status.incomplete} stroke={t.gap} strokeWidth={2} radius={[4, 4, 0, 0]} maxBarSize={64} />
+                    <Bar dataKey="incomplete" name="Rejected" stackId="a" fill={t.status.incomplete} stroke={t.gap} strokeWidth={2} radius={[4, 4, 0, 0]} maxBarSize={64} />
                   </BarChart>
                 </ResponsiveContainer>
               </ChartCard>
@@ -338,6 +341,8 @@ export default function AnalyticsPage() {
               color={t.markColor}
               track={t.grid}
             />
+
+            <ReportBuilder campuses={campuses} scholarshipTypes={scholarshipTypes} />
 
             {/* No program panel here — that would restate the bar chart beside it. Its
                 numbers are one click away via the chart's table toggle instead. */}
@@ -618,7 +623,7 @@ function PeriodComparison({ trends, t }) {
         subtitle="Document outcomes per period — the stack height is that period's total"
         info="Every document submitted in each academic period, stacked by its review outcome. A rising stack means more submissions overall; a growing orange band means more are coming back incomplete."
         table={{
-          columns: ['Period', 'Verified', 'Pending', 'Incomplete', 'Total'],
+          columns: ['Period', 'Verified', 'Pending', 'Rejected', 'Total'],
           rows: periods.map(p => [p.period, p.verified, p.pending, p.incomplete, p.totalSubmissions]),
         }}
       >
@@ -633,7 +638,7 @@ function PeriodComparison({ trends, t }) {
             <ChartLegend items={[
               { label: 'Verified',   color: t.status.verified },
               { label: 'Pending',    color: t.status.pending },
-              { label: 'Incomplete', color: t.status.incomplete },
+              { label: 'Rejected', color: t.status.incomplete },
             ]} />
             <ResponsiveContainer width="100%" height={250}>
               <AreaChart data={periods} margin={CHART_MARGIN}>
@@ -645,7 +650,7 @@ function PeriodComparison({ trends, t }) {
                     a monotone spline would draw values that no period actually had. */}
                 <Area type="linear" dataKey="verified"   name="Verified"   stackId="s" stroke={t.gap} strokeWidth={2} fill={t.status.verified} fillOpacity={0.92} />
                 <Area type="linear" dataKey="pending"    name="Pending"    stackId="s" stroke={t.gap} strokeWidth={2} fill={t.status.pending} fillOpacity={0.92} />
-                <Area type="linear" dataKey="incomplete" name="Incomplete" stackId="s" stroke={t.gap} strokeWidth={2} fill={t.status.incomplete} fillOpacity={0.92} />
+                <Area type="linear" dataKey="incomplete" name="Rejected" stackId="s" stroke={t.gap} strokeWidth={2} fill={t.status.incomplete} fillOpacity={0.92} />
               </AreaChart>
             </ResponsiveContainer>
           </>
@@ -721,7 +726,7 @@ function PeriodComparison({ trends, t }) {
                 <DeltaRow label="Documents submitted" from={a.totalSubmissions} to={b.totalSubmissions} />
                 <DeltaRow label="Verified" from={a.verified} to={b.verified} />
                 <DeltaRow label="Pending review" from={a.pending} to={b.pending} goodWhenDown />
-                <DeltaRow label="Incomplete" from={a.incomplete} to={b.incomplete} goodWhenDown />
+                <DeltaRow label="Rejected" from={a.incomplete} to={b.incomplete} goodWhenDown />
                 <DeltaRow label="Verification rate" from={a.verifiedRate} to={b.verifiedRate} suffix="%" />
                 <DeltaRow label="Grades recorded" from={a.totalGraded} to={b.totalGraded} />
                 <DeltaRow label="GWA compliant" from={a.compliant} to={b.compliant} />
@@ -1276,5 +1281,124 @@ function GranteeAnalytics({ token, t, campuses, liveTick }) {
         </>
       )}
     </section>
+  );
+}
+
+/* ── Report builder ──────────────────────────────── */
+
+const REPORT_KINDS = [
+  { key: 'scholars', label: 'Scholars' },
+  { key: 'grantees', label: 'Grantees' },
+  { key: 'masterlist', label: 'Master list (scholars & grantees)' },
+];
+
+/**
+ * A report made to order: pick who to list and narrow it down, and the system generates
+ * exactly that — e.g. every scholar at one campus with the scholarship each holds, or the
+ * female grantees of one grant. Excel to work with, PDF to print; the filters are written into
+ * the report's heading.
+ */
+function ReportBuilder({ campuses, scholarshipTypes }) {
+  const { token } = useAuth();
+  const toast = useToast();
+  const [kind, setKind] = useState('scholars');
+  const [f, setF] = useState({ campusId: '', scholarshipTypeId: '', grantTypeId: '', programId: '', yearLevel: '', sex: '', status: '' });
+  const [programs, setPrograms] = useState([]);
+  const [grantTypes, setGrantTypes] = useState([]);
+  const [busy, setBusy] = useState('');
+
+  useEffect(() => {
+    getPrograms(token).then(setPrograms).catch(() => {});
+    getGrantTypes(token).then(setGrantTypes).catch(() => {});
+  }, [token]);
+
+  const set = (k, v) => setF(x => ({ ...x, [k]: v }));
+  const ctl = 'clay-input text-xs';
+  const ctlSt = { height: 34, minHeight: 34 };
+
+  function filters() {
+    const common = { campusId: f.campusId, sex: f.sex };
+    if (kind === 'scholars') return { ...common, scholarshipTypeId: f.scholarshipTypeId, programId: f.programId, yearLevel: f.yearLevel, lifecycleStatus: f.status };
+    if (kind === 'grantees') return { ...common, grantTypeId: f.grantTypeId, programId: f.programId, yearLevel: f.yearLevel, active: f.status };
+    return { ...common, scholarshipTypeId: f.scholarshipTypeId, grantTypeId: f.grantTypeId, status: f.status };
+  }
+
+  async function run(format) {
+    setBusy(format);
+    try { await downloadListReport(kind, format, filters(), token); }
+    catch (e) { toast(e.message, 'error'); }
+    finally { setBusy(''); }
+  }
+
+  return (
+    <div className="clay-card p-5">
+      <h2 className="text-sm font-black" style={{ color: 'var(--text-strong)' }}>Custom Report</h2>
+      <p className="text-xs mt-0.5 mb-4" style={{ color: 'var(--text-muted)' }}>
+        Choose who to list and narrow it down — the report contains exactly that.
+      </p>
+      <div className="space-y-2">
+        <select value={kind} onChange={e => { setKind(e.target.value); set('status', ''); }} className={ctl} style={ctlSt} aria-label="Report of">
+          {REPORT_KINDS.map(k => <option key={k.key} value={k.key}>{k.label}</option>)}
+        </select>
+        <select value={f.campusId} onChange={e => set('campusId', e.target.value)} className={ctl} style={ctlSt} aria-label="Campus">
+          <option value="">All campuses</option>
+          {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+        {kind !== 'grantees' && (
+          <select value={f.scholarshipTypeId} onChange={e => set('scholarshipTypeId', e.target.value)} className={ctl} style={ctlSt} aria-label="Scholarship">
+            <option value="">All scholarships</option>
+            {scholarshipTypes.map(st => <option key={st.id} value={st.id}>{st.name}</option>)}
+          </select>
+        )}
+        {kind !== 'scholars' && (
+          <select value={f.grantTypeId} onChange={e => set('grantTypeId', e.target.value)} className={ctl} style={ctlSt} aria-label="Grant">
+            <option value="">All grants</option>
+            {grantTypes.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+          </select>
+        )}
+        {kind !== 'masterlist' && (
+          <div className="grid grid-cols-2 gap-2">
+            <select value={f.programId} onChange={e => set('programId', e.target.value)} className={ctl} style={ctlSt} aria-label="Program">
+              <option value="">All programs</option>
+              {programs.map(p => <option key={p.id} value={p.id}>{p.code}{p.major ? ` (${p.major})` : ''}</option>)}
+            </select>
+            <select value={f.yearLevel} onChange={e => set('yearLevel', e.target.value)} className={ctl} style={ctlSt} aria-label="Year level">
+              <option value="">All years</option>
+              {[1, 2, 3, 4, 5, 6].map(y => <option key={y} value={y}>Year {y}</option>)}
+            </select>
+          </div>
+        )}
+        <div className="grid grid-cols-2 gap-2">
+          <select value={f.sex} onChange={e => set('sex', e.target.value)} className={ctl} style={ctlSt} aria-label="Sex">
+            <option value="">Male &amp; Female</option>
+            {SEX_OPTIONS.map(x => <option key={x} value={x}>{x}</option>)}
+          </select>
+          <select value={f.status} onChange={e => set('status', e.target.value)} className={ctl} style={ctlSt} aria-label="Status">
+            {kind === 'scholars' && <>
+              <option value="">Any status</option>
+              {['Active', 'Renewed', 'Lapsed', 'Suspended', 'Graduated'].map(x => <option key={x} value={x}>{x}</option>)}
+            </>}
+            {kind === 'grantees' && <>
+              <option value="">Any account</option>
+              <option value="true">Active accounts</option>
+              <option value="false">Closed accounts</option>
+            </>}
+            {kind === 'masterlist' && <>
+              <option value="">Any account status</option>
+              <option value="claimed">Account created</option>
+              <option value="unclaimed">Not yet signed up</option>
+            </>}
+          </select>
+        </div>
+        <div className="grid grid-cols-2 gap-2 pt-1">
+          <button onClick={() => run('xlsx')} disabled={!!busy} className="clay-btn clay-btn-ghost text-xs py-2 flex items-center justify-center gap-1.5">
+            <Download size={13} /> {busy === 'xlsx' ? 'Generating…' : 'Excel'}
+          </button>
+          <button onClick={() => run('pdf')} disabled={!!busy} className="clay-btn clay-btn-ghost text-xs py-2 flex items-center justify-center gap-1.5">
+            <Download size={13} /> {busy === 'pdf' ? 'Generating…' : 'PDF'}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

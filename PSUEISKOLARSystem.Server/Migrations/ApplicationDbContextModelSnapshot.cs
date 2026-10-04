@@ -214,6 +214,10 @@ namespace PSUEISKOLARSystem.Server.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
+                    b.Property<string>("Major")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -741,6 +745,10 @@ namespace PSUEISKOLARSystem.Server.Migrations
                     b.Property<int?>("ScholarshipTypeId")
                         .HasColumnType("int");
 
+                    b.Property<string>("Sex")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
                     b.Property<string>("StudentId")
                         .IsRequired()
                         .HasMaxLength(30)
@@ -772,6 +780,9 @@ namespace PSUEISKOLARSystem.Server.Migrations
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("AccountsClosedAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
