@@ -310,6 +310,22 @@ namespace PSUEISKOLARSystem.Server.Data
                 .Property(t => t.Amount)
                 .HasPrecision(12, 2);
 
+            /* ── Campus scoping (revision 5) ── */
+
+            // Campus-exclusive scholarship types. A campus with types of its own cannot be
+            // deleted out from under them.
+            builder.Entity<ScholarshipType>()
+                .HasOne(t => t.Campus)
+                .WithMany()
+                .HasForeignKey(t => t.CampusId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            builder.Entity<ApplicationUser>()
+                .HasOne(u => u.Campus)
+                .WithMany()
+                .HasForeignKey(u => u.CampusId)
+                .OnDelete(DeleteBehavior.SetNull);
+
             /* ── Recurring scholarship releases (per semester / per year) ── */
 
             builder.Entity<ScholarshipRelease>()

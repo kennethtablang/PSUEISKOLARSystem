@@ -455,8 +455,9 @@ body {
 /* ═══ SPLIT PAGE LAYOUT ═══
    Two-column shell: working content on the left, secondary panels in a right rail.
    The rail is where a page's supporting material goes — summaries, filters, contextual
-   help — so wide screens gain information density instead of empty margin. Below 1280px
-   the rail stacks underneath, so nothing is lost on tablets and phones. */
+   help — so wide screens gain information density instead of empty margin. Below 1440px
+   the rail stacks underneath, so nothing is lost on laptops, half-screen windows, tablets
+   and phones — beside a 260px sidebar a rail any earlier left a table barely 570px. */
 .page-split {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -464,7 +465,7 @@ body {
   align-items: start;
 }
 
-@media (min-width: 1280px) {
+@media (min-width: 1440px) {
   .page-split { grid-template-columns: minmax(0, 1fr) 360px; }
   /* A hairline separates the rail from the working column without adding a box.
 
@@ -493,7 +494,7 @@ body {
   }
 }
 
-@media (min-width: 1600px) {
+@media (min-width: 1680px) {
   .page-split { grid-template-columns: minmax(0, 1fr) 420px; }
 }
 
@@ -1017,7 +1018,14 @@ select.clay-input {
     inset -1px 0 0 rgba(255, 255, 255, 0.07);
 }
 
-/* ═══ TABLE ═══ */
+/* ═══ TABLE ═══
+   Wide tables scroll sideways inside their card rather than crushing their columns: a
+   scholar's name breaking over four lines and the row actions cut off at the card edge was
+   what a non-maximised window used to show. Headings never wrap, and the scrollbar is kept
+   visible so the columns past the edge are discoverable. */
+.overflow-x-auto > table th { white-space: nowrap; }
+.overflow-x-auto { scrollbar-width: thin; }
+.overflow-x-auto::-webkit-scrollbar { height: 8px; }
 .clay-table-head {
   background: rgba(0, 48, 135, 0.05);
   border-bottom: 2px solid rgba(0, 48, 135, 0.09);

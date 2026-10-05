@@ -22,7 +22,8 @@ namespace PSUEISKOLARSystem.Server.Controllers
             [FromQuery] string? academicYear = null,
             [FromQuery] int? semester = null,
             CancellationToken ct = default)
-            => Ok(await analytics.OverviewAsync(academicYear, semester, ct));
+            // A coordinator's figures are their own campus's.
+            => Ok(await analytics.OverviewAsync(academicYear, semester, ct, await db.CampusOfAsync(User)));
 
         /// <summary>
         /// GET /api/analytics/demographics?population=scholars|grantees|all&amp;campusId=
@@ -36,6 +37,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
         [HttpGet("demographics")]
         public async Task<IActionResult> Demographics([FromQuery] string? population, [FromQuery] int? campusId)
         {
+            campusId = await db.CampusOfAsync(User) ?? campusId;
             population = population?.ToLowerInvariant() switch
             {
                 "grantees" => "grantees",
@@ -166,6 +168,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
         [HttpGet("grantees")]
         public async Task<IActionResult> Grantees([FromQuery] int? campusId)
         {
+            campusId = await db.CampusOfAsync(User) ?? campusId;
             var grantees = db.GranteeProfiles.AsQueryable();
             if (campusId is int cid) grantees = grantees.Where(g => g.CampusId == cid);
 
@@ -253,7 +256,9 @@ namespace PSUEISKOLARSystem.Server.Controllers
         [HttpGet("trends")]
         public async Task<IActionResult> Trends()
         {
+            var campusId = await db.CampusOfAsync(User);
             var submissionsByPeriod = await db.DocumentSubmissions
+                .AtCampus(db, campusId)
                 .GroupBy(s => new { s.AcademicYear, s.Semester })
                 .Select(g => new
                 {
@@ -266,6 +271,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 .ToListAsync();
 
             var gradesByPeriod = await db.AcademicGrades
+                .Where(g => campusId == null || g.ScholarProfile.CampusId == campusId)
                 .GroupBy(g => new { g.AcademicYear, g.Semester })
                 .Select(g => new
                 {
@@ -336,7 +342,11 @@ namespace PSUEISKOLARSystem.Server.Controllers
             [FromQuery] string? academicYear = null,
             [FromQuery] int? semester = null)
         {
-            var releases = db.ScholarshipReleases.AsQueryable();
+            var campusId = await db.CampusOfAsync(User);
+            var atCampus = db.StudentsAt(campusId);
+            var allReleases = db.ScholarshipReleases.AsQueryable();
+            if (atCampus is not null) allReleases = allReleases.Where(r => atCampus.Contains(r.ScholarId));
+            var releases = allReleases;
             if (!string.IsNullOrWhiteSpace(academicYear))
                 releases = releases.Where(r => r.AcademicYear == academicYear);
             if (semester is int sem)
@@ -355,6 +365,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             // Holders per type, so coverage can be stated as a share of who is owed rather
             // than a share of rows that happen to exist.
             var holders = await db.ScholarProfiles
+                .AtCampus(campusId)
                 .Where(sp => sp.ScholarshipTypeId != null)
                 .GroupBy(sp => sp.ScholarshipTypeId!.Value)
                 .Select(g => new { TypeId = g.Key, Count = g.Count() })
@@ -394,7 +405,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 .OrderByDescending(t => t.releasedAmount)
                 .ToList();
 
-            var perPeriod = await db.ScholarshipReleases
+            var perPeriod = await allReleases
                 .GroupBy(r => new { r.AcademicYear, r.Semester })
                 .Select(g => new
                 {
@@ -425,8 +436,9 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 .ToList();
 
             // One-off grants, reported beside the recurring stream rather than folded into it.
-            var grantsReleased = db.OneTimeGrants.Where(g => g.ReleaseStatus == GrantReleaseStatuses.Released);
-            var grantsPending = db.OneTimeGrants.Where(g => g.ReleaseStatus == GrantReleaseStatuses.Pending);
+            var campusGrants = atCampus is null ? db.OneTimeGrants : db.OneTimeGrants.Where(g => atCampus.Contains(g.ScholarId));
+            var grantsReleased = campusGrants.Where(g => g.ReleaseStatus == GrantReleaseStatuses.Released);
+            var grantsPending = campusGrants.Where(g => g.ReleaseStatus == GrantReleaseStatuses.Pending);
             var grantsReleasedCount = await grantsReleased.CountAsync();
             var grantsPendingCount = await grantsPending.CountAsync();
 

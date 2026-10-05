@@ -70,6 +70,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             var requirement = await db.DocumentRequirements.FindAsync(dto.RequirementId);
             if (requirement is null || !requirement.IsActive)
                 return BadRequest(new { message = "Document requirement not found." });
+            if (await CoordinatorBlockedAsync(dto.RequirementId) is { } blocked) return blocked;
 
             var existing = await db.SubmissionDeadlines.FirstOrDefaultAsync(d =>
                 d.RequirementId == dto.RequirementId &&
@@ -113,6 +114,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
         {
             var deadline = await db.SubmissionDeadlines.FindAsync(id);
             if (deadline is null) return NotFound();
+            if (await CoordinatorBlockedAsync(deadline.RequirementId) is { } blocked) return blocked;
 
             if (DueDateProblem(dto.DueDate) is { } dueProblem)
                 return BadRequest(new { message = dueProblem });
@@ -125,6 +127,22 @@ namespace PSUEISKOLARSystem.Server.Controllers
             deadline.DueDate = dto.DueDate;
             await db.SaveChangesAsync();
             return NoContent();
+        }
+
+        /// <summary>
+        /// A deadline is one date for every scholar who must submit the document, so a coordinator
+        /// may only set it on a document that belongs to one of their own campus's scholarship
+        /// types; a shared document's deadline reaches every campus and is the administrator's.
+        /// </summary>
+        private async Task<IActionResult?> CoordinatorBlockedAsync(int requirementId)
+        {
+            if (await db.CampusOfAsync(User) is not int campus) return null;
+            var owned = await db.DocumentRequirements.AnyAsync(r =>
+                r.Id == requirementId && r.ScholarshipType != null && r.ScholarshipType.CampusId == campus);
+            return owned ? null : StatusCode(403, new
+            {
+                message = "This document is shared by scholarships at every campus, so only the administrator sets its deadline."
+            });
         }
 
         /// <summary>
@@ -141,6 +159,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
         {
             var deadline = await db.SubmissionDeadlines.FindAsync(id);
             if (deadline is null) return NotFound();
+            if (await CoordinatorBlockedAsync(deadline.RequirementId) is { } blocked) return blocked;
             db.Audit(this, "DeleteDeadline", $"Removed deadline #{id} (requirement #{deadline.RequirementId})");
             db.SubmissionDeadlines.Remove(deadline);
             await db.SaveChangesAsync();

@@ -142,6 +142,15 @@ namespace PSUEISKOLARSystem.Server.Services
             if (!await roleManager.RoleExistsAsync(request.Role))
                 throw new BadRequestException($"Role '{request.Role}' does not exist.");
 
+            // Every coordinator is in charge of one campus, and every campus has one coordinator.
+            int? campusId = null;
+            if (request.Role == UserRoles.ScholarshipCoordinator)
+            {
+                if (await CoordinatorCampusProblemAsync(dbContext, request.CampusId, null) is { } problem)
+                    throw new BadRequestException(problem);
+                campusId = request.CampusId;
+            }
+
             var user = new ApplicationUser
             {
                 UserName = request.Email,
@@ -150,6 +159,7 @@ namespace PSUEISKOLARSystem.Server.Services
                 MiddleName = string.IsNullOrWhiteSpace(request.MiddleName) ? null : request.MiddleName.Trim(),
                 LastName = request.LastName.Trim(),
                 EmailConfirmed = true,
+                CampusId = campusId,
             };
 
             var result = await userManager.CreateAsync(user, request.Password);
@@ -161,6 +171,26 @@ namespace PSUEISKOLARSystem.Server.Services
             var userDto = mapper.Map<UserDto>(user);
             userDto.Role = request.Role;
             return userDto;
+        }
+
+        /// <summary>
+        /// Why a coordinator cannot be put in charge of <paramref name="campusId"/>: no campus
+        /// chosen, an unknown campus, or a campus that already has an active coordinator.
+        /// Null when the assignment is fine. <paramref name="exceptUserId"/> is the coordinator
+        /// being edited, who may keep their own campus.
+        /// </summary>
+        public static async Task<string?> CoordinatorCampusProblemAsync(ApplicationDbContext db, int? campusId, string? exceptUserId)
+        {
+            if (campusId is not int cid) return "Choose the campus this coordinator is in charge of.";
+            var campus = await db.Campuses.Where(c => c.Id == cid).Select(c => c.Name).FirstOrDefaultAsync();
+            if (campus is null) return "The selected campus does not exist.";
+            var holder = await (
+                from u in db.Users
+                join ur in db.UserRoles on u.Id equals ur.UserId
+                join r in db.Roles on ur.RoleId equals r.Id
+                where r.Name == UserRoles.ScholarshipCoordinator && u.IsActive && u.CampusId == cid && u.Id != exceptUserId
+                select u.FirstName + " " + u.LastName).FirstOrDefaultAsync();
+            return holder is null ? null : $"{campus} already has a coordinator ({holder}). Each campus has one coordinator.";
         }
 
         /// <summary>
@@ -191,11 +221,10 @@ namespace PSUEISKOLARSystem.Server.Services
 
             var scholarLine = matches.FirstOrDefault(m => m.Kind == EligibilityKinds.Scholar);
 
-            // Listed as a scholar but already holding a grantee account: that account is reused.
-            var granteeEmail = scholarLine is null ? null : await dbContext.GranteeProfiles
-                .Where(gp => gp.StudentId == scholarLine.StudentId)
-                .Select(gp => gp.User.Email)
-                .FirstOrDefaultAsync();
+            // Listed as a scholar but already holding a grantee account (found by student number
+            // or by name): the system asks for it, and that account is reused.
+            var granteeEmail = scholarLine is null ? null : (await MasterList.FindGranteeAccountAsync(
+                dbContext, request.StudentId, request.FirstName, request.LastName, request.MiddleName))?.User.Email;
 
             return new EligibilityCheckResultDto
             {
@@ -226,21 +255,23 @@ namespace PSUEISKOLARSystem.Server.Services
         /// </summary>
         public async Task<UserDto> RegisterScholarAsync(RegisterScholarRequestDto request)
         {
+            // Students sign up with their own personal email (Gmail, Yahoo, …) — an address they
+            // keep after they leave the university. The DTO already checks it is well-formed.
             var email = request.Email.Trim().ToLowerInvariant();
-            if (!email.EndsWith("@" + PersonalOptions.InstitutionalDomain))
-                throw new BadRequestException($"Use your institutional email address (@{PersonalOptions.InstitutionalDomain}). Personal email addresses are not accepted.");
 
             if (!request.ConsentAccepted)
                 throw new BadRequestException("You must agree to the Data Privacy notice to create an account.");
 
             var studentId = MasterList.NormalizeStudentId(request.StudentId);
 
-            // A past grantee now listed as a scholar keeps their account rather than opening
-            // a second one — see ConvertGranteeToScholarAsync.
-            var existingGrantee = await dbContext.GranteeProfiles
-                .Include(gp => gp.User)
-                .FirstOrDefaultAsync(gp => gp.StudentId == studentId);
-            if (existingGrantee is not null)
+            // A past grantee now listed as a scholar keeps their account rather than opening a
+            // second one — see ConvertGranteeToScholarAsync. Found by student number or, when
+            // the scholar list uses another number, by name; only once they are on a scholar list.
+            var existingGrantee = await MasterList.FindGranteeAccountAsync(
+                dbContext, studentId, request.FirstName, request.LastName, request.MiddleName);
+            if (existingGrantee is not null && (existingGrantee.StudentId == studentId ||
+                (await MasterList.FindMatchesAsync(dbContext, studentId, request.FirstName, request.LastName, request.MiddleName, request.CampusId))
+                    .Any(m => m.Kind == EligibilityKinds.Scholar)))
                 return await ConvertGranteeToScholarAsync(existingGrantee, email, request);
 
             if (await userManager.FindByEmailAsync(email) is not null)
@@ -429,11 +460,9 @@ namespace PSUEISKOLARSystem.Server.Services
 
         public async Task<GranteeConversionPrefillDto> GetGranteeAccountForConversionAsync(GranteeAccountLookupDto request)
         {
-            var studentId = MasterList.NormalizeStudentId(request.StudentId);
-            var grantee = await dbContext.GranteeProfiles
-                .Include(gp => gp.User)
-                .FirstOrDefaultAsync(gp => gp.StudentId == studentId)
-                ?? throw new BadRequestException("No grantee account was found for this student number.");
+            var grantee = await MasterList.FindGranteeAccountAsync(
+                    dbContext, request.StudentId, request.FirstName, request.LastName, request.MiddleName)
+                ?? throw new BadRequestException("No grantee account was found for this student.");
 
             await AuthenticateGranteeForConversionAsync(grantee, request.Email, request.Password, request);
 
@@ -475,8 +504,11 @@ namespace PSUEISKOLARSystem.Server.Services
             var scholarLine = await AuthenticateGranteeForConversionAsync(grantee, email, request.Password, identity);
             var campus = await ValidateSheetAsync(request);
 
-            if (await dbContext.ScholarProfiles.AnyAsync(sp => sp.UserId == user.Id || sp.StudentId == grantee.StudentId))
-                throw new BadRequestException($"Student ID {grantee.StudentId} is already registered to a scholar account.");
+            // The scholar account goes by the number the scholar list uses, which may differ from
+            // the one the student had as a grantee.
+            var studentId = scholarLine.StudentId;
+            if (await dbContext.ScholarProfiles.AnyAsync(sp => sp.UserId == user.Id || sp.StudentId == studentId))
+                throw new BadRequestException($"Student ID {studentId} is already registered to a scholar account.");
 
             var matches = await MasterList.FindMatchesAsync(
                 dbContext, request.StudentId, request.FirstName, request.LastName, request.MiddleName, campus.Id);
@@ -493,7 +525,7 @@ namespace PSUEISKOLARSystem.Server.Services
                 var profile = new ScholarProfile
                 {
                     UserId = user.Id,
-                    StudentId = grantee.StudentId,
+                    StudentId = studentId,
                     CampusId = campus.Id,
                     ProgramId = request.ProgramId,
                     ScholarshipTypeId = scholarLine.ScholarshipTypeId,
@@ -520,7 +552,7 @@ namespace PSUEISKOLARSystem.Server.Services
                 {
                     UserId = user.Id,
                     Action = "ConvertGranteeToScholar",
-                    Details = $"{user.FullName} ({grantee.StudentId}) turned their grantee account into a scholar account " +
+                    Details = $"{user.FullName} ({studentId}) turned their grantee account into a scholar account " +
                               $"under {scholarLine.ScholarshipType?.Name ?? "the listed scholarship"} — matched the master list" +
                               (granteeLines.Count > 0 ? $"; {granteeLines.Count} grant(s) recorded" : ""),
                 });

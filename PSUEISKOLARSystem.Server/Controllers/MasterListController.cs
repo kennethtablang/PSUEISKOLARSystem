@@ -45,7 +45,8 @@ namespace PSUEISKOLARSystem.Server.Controllers
             page = Math.Max(1, page);
             pageSize = Math.Clamp(pageSize, 1, 100);
 
-            var query = db.EligibilityRecords.AsQueryable();
+            // A coordinator sees only their own campus's lines, even on a type for every campus.
+            var query = db.EligibilityRecords.AtCampus(await db.CampusOfAsync(User));
 
             if (!string.IsNullOrWhiteSpace(kind)) query = query.Where(e => e.Kind == kind);
             if (status == "claimed") query = query.Where(e => e.ClaimedByUserId != null);
@@ -111,8 +112,9 @@ namespace PSUEISKOLARSystem.Server.Controllers
         [HttpPost]
         public async Task<IActionResult> Create(MasterListRequest dto)
         {
+            var scope = await db.CampusOfAsync(User);
             var (line, error) = await BuildAsync(dto.Kind, dto.StudentId, dto.LastName, dto.FirstName, dto.MiddleName,
-                dto.CampusId, dto.ScholarshipTypeId, dto.GrantTypeId, dto.GrantAmount, dto.Notes, sex: dto.Sex);
+                scope ?? dto.CampusId, dto.ScholarshipTypeId, dto.GrantTypeId, dto.GrantAmount, dto.Notes, sex: dto.Sex, scope: scope);
             if (error is not null) return BadRequest(new { message = error });
 
             var applied = await MasterList.ApplyToExistingAccountAsync(db, line!, ActorId);
@@ -130,13 +132,14 @@ namespace PSUEISKOLARSystem.Server.Controllers
         [HttpPut("{id:int}")]
         public async Task<IActionResult> Update(int id, MasterListRequest dto)
         {
-            var line = await db.EligibilityRecords.FindAsync(id);
+            var scope = await db.CampusOfAsync(User);
+            var line = await db.EligibilityRecords.AtCampus(scope).FirstOrDefaultAsync(e => e.Id == id);
             if (line is null) return NotFound();
             if (line.ClaimedByUserId is not null)
                 return BadRequest(new { message = "This line has already been used to open an account and can no longer be edited." });
 
             var (updated, error) = await BuildAsync(dto.Kind, dto.StudentId, dto.LastName, dto.FirstName, dto.MiddleName,
-                dto.CampusId, dto.ScholarshipTypeId, dto.GrantTypeId, dto.GrantAmount, dto.Notes, excludingId: id, sex: dto.Sex);
+                scope ?? dto.CampusId, dto.ScholarshipTypeId, dto.GrantTypeId, dto.GrantAmount, dto.Notes, excludingId: id, sex: dto.Sex, scope: scope);
             if (error is not null) return BadRequest(new { message = error });
 
             line.Kind = updated!.Kind;
@@ -167,7 +170,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
         [HttpDelete("{id:int}")]
         public async Task<IActionResult> Delete(int id)
         {
-            var line = await db.EligibilityRecords.FindAsync(id);
+            var line = await db.EligibilityRecords.AtCampus(await db.CampusOfAsync(User)).FirstOrDefaultAsync(e => e.Id == id);
             if (line is null) return NotFound();
 
             db.Audit(this, "DeleteMasterListLine", $"Removed {line.Kind} {line.LastName}, {line.FirstName} ({line.StudentId}) from the master list");
@@ -197,23 +200,24 @@ namespace PSUEISKOLARSystem.Server.Controllers
             if (forGrant is null)
             {
                 ws.Cell(r, 1).Value = "Scholar"; ws.Cell(r, 2).Value = "23-LN-0001"; ws.Cell(r, 3).Value = "DELA CRUZ";
-                ws.Cell(r, 4).Value = "JUAN"; ws.Cell(r, 5).Value = "SANTOS"; ws.Cell(r, 6).Value = "Male"; ws.Cell(r, 7).Value = "LIN";
+                ws.Cell(r, 4).Value = "JUAN"; ws.Cell(r, 5).Value = "SANTOS"; ws.Cell(r, 6).Value = "Male"; ws.Cell(r, 7).Value = CampusCodes.Lingayen;
                 ws.Cell(r, 8).Value = forType ?? "CHED Scholarship";
                 r++;
             }
             if (forType is null)
             {
                 ws.Cell(r, 1).Value = "Grantee"; ws.Cell(r, 2).Value = "23-LN-0002"; ws.Cell(r, 3).Value = "REYES";
-                ws.Cell(r, 4).Value = "ANA"; ws.Cell(r, 6).Value = "Female"; ws.Cell(r, 7).Value = "LIN"; ws.Cell(r, 9).Value = forGrant ?? "Tulong Dunong"; ws.Cell(r, 10).Value = 5000;
+                ws.Cell(r, 4).Value = "ANA"; ws.Cell(r, 6).Value = "Female"; ws.Cell(r, 7).Value = CampusCodes.Lingayen; ws.Cell(r, 9).Value = forGrant ?? "Tulong Dunong"; ws.Cell(r, 10).Value = 5000;
             }
             ws.Columns().AdjustToContents();
 
             var reference = wb.Worksheets.Add("Reference");
             reference.Cell(1, 1).Value = "Campus codes"; reference.Cell(1, 1).Style.Font.Bold = true;
-            var campuses = await db.Campuses.OrderBy(c => c.Name).ToListAsync();
+            var scope = await db.CampusOfAsync(User);
+            var campuses = await db.Campuses.Where(c => scope == null || c.Id == scope).OrderBy(c => c.Name).ToListAsync();
             for (int i = 0; i < campuses.Count; i++) { reference.Cell(i + 2, 1).Value = campuses[i].Code; reference.Cell(i + 2, 2).Value = campuses[i].Name; }
             reference.Cell(1, 4).Value = "Scholarship types"; reference.Cell(1, 4).Style.Font.Bold = true;
-            var types = await db.ScholarshipTypes.OrderBy(t => t.Name).Select(t => t.Name).ToListAsync();
+            var types = await db.ScholarshipTypes.VisibleAt(scope).OrderBy(t => t.Name).Select(t => t.Name).ToListAsync();
             for (int i = 0; i < types.Count; i++) reference.Cell(i + 2, 4).Value = types[i];
             reference.Cell(1, 6).Value = "Grant types"; reference.Cell(1, 6).Style.Font.Bold = true;
             var grants = await db.GrantTypes.OrderBy(t => t.Name).Select(t => t.Name).ToListAsync();
@@ -249,8 +253,9 @@ namespace PSUEISKOLARSystem.Server.Controllers
             if (rows.Count == 0) return BadRequest(new { message = "The file contains no data rows." });
             if (rows.Count > MaxRows) return BadRequest(new { message = $"Too many rows ({rows.Count}). Maximum is {MaxRows} per import." });
 
+            var scope = await db.CampusOfAsync(User);
             var campusByCode = await db.Campuses.ToDictionaryAsync(c => c.Code.ToUpper(), c => c.Id);
-            var typeByName = await db.ScholarshipTypes.ToDictionaryAsync(t => t.Name.ToUpper(), t => t.Id);
+            var typeByName = await db.ScholarshipTypes.VisibleAt(scope).ToDictionaryAsync(t => t.Name.ToUpper(), t => t.Id);
             var grantByName = await db.GrantTypes.ToDictionaryAsync(t => t.Name.ToUpper(), t => t.Id);
 
             var results = new List<ImportRowResult>();
@@ -271,8 +276,15 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 var campusCode = Get("CampusCode");
                 if (campusCode.Length > 0)
                 {
-                    if (campusByCode.TryGetValue(campusCode.ToUpper(), out var c)) campusId = c;
+                    // An old code (LIN, SCC, …) on a list made before the office's codes still imports.
+                    if (campusByCode.TryGetValue(CampusCodes.Normalize(campusCode), out var c)) campusId = c;
                     else fail = $"Unknown campus code '{campusCode}'.";
+                }
+                // A coordinator's list is their own campus's, whatever the row says.
+                if (fail is null && scope is int own)
+                {
+                    if (campusId is int listed && listed != own) fail = "This student is at another campus — only your campus's students can be listed.";
+                    campusId = own;
                 }
                 var typeName = Get("ScholarshipType");
                 if (fail is null && typeName.Length > 0)
@@ -305,12 +317,14 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 if (kind.Length == 0) kind = grantId is not null ? EligibilityKinds.Grantee : EligibilityKinds.Scholar;
 
                 var (line, error) = await BuildAsync(kind, sid, Get("LastName"), Get("FirstName"), Get("MiddleName"),
-                    campusId, typeId, grantId, amount, Get("Notes"), sex: Get("Sex"));
+                    campusId, typeId, grantId, amount, Get("Notes"), sex: Get("Sex"), scope: scope);
 
                 // Lines added earlier in this same file are not in the database yet.
                 if (error is null && db.ChangeTracker.Entries<EligibilityRecord>().Any(e =>
                         e.State == EntityState.Added && e.Entity.Kind == line!.Kind &&
-                        e.Entity.StudentId == line.StudentId && e.Entity.GrantTypeId == line.GrantTypeId))
+                        e.Entity.GrantTypeId == line.GrantTypeId &&
+                        (e.Entity.StudentId == line.StudentId ||
+                         (e.Entity.LastName == line.LastName && e.Entity.FirstName == line.FirstName && e.Entity.MiddleName == line.MiddleName))))
                     error = "Duplicate of an earlier row in this file.";
 
                 if (error is not null)
@@ -343,7 +357,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
         private async Task<(EligibilityRecord?, string?)> BuildAsync(
             string? kind, string? studentId, string? lastName, string? firstName, string? middleName,
             int? campusId, int? scholarshipTypeId, int? grantTypeId, decimal? grantAmount, string? notes,
-            int? excludingId = null, string? sex = null)
+            int? excludingId = null, string? sex = null, int? scope = null)
         {
             var sexValue = string.IsNullOrWhiteSpace(sex) ? null
                 : PersonalOptions.Sex.FirstOrDefault(x => string.Equals(x, sex.Trim(), StringComparison.OrdinalIgnoreCase)
@@ -368,7 +382,12 @@ namespace PSUEISKOLARSystem.Server.Controllers
             if (kind == EligibilityKinds.Scholar)
             {
                 if (scholarshipTypeId is not int st) return (null, "A scholar line needs a scholarship type.");
-                if (!await db.ScholarshipTypes.AnyAsync(t => t.Id == st)) return (null, "The selected scholarship type does not exist.");
+                // A coordinator lists students only for the types that apply at their campus.
+                var listType = await db.ScholarshipTypes.VisibleAt(scope).FirstOrDefaultAsync(t => t.Id == st);
+                if (listType is null) return (null, "The selected scholarship type does not exist.");
+                if (listType.CampusId is int typeCampus && campusId is int lineCampus && typeCampus != lineCampus)
+                    return (null, $"{listType.Name} is only for its own campus's students.");
+                if (listType.CampusId is int onlyCampus) campusId ??= onlyCampus;
                 grantTypeId = null;
                 grantAmount = null;
             }
@@ -384,12 +403,28 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 scholarshipTypeId = null;
             }
 
-            var duplicate = await db.EligibilityRecords.AnyAsync(e =>
-                e.Id != excludingId && e.Kind == kind && e.StudentId == sid && e.GrantTypeId == grantTypeId);
-            if (duplicate)
+            // Already on a list? A student may be on one scholarship's list, and once per grant.
+            var listedAs = await db.EligibilityRecords
+                .Where(e => e.Id != excludingId && e.Kind == kind && e.StudentId == sid && e.GrantTypeId == grantTypeId)
+                .Select(e => new { Type = e.ScholarshipType != null ? e.ScholarshipType.Name : null })
+                .FirstOrDefaultAsync();
+            if (listedAs is not null)
                 return (null, kind == EligibilityKinds.Scholar
-                    ? $"{sid} is already on the scholar list."
+                    ? $"{sid} is already on the cross-matching list of {listedAs.Type ?? "a scholarship"} — a student may hold only one scholarship."
                     : $"{sid} is already on the list for this grant.");
+
+            /* The same person under another student number. Lists are typed by hand, and a mistyped
+               number would otherwise put the student on the Master List twice and let them sign up
+               twice. A grantee may be on many grant lists, but always under one number. */
+            var middle = MasterList.NormalizeOptionalName(middleName);
+            var sameName = await db.EligibilityRecords
+                .Where(e => e.Id != excludingId && e.StudentId != sid
+                         && e.LastName == last && e.FirstName == first && e.MiddleName == middle)
+                .Select(e => e.StudentId)
+                .FirstOrDefaultAsync();
+            if (sameName is not null)
+                return (null, $"{first} {(middle is null ? "" : middle + " ")}{last} is already on the Master List under student no. {sameName}. " +
+                              "Use that student number — a student is listed under one number only.");
 
             return (new EligibilityRecord
             {
@@ -397,7 +432,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 StudentId = sid,
                 LastName = last,
                 FirstName = first,
-                MiddleName = MasterList.NormalizeOptionalName(middleName),
+                MiddleName = middle,
                 Sex = sexValue,
                 CampusId = campusId,
                 ScholarshipTypeId = scholarshipTypeId,
@@ -433,6 +468,8 @@ namespace PSUEISKOLARSystem.Server.Controllers
         {
             page = Math.Max(1, page);
             pageSize = Math.Clamp(pageSize, 1, 100);
+            // A coordinator's Master List is their own campus's students.
+            if (await db.CampusOfAsync(User) is int scope) filter.CampusId = scope;
             var people = await ListFilters.MasterListPeopleAsync(db, filter);
             return Ok(new
             {

@@ -396,11 +396,11 @@ export default function ScholarshipReleasesPage() {
                               checked={selected.has(s.scholarId)} onChange={() => toggleRow(s.scholarId)} />
                           )}
                         </td>
-                        <td className="px-5 py-3.5">
+                        <td className="px-5 py-3.5 min-w-[220px]">
                           <p className="font-semibold" style={{ color: 'var(--text-strong)' }}>{s.scholarName}</p>
-                          <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{s.studentId || s.scholarEmail}</p>
+                          <p className="text-xs font-mono whitespace-nowrap" style={{ color: 'var(--text-muted)' }}>{s.studentId || s.scholarEmail}</p>
                         </td>
-                        <td className="px-5 py-3.5 text-xs" style={{ color: 'var(--text)' }}>{s.campusName ?? '—'}</td>
+                        <td className="px-5 py-3.5 text-xs min-w-[120px]" style={{ color: 'var(--text)' }}>{s.campusName ?? '—'}</td>
                         <td className="px-5 py-3.5 text-xs" style={{ color: 'var(--text)' }}>
                           {s.releaseYearLevel ?? s.profileYearLevel ? `Year ${s.releaseYearLevel ?? s.profileYearLevel}` : '—'}
                         </td>
@@ -430,7 +430,7 @@ export default function ScholarshipReleasesPage() {
                         <td className="px-5 py-3.5 font-mono text-xs" style={{ color: 'var(--text)' }}>
                           {s.referenceNo ?? '—'}
                         </td>
-                        <td className="px-5 py-3.5 text-right">
+                        <td className="px-5 py-3.5 text-right whitespace-nowrap">
                           <div className="flex items-center gap-3 justify-end">
                             {s.status === 'NotRecorded' && (
                               <button

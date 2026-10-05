@@ -393,7 +393,7 @@ export default function LoginPage() {
                     required
                     value={email}
                     onChange={e => setEmail(e.target.value)}
-                    placeholder="you@psu.edu.ph"
+                    placeholder="you@example.com"
                     className="clay-input"
                     style={{ paddingLeft: '38px' }}
                     autoComplete="email"
@@ -630,7 +630,7 @@ function ForgotPasswordModal({ onClose }) {
                     required
                     value={email}
                     onChange={e => setEmail(e.target.value)}
-                    placeholder="you@psu.edu.ph"
+                    placeholder="you@example.com"
                     className="clay-input"
                     style={{ paddingLeft: '38px' }}
                     autoFocus

@@ -8,6 +8,20 @@ export const NOTIFICATION_CATEGORIES = {
   Account:        'Account',
 };
 
+/** The announcement a notification is about: `?announcement=<id>` on its link, or null. */
+export function announcementIdOf(n) {
+  const m = /[?&]announcement=(\d+)/.exec(n?.linkUrl ?? '');
+  return m ? Number(m[1]) : null;
+}
+
+/**
+ * Whether clicking the notification should open it in full rather than follow its link: every
+ * announcement, and anything at all for a grantee, whose account has no pages to send them to.
+ */
+export function opensInPlace(n, role) {
+  return role === 'Grantee' || n?.category === NOTIFICATION_CATEGORIES.Announcement || announcementIdOf(n) != null;
+}
+
 // Categories a user may silence in the bell (server: NotificationMuting.Mutable).
 // Account/security notices are deliberately absent — those always come through.
 export const MUTABLE_IN_APP_CATEGORIES = [

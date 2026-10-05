@@ -11,13 +11,22 @@ import Logo from './Logo';
 import {
   LayoutDashboard, FileCheck, Users, Bell,
   FolderOpen, User, LogOut, BarChart2,
-  ChevronLeft, Settings, Menu, X, ClipboardList, Activity, Award, MessageSquare,
-  Sun, Moon, Monitor, HelpCircle, UserCheck, Banknote, ShieldCheck, Wallet,
+  ChevronLeft, Settings, Menu, X, Activity, Award, MessageSquare,
+  Sun, Moon, Monitor, HelpCircle, UserCheck, Banknote, Wallet,
   ListChecks, HandCoins, Gift, Building2,
 } from 'lucide-react';
 import { getPendingApprovalCount } from '../api/scholarApprovals';
 import { getPendingDocumentCount } from '../api/documents';
 import { useMediaQuery } from '../hooks/useMediaQuery';
+import { useMyCampus } from '../hooks/useMyCampus';
+
+/* A coordinator's own campus; everyone else works across Pangasinan State University. */
+function SidebarCampus() {
+  const { user } = useAuth();
+  const campus = useMyCampus();
+  if (user?.role === 'ScholarshipCoordinator') return <>{campus ? `PSU ${campus.name}` : 'Pangasinan State University'}</>;
+  return <>Pangasinan State University</>;
+}
 
 /* ── Nav config ──────────────────────────────────── */
 const navByRole = {
@@ -33,8 +42,6 @@ const navByRole = {
     { to: '/document-review', label: 'Document Review',  Icon: FileCheck, badge: 'documents' },
     { to: '/scholarship-releases', label: 'Releases',    Icon: Wallet },
     { to: '/one-time-grants', label: 'One-Time Grants',  Icon: Banknote },
-    { to: '/scholarship-verification', label: 'Scholarship Check', Icon: ShieldCheck },
-    { to: '/requirements',    label: 'Document Library', Icon: ClipboardList },
     { to: '/campuses',        label: 'Campuses & Programs', Icon: Building2 },
     { to: '/users',           label: 'Users',            Icon: Users },
     { section: 'Engage' },
@@ -58,7 +65,6 @@ const navByRole = {
     { to: '/document-review', label: 'Document Review',  Icon: FileCheck, badge: 'documents' },
     { to: '/scholarship-releases', label: 'Releases',    Icon: Wallet },
     { to: '/one-time-grants', label: 'One-Time Grants',  Icon: Banknote },
-    { to: '/scholarship-verification', label: 'Scholarship Check', Icon: ShieldCheck },
     { section: 'Engage' },
     { to: '/announcements',   label: 'Announcements',    Icon: Bell },
     { to: '/messages',        label: 'Messages',         Icon: MessageSquare },
@@ -125,16 +131,23 @@ export default function Layout({ children }) {
   const location   = useLocation();
   const isDesktop  = useMediaQuery('(min-width: 1024px)');
 
-  const [collapsed, setCollapsed] = useState(
-    () => localStorage.getItem('sidebar-collapsed') === 'true'
-  );
+  const [savedCollapsed, setSavedCollapsed] = useState(() => {
+    try { return localStorage.getItem('sidebar-collapsed') === 'true'; } catch { return false; }
+  });
+  /* On a laptop-sized or half-screen window the full sidebar ate a fifth of the width and
+     squeezed every table, so between 1024px and 1360px it starts as the icon rail; it still
+     opens on demand, just without that choice being remembered as the wide-screen preference. */
+  const isRoomy = useMediaQuery('(min-width: 1360px)');
+  const [narrowExpanded, setNarrowExpanded] = useState(false);
+  const collapsed = isRoomy ? savedCollapsed : !narrowExpanded;
+  const setCollapsed = value => (isRoomy ? setSavedCollapsed(value) : setNarrowExpanded(!value));
   const [mobileOpen, setMobileOpen] = useState(false);
   const [confirmLogout, setConfirmLogout] = useState(false);
 
   /* Persist desktop collapsed state */
   useEffect(() => {
-    localStorage.setItem('sidebar-collapsed', String(collapsed));
-  }, [collapsed]);
+    try { localStorage.setItem('sidebar-collapsed', String(savedCollapsed)); } catch { /* storage unavailable */ }
+  }, [savedCollapsed]);
 
   /* Auto-close mobile drawer on route change, and start the new page at the top. The window
      is what scrolls, and the router does not reset it, so arriving from halfway down a long
@@ -247,7 +260,7 @@ export default function Layout({ children }) {
               e-Iskolar
             </p>
             <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.38)', fontWeight: 500, marginTop: 2 }}>
-              PSU Lingayen Campus
+              <SidebarCampus />
             </p>
           </div>
         </div>

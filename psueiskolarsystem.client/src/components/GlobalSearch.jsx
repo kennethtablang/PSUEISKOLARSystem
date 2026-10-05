@@ -93,7 +93,7 @@ export default function GlobalSearch({ isDesktop }) {
               <Group label="Announcements" icon={Megaphone} items={results.announcements}
                 render={a => ({ key: `a${a.id}`, title: a.title, url: '/announcements' })} onGo={go} />
               <Group label="Requirements" icon={ClipboardList} items={results.requirements}
-                render={r => ({ key: `r${r.id}`, title: r.name, url: '/requirements' })} onGo={go} />
+                render={r => ({ key: `r${r.id}`, title: r.name, url: r.scholarshipTypeId ? `/scholarship-types/${r.scholarshipTypeId}?tab=documents` : '/scholarship-types' })} onGo={go} />
             </>
           )}
         </div>

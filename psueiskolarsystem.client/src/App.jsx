@@ -22,7 +22,6 @@ import AnnouncementsPage from './pages/AnnouncementsPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import MyDocumentsPage from './pages/MyDocumentsPage';
 import DocumentReviewPage from './pages/DocumentReviewPage';
-import RequirementsPage from './pages/RequirementsPage';
 import DeadlinesPage from './pages/DeadlinesPage';
 import MessagesPage from './pages/MessagesPage';
 import NotificationsPage from './pages/NotificationsPage';
@@ -30,7 +29,6 @@ import ScholarshipTypesPage from './pages/ScholarshipTypesPage';
 import ScholarshipTypeDetailPage from './pages/ScholarshipTypeDetailPage';
 import GrantTypeDetailPage from './pages/GrantTypeDetailPage';
 import ScholarApprovalsPage from './pages/ScholarApprovalsPage';
-import ScholarshipVerificationPage from './pages/ScholarshipVerificationPage';
 import OneTimeGrantsPage from './pages/OneTimeGrantsPage';
 import ScholarshipReleasesPage from './pages/ScholarshipReleasesPage';
 import SettingsPage from './pages/SettingsPage';
@@ -83,7 +81,6 @@ export default function App() {
           <Route path="/scholars" element={<ProtectedRoute roles={adminCoord}><ScholarsPage /></ProtectedRoute>} />
           <Route path="/scholars/:userId" element={<ProtectedRoute roles={adminCoord}><ScholarDetailPage /></ProtectedRoute>} />
           <Route path="/scholar-approvals" element={<ProtectedRoute roles={adminCoord}><ScholarApprovalsPage /></ProtectedRoute>} />
-          <Route path="/scholarship-verification" element={<ProtectedRoute roles={adminCoord}><ScholarshipVerificationPage /></ProtectedRoute>} />
           <Route path="/one-time-grants" element={<ProtectedRoute roles={adminCoord}><OneTimeGrantsPage /></ProtectedRoute>} />
           <Route path="/scholarship-releases" element={<ProtectedRoute roles={adminCoord}><ScholarshipReleasesPage /></ProtectedRoute>} />
           {/* Renders ScholarDetailPage against the signed-in user's own id, so only a
@@ -92,7 +89,6 @@ export default function App() {
           <Route path="/my-documents" element={<ProtectedRoute roles={['Scholar']}><MyDocumentsPage /></ProtectedRoute>} />
           <Route path="/document-review" element={<ProtectedRoute roles={adminCoord}><DocumentReviewPage /></ProtectedRoute>} />
           <Route path="/deadlines" element={<ProtectedRoute roles={adminCoord}><DeadlinesPage /></ProtectedRoute>} />
-          <Route path="/requirements"       element={<ProtectedRoute roles={admin}><RequirementsPage /></ProtectedRoute>} />
           <Route path="/scholarship-types"  element={<ProtectedRoute roles={adminCoord}><ScholarshipTypesPage /></ProtectedRoute>} />
           <Route path="/scholarship-types/:id" element={<ProtectedRoute roles={adminCoord}><ScholarshipTypeDetailPage /></ProtectedRoute>} />
           <Route path="/grant-types/:id" element={<ProtectedRoute roles={adminCoord}><GrantTypeDetailPage /></ProtectedRoute>} />

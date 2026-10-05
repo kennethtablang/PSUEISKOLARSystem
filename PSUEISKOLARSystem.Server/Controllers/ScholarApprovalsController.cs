@@ -42,6 +42,8 @@ namespace PSUEISKOLARSystem.Server.Controllers
             var scholarIds = db.UserRoles.Where(ur => ur.RoleId == scholarRoleId).Select(ur => ur.UserId);
 
             var query = db.Users.Where(u => scholarIds.Contains(u.Id));
+            if (await db.CampusOfAsync(User) is int campus)
+                query = query.Where(u => db.ScholarProfiles.Any(sp => sp.UserId == u.Id && sp.CampusId == campus));
 
             if (!string.IsNullOrWhiteSpace(status))
             {
@@ -192,10 +194,12 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 .Select(r => r.Id)
                 .FirstOrDefaultAsync();
 
-            var count = await db.Users
+            var pending = db.Users
                 .Where(u => u.ApprovalStatus == ApprovalStatuses.Pending &&
-                            db.UserRoles.Any(ur => ur.RoleId == scholarRoleId && ur.UserId == u.Id))
-                .CountAsync();
+                            db.UserRoles.Any(ur => ur.RoleId == scholarRoleId && ur.UserId == u.Id));
+            if (await db.CampusOfAsync(User) is int campus)
+                pending = pending.Where(u => db.ScholarProfiles.Any(sp => sp.UserId == u.Id && sp.CampusId == campus));
+            var count = await pending.CountAsync();
 
             return Ok(new { count });
         }

@@ -26,7 +26,8 @@ export const PERSONAL_FLAGS = [
   { key: 'isWorkingStudent',         label: 'Working student' },
 ];
 
-export const INSTITUTIONAL_DOMAIN = 'psu.edu.ph';
+// A plausible email address: something@domain.tld, no spaces.
+export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 export const EMPTY_PERSONAL = {
   sex: '', civilStatus: '',

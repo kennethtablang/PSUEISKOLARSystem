@@ -44,11 +44,15 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 .Include(ds => ds.ReviewedBy)
                 .AsQueryable();
 
-            // Scholars can only see their own
+            // Scholars can only see their own; a coordinator only their campus's scholars'.
             if (!isAdminOrCoord)
                 query = query.Where(ds => ds.ScholarId == currentUserId);
-            else if (!string.IsNullOrEmpty(scholarId))
-                query = query.Where(ds => ds.ScholarId == scholarId);
+            else
+            {
+                query = query.AtCampus(db, await db.CampusOfAsync(User));
+                if (!string.IsNullOrEmpty(scholarId))
+                    query = query.Where(ds => ds.ScholarId == scholarId);
+            }
 
             if (requirementId.HasValue)
                 query = query.Where(ds => ds.RequirementId == requirementId);
@@ -404,7 +408,9 @@ namespace PSUEISKOLARSystem.Server.Controllers
         [Authorize(Roles = $"{UserRoles.Administrator},{UserRoles.ScholarshipCoordinator}")]
         public async Task<IActionResult> PendingCount()
         {
-            var count = await db.DocumentSubmissions.CountAsync(ds => ds.Status == DocumentStatus.Pending || ds.Status == DocumentStatus.UnderReview);
+            var count = await db.DocumentSubmissions
+                .AtCampus(db, await db.CampusOfAsync(User))
+                .CountAsync(ds => ds.Status == DocumentStatus.Pending || ds.Status == DocumentStatus.UnderReview);
             return Ok(new { count });
         }
 
@@ -420,6 +426,10 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
             if (!isAdminOrCoord && submission.ScholarId != currentUserId)
                 return Forbid();
+            if (isAdminOrCoord && !await db.CanSeeScholarAsync(await db.CampusOfAsync(User), submission.ScholarId))
+                return NotFound();
+            if (isAdminOrCoord && !await db.CanSeeScholarAsync(await db.CampusOfAsync(User), submission.ScholarId))
+                return NotFound();
 
             try
             {
@@ -475,6 +485,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 return invalid;
 
             var submission = await db.DocumentSubmissions
+                .AtCampus(db, await db.CampusOfAsync(User))
                 .Include(s => s.Scholar)
                 .Include(s => s.Requirement)
                 .FirstOrDefaultAsync(s => s.Id == id);
@@ -541,6 +552,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             var now = DateTime.UtcNow;
 
             var submissions = await db.DocumentSubmissions
+                .AtCampus(db, await db.CampusOfAsync(User))
                 .Include(s => s.Scholar)
                 .Include(s => s.Requirement)
                 .Where(s => dto.Ids.Contains(s.Id))
@@ -604,6 +616,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             var reviewerId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
             var now = DateTime.UtcNow;
             var submissions = await db.DocumentSubmissions
+                .AtCampus(db, await db.CampusOfAsync(User))
                 .Where(s => ids.Contains(s.Id) && s.Status == DocumentStatus.Pending)
                 .ToListAsync();
 

@@ -16,6 +16,14 @@ namespace PSUEISKOLARSystem.Server.Models
             : $"{FirstName} {MiddleName} {LastName}".Trim();
 
         public bool IsActive { get; set; } = true;
+
+        /// <summary>
+        /// The campus a scholarship coordinator is in charge of. A coordinator sees only that
+        /// campus's scholars, grantees, documents, messages and figures; null for the
+        /// administrator, who sees every campus. Students' campus lives on their profile.
+        /// </summary>
+        public int? CampusId { get; set; }
+        public Campus? Campus { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? LastLoginAt { get; set; }
 

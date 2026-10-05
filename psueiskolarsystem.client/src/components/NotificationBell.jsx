@@ -2,7 +2,9 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, FileCheck, Megaphone, Clock, MessageSquare, UserCog, CheckCheck } from 'lucide-react';
 import { useNotifications } from '../context/NotificationContext';
-import { NOTIFICATION_CATEGORIES } from '../constants/notifications';
+import { NOTIFICATION_CATEGORIES, opensInPlace } from '../constants/notifications';
+import { useAuth } from '../context/AuthContext';
+import NotificationDetailModal from './NotificationDetailModal';
 
 /* Relative "time ago" from a UTC timestamp */
 function timeAgo(iso) {
@@ -33,6 +35,8 @@ export default function NotificationBell({ variant = 'floating' }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const [viewing, setViewing] = useState(null);
 
   useEffect(() => {
     if (!open) return;
@@ -53,7 +57,8 @@ export default function NotificationBell({ variant = 'floating' }) {
   function handleItemClick(n) {
     if (!n.isRead) markOneRead(n.id);
     setOpen(false);
-    if (n.linkUrl) navigate(n.linkUrl);
+    if (opensInPlace(n, user?.role)) setViewing(n);
+    else if (n.linkUrl) navigate(n.linkUrl);
   }
 
   const wrapperStyle = variant === 'floating'
@@ -181,6 +186,7 @@ export default function NotificationBell({ variant = 'floating' }) {
           </button>
         </div>
       )}
+      {viewing && <NotificationDetailModal notification={viewing} onClose={() => setViewing(null)} />}
     </div>
   );
 }

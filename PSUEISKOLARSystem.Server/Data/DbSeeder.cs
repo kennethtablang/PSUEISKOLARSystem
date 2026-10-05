@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using PSUEISKOLARSystem.Server.Models;
 using PSUEISKOLARSystem.Server.Models.Enums;
+using PSUEISKOLARSystem.Server.Services;
 
 namespace PSUEISKOLARSystem.Server.Data
 {
@@ -23,8 +24,8 @@ namespace PSUEISKOLARSystem.Server.Data
                 db.ScholarshipTypes.AddRange(
                     new ScholarshipType { Name = "CHED Scholarship", Description = "Commission on Higher Education merit scholarship", Category = "Government", MinimumGwa = 1.75m },
                     new ScholarshipType { Name = "DOST-SEI Scholarship", Description = "Department of Science and Technology scholarship", Category = "Government", MinimumGwa = 1.75m },
-                    new ScholarshipType { Name = "PSU Institutional Scholarship", Description = "Pangasinan State University institutional grant", Category = "Institutional", MinimumGwa = 2.00m },
-                    new ScholarshipType { Name = "Local Government Unit (LGU)", Description = "Scholarship funded by local government", Category = "Local (LGU)", MinimumGwa = 2.25m },
+                    new ScholarshipType { Name = "PSU Institutional Scholarship", Description = "Pangasinan State University institutional grant", Category = ScholarshipCategories.Government, MinimumGwa = 2.00m },
+                    new ScholarshipType { Name = "Local Government Unit (LGU)", Description = "Scholarship funded by local government", Category = ScholarshipCategories.Government, MinimumGwa = 2.25m },
                     new ScholarshipType { Name = "Private/External Grant", Description = "Scholarships from private organizations or donors", Category = "Private", MinimumGwa = 2.50m }
                 );
                 await db.SaveChangesAsync();
@@ -48,6 +49,7 @@ namespace PSUEISKOLARSystem.Server.Data
             }
 
             await SeedCampusesAsync(db);
+            await CollapseScholarshipCategoriesAsync(db);
 
             if (!db.DocumentRequirements.Any())
             {
@@ -106,7 +108,59 @@ namespace PSUEISKOLARSystem.Server.Data
                 }
             }
 
+            await SeedCampusCoordinatorsAsync(db, userManager);
             await SeedSampleGranteeAsync(db, userManager);
+        }
+
+        /// <summary>
+        /// One coordinator per campus, so each campus's view of the system can be tried out.
+        /// The original coordinator@psu.edu.ph (Maria Santos) takes Lingayen; the other eight
+        /// sign in as coordinator.&lt;code&gt;@psu.edu.ph — e.g. coordinator.urd@psu.edu.ph —
+        /// with the password ChangeMe123!. Runs every start; only fills what is missing.
+        /// </summary>
+        private static async Task SeedCampusCoordinatorsAsync(ApplicationDbContext db, UserManager<ApplicationUser> userManager)
+        {
+            var campuses = await db.Campuses.ToDictionaryAsync(c => c.Code, c => c);
+            if (!campuses.TryGetValue(CampusCodes.Lingayen, out var lingayen)) return;
+
+            var maria = await userManager.FindByEmailAsync("coordinator@psu.edu.ph");
+            if (maria is not null && maria.CampusId is null)
+            {
+                maria.CampusId = lingayen.Id;
+                await userManager.UpdateAsync(maria);
+            }
+
+            var coordinators = new (string Code, string FirstName, string LastName)[]
+            {
+                (CampusCodes.Binmaley, "Ramon", "Aquino"),
+                (CampusCodes.SanCarlos, "Teresa", "Villanueva"),
+                (CampusCodes.Alaminos, "Eduardo", "Ramos"),
+                (CampusCodes.SantaMaria, "Lorna", "Bautista"),
+                (CampusCodes.Urdaneta, "Victor", "Mendoza"),
+                (CampusCodes.Asingan, "Gloria", "Fernandez"),
+                (CampusCodes.Infanta, "Arnel", "Castillo"),
+                (CampusCodes.Bayambang, "Rosario", "Domingo"),
+            };
+            foreach (var (code, firstName, lastName) in coordinators)
+            {
+                if (!campuses.TryGetValue(code, out var campus)) continue;
+                var email = $"coordinator.{code.ToLowerInvariant()}@psu.edu.ph";
+                if (await userManager.FindByEmailAsync(email) is not null) continue;
+                // The campus may already have a coordinator the administrator set up by hand.
+                if (await AuthService.CoordinatorCampusProblemAsync(db, campus.Id, null) is not null) continue;
+
+                var user = new ApplicationUser
+                {
+                    UserName = email,
+                    Email = email,
+                    FirstName = firstName,
+                    LastName = lastName,
+                    EmailConfirmed = true,
+                    CampusId = campus.Id,
+                };
+                if ((await userManager.CreateAsync(user, "ChangeMe123!")).Succeeded)
+                    await userManager.AddToRoleAsync(user, UserRoles.ScholarshipCoordinator);
+            }
         }
 
         public const string SampleGranteeEmail = "grantee@psu.edu.ph";
@@ -127,7 +181,7 @@ namespace PSUEISKOLARSystem.Server.Data
             if (await db.GranteeProfiles.AnyAsync(gp => gp.StudentId == SampleGranteeStudentId) ||
                 await db.ScholarProfiles.AnyAsync(sp => sp.StudentId == SampleGranteeStudentId)) return;
 
-            var campus = await db.Campuses.FirstOrDefaultAsync(c => c.Code == "LIN");
+            var campus = await db.Campuses.FirstOrDefaultAsync(c => c.Code == CampusCodes.Lingayen);
             var program = await db.AcademicPrograms.FirstOrDefaultAsync(p => p.Code == "BSIT");
             var scholarship = await db.ScholarshipTypes.FirstOrDefaultAsync(t => t.Name == "CHED Scholarship");
             if (campus is null || program is null) return;
@@ -242,20 +296,24 @@ namespace PSUEISKOLARSystem.Server.Data
         // before campuses existed are placed there.
         private static readonly (string Code, string Name)[] PsuCampuses =
         [
-            ("ALA", "Alaminos City Campus"),
-            ("ASI", "Asingan Campus"),
-            ("BAY", "Bayambang Campus"),
-            ("BIN", "Binmaley Campus"),
-            ("INF", "Infanta Campus"),
-            ("LIN", "Lingayen Campus"),
-            ("SCC", "San Carlos City Campus"),
-            ("STM", "Santa Maria Campus"),
-            ("URD", "Urdaneta City Campus"),
+            (CampusCodes.Alaminos, "Alaminos City Campus"),
+            (CampusCodes.Asingan, "Asingan Campus"),
+            (CampusCodes.Bayambang, "Bayambang Campus"),
+            (CampusCodes.Binmaley, "Binmaley Campus"),
+            (CampusCodes.Infanta, "Infanta Campus"),
+            (CampusCodes.Lingayen, "Lingayen Campus"),
+            (CampusCodes.SanCarlos, "San Carlos City Campus"),
+            (CampusCodes.SantaMaria, "Santa Maria Campus"),
+            (CampusCodes.Urdaneta, "Urdaneta City Campus"),
         ];
 
         private static async Task SeedCampusesAsync(ApplicationDbContext db)
         {
-            if (db.Campuses.Any()) return;
+            if (db.Campuses.Any())
+            {
+                await RenameLegacyCampusCodesAsync(db);
+                return;
+            }
 
             db.Campuses.AddRange(PsuCampuses.Select(c => new Campus { Code = c.Code, Name = c.Name }));
             await db.SaveChangesAsync();
@@ -270,11 +328,45 @@ namespace PSUEISKOLARSystem.Server.Data
                 from p in programIds
                 select new CampusProgram { CampusId = c, ProgramId = p });
 
-            var lingayen = await db.Campuses.FirstAsync(c => c.Code == "LIN");
+            var lingayen = await db.Campuses.FirstAsync(c => c.Code == CampusCodes.Lingayen);
             await db.ScholarProfiles
                 .Where(sp => sp.CampusId == null)
                 .ExecuteUpdateAsync(s => s.SetProperty(sp => sp.CampusId, lingayen.Id));
 
+            await db.SaveChangesAsync();
+        }
+
+        /// <summary>
+        /// Scholarship types are Government or Private only. Types still carrying one of the
+        /// older categories (Institutional, Local (LGU), International, Other) are moved onto
+        /// one of the two. Runs every start; a no-op once done.
+        /// </summary>
+        private static async Task CollapseScholarshipCategoriesAsync(ApplicationDbContext db)
+        {
+            var stale = await db.ScholarshipTypes
+                .Where(t => t.Category != null && !ScholarshipCategories.All.Contains(t.Category))
+                .ToListAsync();
+            if (stale.Count == 0) return;
+            foreach (var t in stale) t.Category = ScholarshipCategories.FromLegacy(t.Category);
+            await db.SaveChangesAsync();
+        }
+
+        /// <summary>
+        /// Databases seeded before the office's campus codes were adopted (LIN, SCC, STM, ASI,
+        /// BAY) are moved onto them (LN, SC, SM, ASIN, BY). Runs every start; a no-op once done.
+        /// </summary>
+        private static async Task RenameLegacyCampusCodesAsync(ApplicationDbContext db)
+        {
+            var legacy = CampusCodes.Legacy.Keys.ToList();
+            var stale = await db.Campuses.Where(c => legacy.Contains(c.Code)).ToListAsync();
+            if (stale.Count == 0) return;
+            var taken = await db.Campuses.Select(c => c.Code).ToListAsync();
+            foreach (var campus in stale)
+            {
+                var code = CampusCodes.Normalize(campus.Code);
+                if (taken.Contains(code, StringComparer.OrdinalIgnoreCase)) continue;
+                campus.Code = code;
+            }
             await db.SaveChangesAsync();
         }
     }

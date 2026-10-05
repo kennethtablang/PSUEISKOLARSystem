@@ -47,8 +47,10 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
             var query = db.ScholarshipReleases.AsQueryable();
 
-            // Scholars only ever see their own releases.
+            // Scholars only ever see their own releases; a coordinator their campus's.
             if (!isStaff) query = query.Where(r => r.ScholarId == currentUserId);
+            else if (db.StudentsAt(await db.CampusOfAsync(User)) is { } atCampus)
+                query = query.Where(r => atCampus.Contains(r.ScholarId));
 
             if (scholarshipTypeId is int typeId) query = query.Where(r => r.ScholarshipTypeId == typeId);
             if (!string.IsNullOrWhiteSpace(academicYear)) query = query.Where(r => r.AcademicYear == academicYear.Trim());
@@ -142,6 +144,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             // The holders of the scholarship are the denormalised pointers on the profiles —
             // the same source the slot tracker counts, so the two never disagree.
             var holders = db.ScholarProfiles.Where(sp => sp.ScholarshipTypeId == scholarshipTypeId);
+            campusId = await db.CampusOfAsync(User) ?? campusId;   // a coordinator: their campus only
             if (campusId is int cid) holders = holders.Where(sp => sp.CampusId == cid);
             if (yearLevel is int yl) holders = holders.Where(sp => sp.YearLevel == yl);
 
@@ -413,6 +416,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                the type meant a period rollover opened a pending payout for every alumnus who
                had ever held it, and each one then sat in the monitor as unpaid. */
             var holders = await db.ScholarProfiles
+                .AtCampus(await db.CampusOfAsync(User))
                 .Where(sp => sp.ScholarshipTypeId == dto.ScholarshipTypeId
                           && LifecycleStatuses.Holding.Contains(sp.LifecycleStatus))
                 .Select(sp => sp.UserId)
@@ -500,6 +504,8 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 return BadRequest(new { message = "Year level must be between 1 and 6." });
 
             var campusIds = (dto.CampusIds ?? []).Distinct().ToList();
+            // A coordinator schedules their own campus only.
+            if (await db.CampusOfAsync(User) is int ownCampus) campusIds = campusIds.Where(c => c == ownCampus).ToList();
             if (campusIds.Count == 0)
                 return BadRequest(new { message = "Choose at least one campus that receives on this date." });
 
@@ -607,7 +613,10 @@ namespace PSUEISKOLARSystem.Server.Controllers
             if (releasedAt < new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc))
                 return BadRequest(new { message = "Release date must be in the year 2000 or later." });
 
-            var releases = await db.ScholarshipReleases
+            var batchQuery = db.ScholarshipReleases.AsQueryable();
+            if (db.StudentsAt(await db.CampusOfAsync(User)) is { } atCampus)
+                batchQuery = batchQuery.Where(r => atCampus.Contains(r.ScholarId));
+            var releases = await batchQuery
                 .Include(r => r.ScholarshipType)
                 .Where(r => ids.Contains(r.Id) && r.Status == GrantReleaseStatuses.Pending)
                 .ToListAsync();

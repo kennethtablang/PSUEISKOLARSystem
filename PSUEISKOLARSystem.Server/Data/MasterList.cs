@@ -35,6 +35,30 @@ namespace PSUEISKOLARSystem.Server.Data
         public static string NormalizeStudentId(string? value) =>
             (value ?? string.Empty).Trim().ToUpperInvariant();
 
+        /// <summary>
+        /// The grantee account a student already has: by student number, or — when the office
+        /// listed them as a scholar under a different number than the one they used as a
+        /// grantee — by their full name. Null when they have none. The User is included.
+        /// </summary>
+        public static async Task<GranteeProfile?> FindGranteeAccountAsync(
+            ApplicationDbContext db, string studentId, string firstName, string lastName, string? middleName)
+        {
+            var sid = NormalizeStudentId(studentId);
+            var byNumber = await db.GranteeProfiles.Include(gp => gp.User).FirstOrDefaultAsync(gp => gp.StudentId == sid);
+            if (byNumber is not null) return byNumber;
+
+            var first = NormalizeName(firstName);
+            var last = NormalizeName(lastName);
+            var middle = NormalizeOptionalName(middleName);
+            var byName = await db.GranteeProfiles
+                .Include(gp => gp.User)
+                .Where(gp => gp.User.FirstName == first && gp.User.LastName == last)
+                .ToListAsync();
+            // Only an unambiguous match: one account, and the middle names agree when both are given.
+            var candidates = byName.Where(gp => gp.User.MiddleName is null || middle is null || gp.User.MiddleName == middle).ToList();
+            return candidates.Count == 1 ? candidates[0] : null;
+        }
+
         /// <summary>Unclaimed lines matching the student's details, scholar lines first.</summary>
         public static async Task<List<EligibilityRecord>> FindMatchesAsync(
             ApplicationDbContext db, string studentId, string firstName, string lastName, string? middleName, int? campusId)
@@ -103,6 +127,20 @@ namespace PSUEISKOLARSystem.Server.Data
                     .Select(gp => gp.UserId)
                     .FirstOrDefaultAsync()
                 : null;
+
+            /* The same student under another number: the office's lists are typed by hand. A
+               single account with exactly this name is that student — their grant is recorded on
+               it rather than waiting for a sign-up that will never come. */
+            if (scholarUserId is null && granteeUserId is null && line.Kind == EligibilityKinds.Grantee)
+            {
+                var named = await db.ScholarProfiles
+                    .Where(sp => sp.User.FirstName == line.FirstName && sp.User.LastName == line.LastName
+                              && (line.MiddleName == null || sp.User.MiddleName == null || sp.User.MiddleName == line.MiddleName))
+                    .Select(sp => sp.UserId)
+                    .Take(2)
+                    .ToListAsync();
+                if (named.Count == 1) scholarUserId = named[0];
+            }
 
             var userId = scholarUserId ?? granteeUserId;
             if (userId is null) return null;
@@ -236,9 +274,9 @@ namespace PSUEISKOLARSystem.Server.Data
                 staff,
                 "Scholar matched another scholarship",
                 $"{c.ScholarName} ({c.StudentId}) already holds {c.CurrentScholarship} but matched the cross-matching list of " +
-                $"{c.MatchedScholarship} on {c.MatchedOn}. A student may hold only one scholarship — review it on the Scholarship Check page.",
+                $"{c.MatchedScholarship} on {c.MatchedOn}. A student may hold only one scholarship — review the student on the Master List.",
                 NotificationCategories.Account,
-                "/scholarship-verification");
+                $"/master-list?search={Uri.EscapeDataString(c.StudentId)}");
         }
 
         /// <summary>

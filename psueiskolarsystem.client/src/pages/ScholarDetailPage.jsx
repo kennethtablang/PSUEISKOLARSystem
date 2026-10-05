@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { AlertTriangle, Printer, Award, Plus, BanknoteArrowUp, History, Camera, Wallet, FileCheck, Eye, Download, CalendarClock, Lock } from 'lucide-react';
+import { AlertTriangle, Printer, Award, BanknoteArrowUp, History, Camera, Wallet, FileCheck, Eye, Download, CalendarClock, Lock } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
@@ -19,7 +19,7 @@ import { vizTokens, tooltipStyle } from '../constants/viz';
 import Avatar from '../components/Avatar';
 import logoPsu from '../assets/logo-psu.png';
 import StatusBadge from '../components/StatusBadge';
-import { GrantModal, ReleaseModal } from './OneTimeGrantsPage';
+import { ReleaseModal } from './OneTimeGrantsPage';
 import { ClayModal, ErrorBox, ModalButtons } from './UsersPage';
 import { peso } from '../constants/grants';
 import Field from '../components/Field';
@@ -53,7 +53,6 @@ export default function ScholarDetailPage() {
   const [grants, setGrants] = useState(null);         // { items, totalAmount, … }
   const [releases, setReleases] = useState([]);       // recurring per-period payouts
   const [missed, setMissed] = useState([]);           // deadlines passed with nothing submitted
-  const [showGrantModal, setShowGrantModal] = useState(false);
   const [campuses, setCampuses] = useState([]);
   const [showDocuments, setShowDocuments] = useState(false);
   const [releasingGrant, setReleasingGrant] = useState(null);
@@ -422,7 +421,6 @@ export default function ScholarDetailPage() {
             <OneTimeGrantsCard
               grants={grants}
               isAdminOrCoord={isAdminOrCoord}
-              onAdd={() => setShowGrantModal(true)}
               onRelease={handleReleaseGrant}
             />
 
@@ -517,21 +515,6 @@ export default function ScholarDetailPage() {
         />
       )}
 
-      {showGrantModal && profile && (
-        <GrantModal
-          initial={null}
-          scholarshipTypes={scholarshipTypes}
-          fixedScholar={{
-            userId: targetUserId,
-            fullName: profile.fullName,
-            // Pre-files the grant under the scholarship this scholar already holds.
-            scholarshipTypeId: profile.scholarshipTypeId,
-          }}
-          token={token}
-          onClose={() => setShowGrantModal(false)}
-          onSaved={() => { setShowGrantModal(false); toast('Grant recorded.', 'success'); load(); }}
-        />
-      )}
 
       {releasingGrant && (
         <ReleaseModal
@@ -754,7 +737,7 @@ function ScholarshipReleasesCard({ releases, isAdminOrCoord }) {
 }
 
 /* ── One-off financial awards on top of the scholarship ── */
-function OneTimeGrantsCard({ grants, isAdminOrCoord, onAdd, onRelease }) {
+function OneTimeGrantsCard({ grants, isAdminOrCoord, onRelease }) {
   const items = grants?.items ?? [];
 
   return (
@@ -763,10 +746,12 @@ function OneTimeGrantsCard({ grants, isAdminOrCoord, onAdd, onRelease }) {
         <h2 className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
           One-Time Grants
         </h2>
+        {/* No "record grant" here: a scholar on a grant type's cross-matching list gets the
+            grant on their profile automatically, so there is nothing to key in by hand. */}
         {isAdminOrCoord && (
-          <button onClick={onAdd} className="text-xs font-medium hover:underline flex items-center gap-1" style={{ color: 'var(--accent)' }}>
-            <Plus size={12} strokeWidth={2.8} /> Record grant
-          </button>
+          <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+            Added automatically from each grant type’s cross-matching list
+          </span>
         )}
       </div>
 

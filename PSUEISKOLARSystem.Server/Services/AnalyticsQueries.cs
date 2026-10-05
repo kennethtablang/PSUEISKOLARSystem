@@ -16,10 +16,11 @@ namespace PSUEISKOLARSystem.Server.Services
     /// </summary>
     public sealed class AnalyticsQueries(ApplicationDbContext db)
     {
+        /// <param name="campusId">A coordinator's campus: every figure is that campus's alone.</param>
         public async Task<OverviewDto> OverviewAsync(
-            string? academicYear = null, int? semester = null, CancellationToken ct = default)
+            string? academicYear = null, int? semester = null, CancellationToken ct = default, int? campusId = null)
         {
-            var scholars = db.ScholarProfiles.AsQueryable();
+            var scholars = db.ScholarProfiles.AtCampus(campusId);
 
             /* Each scholar's verdict is their latest grade's — a correlated "top 1 ordered by
                period" subquery. Grouping by that subquery would count all three buckets in one
@@ -61,7 +62,7 @@ namespace PSUEISKOLARSystem.Server.Services
                 .Select(x => new ScholarshipTypeCountDto(x.Name, x.Count))
                 .ToList();
 
-            var submissions = db.DocumentSubmissions.AsQueryable();
+            var submissions = db.DocumentSubmissions.AtCampus(db, campusId);
 
             // Before the filter is applied — see the remark on AvailablePeriods.
             var periodKeys = await submissions

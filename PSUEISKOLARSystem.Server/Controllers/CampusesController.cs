@@ -25,8 +25,13 @@ namespace PSUEISKOLARSystem.Server.Controllers
             // Inactive campuses are only shown to an administrator managing them.
             var showInactive = includeInactive && User.IsInRole(UserRoles.Administrator);
 
+            // A coordinator works within their own campus, so that is the only one offered to
+            // them — every campus picker in the app narrows to it.
+            var own = await db.CampusOfAsync(User);
+
             var campuses = await db.Campuses
                 .Where(c => showInactive || c.IsActive)
+                .Where(c => own == null || c.Id == own)
                 .OrderBy(c => c.Name)
                 .Select(c => new
                 {

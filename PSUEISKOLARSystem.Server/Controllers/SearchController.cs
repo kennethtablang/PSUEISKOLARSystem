@@ -21,11 +21,14 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
             const int take = 6;
 
+            // A coordinator finds only their own campus's scholars.
+            var campusId = await db.CampusOfAsync(User);
             var scholars = await (
                 from u in db.Users
                 join ur in db.UserRoles on u.Id equals ur.UserId
                 join r in db.Roles on ur.RoleId equals r.Id
                 where r.Name == UserRoles.Scholar &&
+                    (campusId == null || db.ScholarProfiles.Any(sp => sp.UserId == u.Id && sp.CampusId == campusId)) &&
                     (EF.Functions.Like((u.FirstName + " " + u.LastName).ToLower(), $"%{term}%") ||
                      (u.Email != null && EF.Functions.Like(u.Email.ToLower(), $"%{term}%")))
                 orderby u.LastName, u.FirstName
@@ -42,10 +45,12 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 .ToListAsync();
 
             var requirements = await db.DocumentRequirements
-                .Where(rq => EF.Functions.Like(rq.Name.ToLower(), $"%{term}%"))
+                .Where(rq => rq.IsActive && EF.Functions.Like(rq.Name.ToLower(), $"%{term}%"))
                 .OrderBy(rq => rq.Name)
                 .Take(take)
-                .Select(rq => new { rq.Id, rq.Name })
+                // Documents are managed inside their scholarship type, so a type-only document
+                // leads to its type; a shared one to the list of types.
+                .Select(rq => new { rq.Id, rq.Name, rq.ScholarshipTypeId })
                 .ToListAsync();
 
             return Ok(new { scholars, announcements, requirements });

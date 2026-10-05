@@ -41,7 +41,8 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
             var query = ListFilters.Grantees(db, new ListFilters.GranteeFilter
             {
-                CampusId = campusId, ProgramId = programId, GrantTypeId = grantTypeId, Active = active,
+                // A coordinator works only with their own campus's grantees.
+                CampusId = await db.CampusOfAsync(User) ?? campusId, ProgramId = programId, GrantTypeId = grantTypeId, Active = active,
                 Search = search, Sex = sex, YearLevel = yearLevel,
             });
 
@@ -82,6 +83,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             if (!IsStaff() && CurrentUserId != userId) return Forbid();
 
             var g = await db.GranteeProfiles
+                .AtCampus(await db.CampusOfAsync(User))
                 .Include(x => x.User)
                 .Include(x => x.Campus)
                 .Include(x => x.Program)

@@ -31,3 +31,8 @@ export async function toggleScholarshipTypeActive(id, token) {
 export async function deleteScholarshipType(id, token) {
   return apiDelete(`${API}/${id}`, token, 'Delete failed.');
 }
+
+// The documents a type's scholars submit: ticked shared documents plus the type's own.
+export async function updateScholarshipTypeDocuments(id, data, token) {
+  return apiSend(`${API}/${id}/documents`, 'PUT', data, token, 'Failed to save the required documents.');
+}

@@ -2,7 +2,7 @@ import { useId, useLayoutEffect, useRef } from 'react';
 import { Check } from 'lucide-react';
 import {
   SEX_OPTIONS, CIVIL_STATUS_OPTIONS, EDUCATION_OPTIONS, SUPPORT_SOURCE_OPTIONS, PERSONAL_FLAGS,
-  INSTITUTIONAL_DOMAIN, ageFrom,
+  ageFrom,
 } from '../constants/personal';
 
 /* The Scholar's Data sheet as form controls, shared by sign-up and the staff edit modals so
@@ -152,26 +152,20 @@ export function ContactInput({ value, onChange, id, required }) {
   );
 }
 
-/** Institutional email: the student types the part before the @, the domain is fixed. */
-export function InstitutionalEmailInput({ value, onChange, id, required }) {
+/** The student's personal email address (Gmail, Yahoo, …). */
+export function PersonalEmailInput({ value, onChange, id, required }) {
   return (
-    <div className="flex items-stretch">
-      <input
-        id={id}
-        type="text"
-        required={required}
-        value={value}
-        onChange={e => onChange(e.target.value.replace(/[@\s]/g, '').toLowerCase())}
-        placeholder="23ln0001_ms"
-        className="clay-input"
-        style={{ borderTopRightRadius: 0, borderBottomRightRadius: 0 }}
-        autoComplete="off"
-      />
-      <span className="flex items-center px-3 text-sm font-bold shrink-0 rounded-r-2xl"
-        style={{ background: 'var(--surface-inset)', color: 'var(--text-muted)', border: '1.5px solid var(--surface-inset)' }}>
-        @{INSTITUTIONAL_DOMAIN}
-      </span>
-    </div>
+    <input
+      id={id}
+      type="email"
+      required={required}
+      value={value}
+      onChange={e => onChange(e.target.value.replace(/\s/g, '').toLowerCase())}
+      placeholder="juan.delacruz@gmail.com"
+      className="clay-input"
+      autoComplete="email"
+      inputMode="email"
+    />
   );
 }
 

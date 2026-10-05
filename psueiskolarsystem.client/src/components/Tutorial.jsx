@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   X, ChevronLeft, ChevronRight, Sparkles, LayoutDashboard, FolderOpen, MessageSquare,
   Bell, User, GraduationCap, FileCheck, CalendarClock, Megaphone, BarChart2, Users, Settings,
-  UserCheck, Award, Banknote, BanknoteArrowUp, ShieldCheck, ClipboardList, Activity,
+  UserCheck, Award, Banknote, BanknoteArrowUp, Activity,
   HelpCircle, Search, Sun, CheckCircle2,
 } from 'lucide-react';
 
@@ -85,11 +85,7 @@ const COORDINATOR_STEPS = [
   },
   {
     target: '/scholarship-types', route: '/scholarship-types', Icon: Award, title: 'Step 2 — define the scholarship',
-    body: 'A scholarship type carries its GWA ceiling, its slot limit, the documents it demands, and how it pays out — one-time, per semester, or per year. Everything downstream reads these settings.',
-  },
-  {
-    target: '/requirements', route: '/requirements', Icon: ClipboardList, title: 'The shared document catalog',
-    body: 'Documents several scholarships ask for live here once. Group and reorder them and the scholar checklist follows. Documents unique to one scholarship are edited on that scholarship instead.',
+    body: 'A scholarship type carries its GWA ceiling, its slot limit, the documents it demands with their deadlines, and how it pays out — one-time, per semester, or per year. Everything downstream reads these settings.',
   },
   {
     target: '/master-list', route: '/master-list', Icon: GraduationCap, title: 'Step 3 — the roster',
@@ -106,10 +102,6 @@ const COORDINATOR_STEPS = [
   {
     target: '/one-time-grants', route: '/one-time-grants', Icon: Banknote, title: 'One-off assistance',
     body: 'Allowances and top-ups awarded on top of a scholarship. Each is tracked from award to release with its own reference number, and filed under the scholarship it belongs to.',
-  },
-  {
-    target: '/scholarship-verification', route: '/scholarship-verification', Icon: ShieldCheck, title: 'Keeping the records honest',
-    body: 'Scholarship Check hunts for duplicate student IDs, scholars holding two scholarships at once, and profiles that disagree with the assignment ledger. Run it before you report figures upward.',
   },
   {
     target: '/announcements', route: '/announcements', Icon: Megaphone, title: 'Reaching scholars',

@@ -24,5 +24,8 @@ namespace PSUEISKOLARSystem.Server.DTOs.Auth
 
         [Required(ErrorMessage = "Role is required.")]
         public string Role { get; set; } = string.Empty;
+
+        // Required for a scholarship coordinator: the campus they are in charge of.
+        public int? CampusId { get; set; }
     }
 }

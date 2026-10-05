@@ -12,11 +12,13 @@ import InfoTip from '../components/InfoTip';
 import DocumentTracker from '../components/DocumentTracker';
 import { GraduationCap, ClipboardList, AlertTriangle, BarChart2, Inbox, Clock, FileCheck, ArrowRight, RefreshCw, CalendarClock, MessageSquare, Megaphone, FolderOpen, User, Activity, UserCheck, Banknote, ShieldX, ShieldQuestion } from 'lucide-react';
 import { useTitle } from '../hooks/useTitle';
+import { useMyCampus } from '../hooks/useMyCampus';
 import { useNow, daysUntil } from '../hooks/useNow';
 
 export default function DashboardPage() {
   useTitle('Dashboard');
   const { user, token } = useAuth();
+  const myCampus = useMyCampus();
   const [announcements, setAnnouncements] = useState([]);
   const [stats, setStats] = useState(null);
   const [compliance, setCompliance] = useState(null);
@@ -97,7 +99,7 @@ export default function DashboardPage() {
     <Layout>
       {/* Full-width dashboard: the primary column carries the working content, the right
           rail carries the feeds (announcements, activity, deadlines) that used to be
-          stacked underneath it. The rail collapses under the main column below 1280px. */}
+          stacked underneath it. The rail collapses under the main column below 1440px. */}
       <div className="page-shell">
         {/* Header */}
         <div className="page-head">
@@ -106,7 +108,9 @@ export default function DashboardPage() {
               Welcome back, {user?.fullName?.split(' ')[0]}
             </h1>
             <p className="page-subtitle">
-              PSU Lingayen Campus · {user?.role === 'ScholarshipCoordinator' ? 'Coordinator' : user?.role}
+              {user?.role === 'ScholarshipCoordinator'
+                ? `${myCampus ? `PSU ${myCampus.name}` : 'Pangasinan State University'} · Coordinator`
+                : `Pangasinan State University · ${user?.role}`}
             </p>
             <span className="page-title-bar" />
           </div>

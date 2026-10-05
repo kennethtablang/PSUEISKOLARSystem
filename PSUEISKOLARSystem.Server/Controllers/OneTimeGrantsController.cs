@@ -43,11 +43,16 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
             var query = db.OneTimeGrants.AsQueryable();
 
-            // Scholars only ever see their own grants.
+            // Scholars only ever see their own grants; a coordinator their campus's.
             if (!isStaff)
                 query = query.Where(g => g.ScholarId == currentUserId);
-            else if (!string.IsNullOrWhiteSpace(scholarId))
-                query = query.Where(g => g.ScholarId == scholarId);
+            else
+            {
+                if (db.StudentsAt(await db.CampusOfAsync(User)) is { } atCampus)
+                    query = query.Where(g => atCampus.Contains(g.ScholarId));
+                if (!string.IsNullOrWhiteSpace(scholarId))
+                    query = query.Where(g => g.ScholarId == scholarId);
+            }
 
             if (scholarshipTypeId is int typeFilter)
                 query = query.Where(g => g.ScholarshipTypeId == typeFilter);
@@ -140,7 +145,11 @@ namespace PSUEISKOLARSystem.Server.Controllers
         [Authorize(Roles = StaffRoles)]
         public async Task<IActionResult> Summary()
         {
-            var grouped = await db.OneTimeGrants
+            var grants = db.OneTimeGrants.AsQueryable();
+            if (db.StudentsAt(await db.CampusOfAsync(User)) is { } atCampus)
+                grants = grants.Where(g => atCampus.Contains(g.ScholarId));
+
+            var grouped = await grants
                 .GroupBy(g => g.ReleaseStatus)
                 .Select(g => new { Status = g.Key, Count = g.Count(), Amount = g.Sum(x => x.Amount) })
                 .ToListAsync();
@@ -157,14 +166,14 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 releasedCount = CountFor(GrantReleaseStatuses.Released),
                 releasedAmount = AmountFor(GrantReleaseStatuses.Released),
                 cancelledCount = CountFor(GrantReleaseStatuses.Cancelled),
-                beneficiaries = await db.OneTimeGrants
+                beneficiaries = await grants
                     .Where(g => g.ReleaseStatus != GrantReleaseStatuses.Cancelled)
                     .Select(g => g.ScholarId)
                     .Distinct()
                     .CountAsync(),
                 // What each scholarship type has paid out in one-off awards, so a type's
                 // total spend is the sum of its releases and its grants rather than just one.
-                byScholarshipType = await db.OneTimeGrants
+                byScholarshipType = await grants
                     .Where(g => g.ReleaseStatus != GrantReleaseStatuses.Cancelled)
                     .GroupBy(g => new { g.ScholarshipTypeId, Name = g.ScholarshipType != null ? g.ScholarshipType.Name : null })
                     .Select(g => new

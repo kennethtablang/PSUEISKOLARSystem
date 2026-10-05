@@ -89,6 +89,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     Email = u.Email ?? string.Empty,
                     Role = roles.FirstOrDefault() ?? string.Empty,
                     IsActive = u.IsActive,
+                    CampusId = u.CampusId,
                     ApprovalStatus = u.ApprovalStatus,
                     ApprovalNote = u.ApprovalNote,
                     ApprovalDecidedAt = u.ApprovalDecidedAt,
@@ -116,6 +117,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 Email = user.Email ?? string.Empty,
                 Role = roles.FirstOrDefault() ?? string.Empty,
                 IsActive = user.IsActive,
+                CampusId = user.CampusId,
                 ApprovalStatus = user.ApprovalStatus,
                 ApprovalNote = user.ApprovalNote,
                 ApprovalDecidedAt = user.ApprovalDecidedAt,
@@ -174,6 +176,15 @@ namespace PSUEISKOLARSystem.Server.Controllers
             user.FirstName = dto.FirstName.Trim();
             user.MiddleName = string.IsNullOrWhiteSpace(dto.MiddleName) ? null : dto.MiddleName.Trim();
             user.LastName = dto.LastName.Trim();
+
+            // A coordinator's campus decides everything they can see; other roles have none.
+            if (dto.Role == UserRoles.ScholarshipCoordinator)
+            {
+                if (await AuthService.CoordinatorCampusProblemAsync(db, dto.CampusId, user.Id) is { } problem)
+                    return BadRequest(new { message = problem });
+                user.CampusId = dto.CampusId;
+            }
+            else user.CampusId = null;
 
             /* The result used to be discarded, so a rejected update (an email Identity refuses,
                a concurrency conflict) still answered 204 and the admin saw "saved". */

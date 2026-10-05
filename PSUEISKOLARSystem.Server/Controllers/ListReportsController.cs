@@ -27,6 +27,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
         [HttpGet("masterlist.{format}")]
         public async Task<IActionResult> MasterList(string format, [FromQuery] ListFilters.MasterListFilter f)
         {
+            if (await db.CampusOfAsync(User) is int scope) f.CampusId = scope;
             var people = await ListFilters.MasterListPeopleAsync(db, f);
             var rows = people.Select(p => new[]
             {
@@ -57,6 +58,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
         [HttpGet("scholars.{format}")]
         public async Task<IActionResult> Scholars(string format, [FromQuery] ListFilters.ScholarFilter f)
         {
+            if (await db.CampusOfAsync(User) is int scope) f.CampusId = scope;
             var list = await ListFilters.Scholars(db, f)
                 .OrderBy(sp => sp.ScholarshipType != null ? sp.ScholarshipType.Name : "")
                 .ThenBy(sp => sp.User.LastName).ThenBy(sp => sp.User.FirstName)
@@ -105,6 +107,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
         [HttpGet("grantees.{format}")]
         public async Task<IActionResult> Grantees(string format, [FromQuery] ListFilters.GranteeFilter f)
         {
+            if (await db.CampusOfAsync(User) is int scope) f.CampusId = scope;
             var list = await ListFilters.Grantees(db, f)
                 .OrderBy(g => g.User.LastName).ThenBy(g => g.User.FirstName)
                 .Select(g => new

@@ -12,16 +12,19 @@ import { useTitle } from '../hooks/useTitle';
 import { ctlStyle } from '../constants/ui';
 import { SEX_OPTIONS } from '../constants/personal';
 import { FREQUENCY_LABELS, peso } from '../constants/grants';
-import { getScholarshipType, getScholarshipTypes } from '../api/scholarshipTypes';
+import { getScholarshipType, getScholarshipTypes, updateScholarshipTypeDocuments } from '../api/scholarshipTypes';
 import { getScholars } from '../api/scholars';
 import { getCampuses } from '../api/campuses';
 import { getPrograms } from '../api/lookups';
-import { getRequirements } from '../api/documents';
+import { getRequirements, uploadRequirementSample, deleteRequirementSample } from '../api/documents';
 import { getActiveSemester } from '../api/settings';
 import { getDeadlines, upsertDeadline } from '../api/deadlines';
 import { getSystemSettings } from '../api/systemSettings';
-import { ScholarshipTypeModal } from './ScholarshipTypesPage';
-import { ArrowLeft, GraduationCap, ListChecks, FileText, CalendarClock, Pencil, Users, Lock } from 'lucide-react';
+import { ScholarshipTypeModal, ScopeBadge } from './ScholarshipTypesPage';
+import { canManageType } from '../constants/scholarshipTypes';
+import Modal from '../components/Modal';
+import { ErrorBox, ModalButtons } from './UsersPage';
+import { ArrowLeft, GraduationCap, ListChecks, FileText, CalendarClock, Pencil, Users, Lock, Plus, Trash2, Save, Sparkles, CheckCircle2 } from 'lucide-react';
 
 const TABS = [
   { key: 'scholars', label: 'Scholars', Icon: Users },
@@ -52,6 +55,8 @@ export default function ScholarshipTypeDetailPage() {
   const [programs, setPrograms] = useState([]);
   const [error, setError] = useState('');
   const [editing, setEditing] = useState(false);
+  const [editingDocs, setEditingDocs] = useState(false);
+  const [docsVersion, setDocsVersion] = useState(0);
   const [sharedRequirements, setSharedRequirements] = useState([]);
   const [defaultGwa, setDefaultGwa] = useState('2.50');
   useTitle(type?.name ?? 'Scholarship Type');
@@ -71,11 +76,13 @@ export default function ScholarshipTypeDetailPage() {
     Promise.all([getCampuses(token), getPrograms(token)])
       .then(([c, p]) => { setCampuses(c); setPrograms(p); })
       .catch(() => {});
-    if (isAdmin) {
-      getRequirements(token, { sharedOnly: true }).then(setSharedRequirements).catch(() => {});
+    getRequirements(token, { sharedOnly: true }).then(setSharedRequirements).catch(() => {});
+    if (isAdmin)
       getSystemSettings(token).then(s => { if (s?.defaultMinimumGwa != null) setDefaultGwa(String(s.defaultMinimumGwa)); }).catch(() => {});
-    }
   }, [loadType, token, isAdmin]);
+
+  // The administrator manages every type; a coordinator only their own campus's types.
+  const manage = canManageType(user, listItem);
 
   function changeTab(key) {
     setTab(key);
@@ -115,11 +122,12 @@ export default function ScholarshipTypeDetailPage() {
                   type.slotLimit != null ? `${type.scholarCount} of ${type.slotLimit} slots` : `${type.scholarCount} scholar${type.scholarCount === 1 ? '' : 's'}`,
                 ].filter(Boolean).join(' · ')}
                 {!type.isActive && <span className="status-badge tone-neutral ml-2">Inactive</span>}
+                {listItem && <span className="ml-2 align-middle"><ScopeBadge type={listItem} /></span>}
               </p>
             )}
             <span className="page-title-bar" />
           </div>
-          {isAdmin && listItem && (
+          {manage && (
             <button onClick={() => setEditing(true)} className="clay-btn clay-btn-ghost text-sm px-4 flex items-center gap-2">
               <Pencil size={14} /> Edit Scholarship Type
             </button>
@@ -143,7 +151,7 @@ export default function ScholarshipTypeDetailPage() {
               <CrossMatchList scope={{ kind: 'Scholar', scholarshipTypeId: typeId, typeName: type.name }} campuses={campuses} />
             )}
             {tab === 'documents' && (
-              <DocumentsTab type={type} isAdmin={isAdmin} onEdit={listItem ? () => setEditing(true) : null} />
+              <DocumentsTab type={type} canEdit={manage} version={docsVersion} onEditDocuments={() => setEditingDocs(true)} />
             )}
           </div>
         )}
@@ -152,11 +160,25 @@ export default function ScholarshipTypeDetailPage() {
       {editing && listItem && (
         <ScholarshipTypeModal
           initial={listItem}
-          allRequirements={sharedRequirements}
           defaultGwa={defaultGwa}
           token={token}
           onClose={() => setEditing(false)}
           onSaved={() => { setEditing(false); toast('Scholarship type saved.', 'success'); loadType(); }}
+        />
+      )}
+
+      {editingDocs && listItem && (
+        <TypeDocumentsModal
+          type={listItem}
+          sharedRequirements={sharedRequirements}
+          token={token}
+          onClose={() => setEditingDocs(false)}
+          onSaved={() => {
+            setEditingDocs(false);
+            toast('Required documents saved.', 'success');
+            setDocsVersion(v => v + 1);
+            loadType();
+          }}
         />
       )}
     </Layout>
@@ -259,17 +281,22 @@ function ScholarsTab({ typeId, campuses, programs }) {
 
 /* ── Required documents and their deadline ───────────────────────── */
 
-function DocumentsTab({ type, isAdmin, onEdit }) {
+function DocumentsTab({ type, canEdit, version, onEditDocuments }) {
   const { token, user } = useAuth();
   const toast = useToast();
   // The documents this scholarship's scholars actually see — a type with no documents chosen
-  // falls back to the whole shared catalog, exactly as the scholar checklist does.
+  // falls back to the whole shared list, exactly as the scholar checklist does.
   const [documents, setDocuments] = useState([]);
-  useEffect(() => {
+  const loadDocuments = useCallback(() => {
     getRequirements(token, { scholarshipTypeId: type.id }).then(setDocuments).catch(() => setDocuments([]));
-  }, [token, type.id, type.sharedRequirements.length, type.otherDocuments.length]);
+  }, [token, type.id]);
+  useEffect(() => { loadDocuments(); }, [loadDocuments, version]);
   const linked = type.sharedRequirements.length + type.otherDocuments.length > 0;
-  const canSetDeadline = user?.role === 'Administrator' || user?.role === 'ScholarshipCoordinator';
+  const isAdmin = user?.role === 'Administrator';
+  // A shared document's deadline reaches every campus, so it is the administrator's to set;
+  // a coordinator sets deadlines on their own type's documents.
+  const canSetDeadline = d => canEdit && (isAdmin || d.scholarshipTypeId === type.id);
+  const settable = documents.filter(canSetDeadline);
   const [period, setPeriod] = useState(null);
   const [deadlines, setDeadlines] = useState({});
   const [allDate, setAllDate] = useState('');
@@ -307,6 +334,17 @@ function DocumentsTab({ type, isAdmin, onEdit }) {
     }
   }
 
+  async function changeSample(doc, file) {
+    try {
+      if (file) await uploadRequirementSample(doc.id, file, token);
+      else await deleteRequirementSample(doc.id, token);
+      toast(file ? 'Sample added.' : 'Sample removed.', 'success');
+      loadDocuments();
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -315,8 +353,8 @@ function DocumentsTab({ type, isAdmin, onEdit }) {
           {period ? <> for <strong>{period.academicYear} · Semester {period.semester}</strong></> : ''}. Once a deadline passes, a scholar who
           submitted nothing is locked out of that document for the period, and it shows on their profile.
         </p>
-        {isAdmin && onEdit && (
-          <button onClick={onEdit} className="clay-btn clay-btn-ghost text-sm px-4 flex items-center gap-2">
+        {canEdit && (
+          <button onClick={onEditDocuments} className="clay-btn clay-btn-ghost text-sm px-4 flex items-center gap-2">
             <Pencil size={14} /> Edit required documents
           </button>
         )}
@@ -324,37 +362,39 @@ function DocumentsTab({ type, isAdmin, onEdit }) {
 
       {!linked && documents.length > 0 && (
         <p className="text-xs px-3 py-2 rounded-xl" style={{ background: 'var(--surface-inset)', color: 'var(--text)' }}>
-          No documents have been chosen for {type.name}, so its scholars see the whole shared catalog below.
-          {isAdmin && ' Edit the required documents to narrow it down.'}
+          No documents have been chosen for {type.name}, so its scholars see every shared document below.
+          {canEdit && ' Use “Edit required documents” to choose the ones they must submit.'}
         </p>
       )}
 
-      {canSetDeadline && documents.length > 0 && (
+      {settable.length > 0 && (
         <div className="rounded-2xl p-4 flex flex-wrap items-end gap-3" style={{ background: 'var(--surface-inset)' }}>
           <div>
             <label htmlFor="all-deadline" className="block text-xs font-bold mb-1.5 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
               Deadline for all documents
             </label>
-            <input id="all-deadline" type="date" value={allDate} onChange={e => setAllDate(e.target.value)} className="clay-input" style={{ width: 200 }} />
+            <input id="all-deadline" type="date" value={allDate} onChange={e => setAllDate(e.target.value)} className="clay-input" style={{ width: 200, maxWidth: '100%' }} />
           </div>
-          <button disabled={!allDate || saving} onClick={() => save(documents.map(d => d.id), allDate)}
+          <button disabled={!allDate || saving} onClick={() => save(settable.map(d => d.id), allDate)}
             className="clay-btn clay-btn-primary text-sm px-4 flex items-center gap-2" style={{ opacity: !allDate || saving ? 0.6 : 1 }}>
             <CalendarClock size={14} /> {saving ? 'Saving…' : 'Set deadline'}
           </button>
           <p className="text-[11px] w-full" style={{ color: 'var(--text-muted)' }}>
-            Shared documents are used by other scholarships too — their deadline is the same for every scholarship that requires them.
+            {isAdmin
+              ? 'Shared documents are used by other scholarships too — their deadline is the same for every scholarship that requires them.'
+              : `Applies to the documents only ${type.name} asks for. Shared documents’ deadlines are set by the administrator for every campus.`}
           </p>
         </div>
       )}
 
       {documents.length === 0 ? (
-        <EmptyState title="No documents required yet" message={isAdmin ? 'Edit the scholarship type to choose the documents its scholars submit.' : 'The administrator has not set any documents for this scholarship.'} />
+        <EmptyState title="No documents required yet" message={canEdit ? 'Use “Edit required documents” to choose the documents its scholars submit.' : 'No documents have been set for this scholarship yet.'} />
       ) : (
-        <div className="rounded-2xl overflow-hidden" style={{ border: '1.5px solid var(--hairline)' }}>
-          <table className="w-full text-sm">
+        <div className="rounded-2xl overflow-x-auto" style={{ border: '1.5px solid var(--hairline)' }}>
+          <table className="w-full min-w-[640px] text-sm">
             <thead className="clay-table-head">
               <tr>
-                {['Document', 'Kind', 'Deadline', ''].map(h => (
+                {['Document', 'Kind', 'Deadline', settable.length > 0 ? 'Set deadline' : ''].map(h => (
                   <th key={h} className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{h}</th>
                 ))}
               </tr>
@@ -368,6 +408,7 @@ function DocumentsTab({ type, isAdmin, onEdit }) {
                     <td className="px-4 py-3">
                       <p className="font-semibold" style={{ color: 'var(--text-strong)' }}>{d.name}</p>
                       {d.description && <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{d.description}</p>}
+                      {isAdmin && <SampleControl doc={d} onChange={file => changeSample(d, file)} />}
                     </td>
                     <td className="px-4 py-3 text-xs" style={{ color: 'var(--text)' }}>
                       {d.scholarshipTypeId === type.id ? `Only ${type.name}` : 'Shared'}{d.isRequired ? ' · required' : ' · optional'}
@@ -381,12 +422,10 @@ function DocumentsTab({ type, isAdmin, onEdit }) {
                         </span>
                       ) : <span style={{ color: 'var(--text-muted)' }}>No deadline</span>}
                     </td>
-                    <td className="px-4 py-3 text-right">
-                      {canSetDeadline && (
-                        <input type="date" aria-label={`Deadline for ${d.name}`} defaultValue={toDateInput(dl?.dueDate)}
-                          key={dl?.dueDate ?? 'none'} disabled={saving}
-                          onBlur={e => { if (e.target.value && e.target.value !== toDateInput(dl?.dueDate)) save([d.id], e.target.value); }}
-                          className="clay-input" style={{ ...ctlStyle, width: 160 }} />
+                    <td className="px-4 py-3">
+                      {canSetDeadline(d) && (
+                        <DeadlineEditor key={dl?.dueDate ?? 'none'} name={d.name} current={toDateInput(dl?.dueDate)}
+                          disabled={saving} onSave={date => save([d.id], date)} />
                       )}
                     </td>
                   </tr>
@@ -397,5 +436,191 @@ function DocumentsTab({ type, isAdmin, onEdit }) {
         </div>
       )}
     </div>
+  );
+}
+
+/* One document's deadline: pick a date, then press Save — nothing is stored until then. */
+function DeadlineEditor({ name, current, disabled, onSave }) {
+  const [value, setValue] = useState(current);
+  const dirty = Boolean(value) && value !== current;
+  return (
+    <div className="flex items-center gap-2 justify-end">
+      <input type="date" aria-label={`Deadline for ${name}`} value={value} disabled={disabled}
+        onChange={e => setValue(e.target.value)} className="clay-input" style={{ ...ctlStyle, width: 160 }} />
+      <button type="button" disabled={!dirty || disabled} onClick={() => onSave(value)}
+        title={dirty ? `Save the deadline for ${name}` : 'Pick a new date first'}
+        className="clay-btn clay-btn-primary text-xs px-3 flex items-center gap-1.5"
+        style={{ height: 34, minHeight: 34, opacity: !dirty || disabled ? 0.5 : 1 }}>
+        <Save size={13} /> Save
+      </button>
+    </div>
+  );
+}
+
+/* An example image scholars can look at before uploading the real document. */
+function SampleControl({ doc, onChange }) {
+  const inputId = `sample-${doc.id}`;
+  return (
+    <div className="flex items-center gap-3 mt-1">
+      <label htmlFor={inputId} className="text-[11px] font-bold cursor-pointer hover:underline" style={{ color: 'var(--accent)' }}>
+        {doc.hasSample ? 'Replace sample' : '+ Add sample'}
+      </label>
+      <input id={inputId} type="file" accept="image/*" className="sr-only"
+        onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) onChange(f); }} />
+      {doc.hasSample && (
+        <button type="button" onClick={() => onChange(null)} className="text-[11px] font-bold hover:underline" style={{ color: 'var(--danger)' }}>
+          Remove sample
+        </button>
+      )}
+    </div>
+  );
+}
+
+/* ── Edit required documents ─────────────────────────────────────── */
+
+/**
+ * What a type's scholars must submit: documents ticked from the shared list (used by other
+ * scholarships too) plus documents that exist only for this type, which are added, renamed
+ * and removed right here.
+ */
+function TypeDocumentsModal({ type, sharedRequirements, token, onClose, onSaved }) {
+  const [requirementIds, setRequirementIds] = useState(type.requirementIds ?? []);
+  const [ownDocs, setOwnDocs] = useState(
+    () => (type.requirements ?? [])
+      .filter(r => r.isTypeSpecific)
+      .map(r => ({ id: r.requirementId, name: r.name, description: r.description ?? '', isRequired: r.isRequired }))
+  );
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  function toggle(id) {
+    setRequirementIds(ids => ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id]);
+  }
+  const addDoc = () => setOwnDocs(d => [...d, { id: null, name: '', description: '', isRequired: true }]);
+  const setDoc = (i, patch) => setOwnDocs(d => d.map((doc, j) => j === i ? { ...doc, ...patch } : doc));
+  const removeDoc = i => setOwnDocs(d => d.filter((_, j) => j !== i));
+
+  const names = ownDocs.filter(d => d.name.trim()).map(d => d.name.trim().toLowerCase());
+  const docsError = names.length !== new Set(names).size
+    ? 'Each document needs a distinct name.'
+    : ownDocs.some(d => !d.name.trim())
+      ? 'Give every new document a name, or remove the empty row.'
+      : '';
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (docsError) return;
+    setError('');
+    setSubmitting(true);
+    try {
+      await updateScholarshipTypeDocuments(type.id, {
+        requirementIds,
+        otherDocuments: ownDocs.map(d => ({
+          id: d.id,
+          name: d.name.trim(),
+          description: d.description.trim() || null,
+          isRequired: d.isRequired,
+        })),
+      }, token);
+      onSaved();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal title={`Required documents: ${type.name}`}
+      subtitle="Tick the shared documents its scholars must submit, and add any document only this scholarship asks for."
+      onClose={onClose} width={640} dismissible={!submitting}>
+      {error && <ErrorBox>{error}</ErrorBox>}
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <div>
+          <p className="text-sm font-semibold mb-1" style={{ color: 'var(--text-strong)' }}>Shared documents</p>
+          <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>
+            Documents other scholarships use too. Leave them all unticked and the scholars see every shared document.
+          </p>
+          {sharedRequirements.length === 0 ? (
+            <p className="text-xs italic" style={{ color: 'var(--text-faint)' }}>There are no shared documents — add this scholarship’s own documents below.</p>
+          ) : (
+            <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--hairline)' }}>
+              {sharedRequirements.map((r, i) => {
+                const checked = requirementIds.includes(r.id);
+                return (
+                  <label key={r.id} className="flex items-start gap-3 px-4 py-3 cursor-pointer select-none"
+                    style={{ borderTop: i > 0 ? '1px solid var(--hairline)' : undefined, background: checked ? 'rgba(0,37,112,0.04)' : 'transparent' }}>
+                    <input type="checkbox" checked={checked} onChange={() => toggle(r.id)} className="mt-0.5 w-4 h-4 rounded"
+                      style={{ accentColor: 'var(--accent)', flexShrink: 0 }} />
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-sm font-medium" style={{ color: 'var(--text-strong)' }}>{r.name}</span>
+                      {r.description && <span className="block text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{r.description}</span>}
+                    </span>
+                    <span className="text-xs font-bold shrink-0" style={{ color: r.isRequired ? '#b45309' : 'var(--text-muted)' }}>
+                      {r.isRequired ? 'Required' : 'Optional'}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between gap-3 mb-1">
+            <p className="text-sm font-semibold flex items-center gap-1.5" style={{ color: 'var(--text-strong)' }}>
+              <Sparkles size={14} style={{ color: '#6b21a8' }} /> Documents only for {type.name}
+            </p>
+            <button type="button" onClick={addDoc} className="text-xs font-bold hover:underline flex items-center gap-1" style={{ color: '#6030b0' }}>
+              <Plus size={12} strokeWidth={2.8} /> Add document
+            </button>
+          </div>
+          <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>
+            New requirements for this scholarship. Other scholarships don’t see them.
+          </p>
+          {ownDocs.length === 0 ? (
+            <button type="button" onClick={addDoc} className="w-full rounded-xl py-4 text-xs font-semibold"
+              style={{ border: '1.5px dashed rgba(107,33,168,0.35)', color: '#6030b0', background: 'rgba(107,33,168,0.04)' }}>
+              + Add a new requirement
+            </button>
+          ) : (
+            <div className="space-y-2.5">
+              {ownDocs.map((doc, i) => (
+                <div key={doc.id ?? `new-${i}`} className="clay-card-inner p-3 flex items-start gap-2">
+                  <div className="flex-1 min-w-0 space-y-2">
+                    <input value={doc.name} onChange={e => setDoc(i, { name: e.target.value })} className="clay-input"
+                      style={{ height: 36, minHeight: 36, fontSize: 13 }} placeholder="Document name — e.g. Barangay Certificate of Indigency"
+                      aria-label="Document name" />
+                    <input value={doc.description} onChange={e => setDoc(i, { description: e.target.value })} className="clay-input"
+                      style={{ height: 34, minHeight: 34, fontSize: 12 }} placeholder="What should the scholar submit? (optional)"
+                      aria-label="Document description" />
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input type="checkbox" checked={doc.isRequired} onChange={e => setDoc(i, { isRequired: e.target.checked })}
+                        className="w-3.5 h-3.5 rounded" style={{ accentColor: '#6030b0' }} />
+                      <span className="text-xs font-medium" style={{ color: 'var(--text)' }}>Required for compliance</span>
+                    </label>
+                  </div>
+                  <button type="button" onClick={() => removeDoc(i)} aria-label={`Remove ${doc.name || 'document'}`}
+                    title={doc.id ? 'Remove — documents already submitted are kept' : 'Remove'}
+                    className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
+                    style={{ background: 'rgba(224,48,48,0.08)', color: 'var(--danger)' }}>
+                    <Trash2 size={14} strokeWidth={2.4} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          {docsError && <p className="text-xs mt-2 font-medium" style={{ color: 'var(--danger)' }}>{docsError}</p>}
+          {ownDocs.some(d => d.id) && (
+            <p className="text-xs mt-2 flex items-start gap-1.5" style={{ color: 'var(--text-muted)' }}>
+              <CheckCircle2 size={12} className="mt-0.5 shrink-0" />
+              Removing a document retires it — documents scholars already submitted are never deleted.
+            </p>
+          )}
+        </div>
+
+        <ModalButtons onClose={onClose} submitting={submitting} disabled={!!docsError} label="Save documents" />
+      </form>
+    </Modal>
   );
 }

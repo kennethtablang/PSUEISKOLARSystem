@@ -6,7 +6,8 @@ import { useNotifications } from '../context/NotificationContext';
 import { useToast } from '../context/UIContext';
 import { getNotifications, markRead, markUnread, markAllRead, deleteNotification } from '../api/notifications';
 import { useTitle } from '../hooks/useTitle';
-import { NOTIFICATION_CATEGORIES, NOTIFICATION_FILTER_CATEGORIES } from '../constants/notifications';
+import { NOTIFICATION_CATEGORIES, NOTIFICATION_FILTER_CATEGORIES, opensInPlace } from '../constants/notifications';
+import NotificationDetailModal from '../components/NotificationDetailModal';
 import { Bell, FileCheck, Megaphone, Clock, MessageSquare, UserCog, CheckCheck, Undo2, Trash2, Settings } from 'lucide-react';
 
 const C = NOTIFICATION_CATEGORIES;
@@ -31,10 +32,11 @@ function timeAgo(iso) {
 
 export default function NotificationsPage() {
   useTitle('Notifications');
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const { refresh } = useNotifications();
   const toast = useToast();
   const navigate = useNavigate();
+  const [viewing, setViewing] = useState(null);
   const [error, setError] = useState('');
 
   const [items, setItems] = useState([]);
@@ -66,7 +68,8 @@ export default function NotificationsPage() {
       setItems(prev => prev.map(x => x.id === n.id ? { ...x, isRead: true } : x));
       refresh();
     }
-    if (n.linkUrl) navigate(n.linkUrl);
+    if (opensInPlace(n, user?.role)) setViewing(n);
+    else if (n.linkUrl) navigate(n.linkUrl);
   }
 
   async function handleMarkAll() {
@@ -231,6 +234,7 @@ export default function NotificationsPage() {
           </aside>
         </div>
       </div>
+      {viewing && <NotificationDetailModal notification={viewing} onClose={() => setViewing(null)} />}
     </Layout>
   );
 }

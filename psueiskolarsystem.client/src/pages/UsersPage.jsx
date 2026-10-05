@@ -3,6 +3,7 @@ import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { getUsers, updateUser, setUserStatus, deleteUser, sendPasswordReset } from '../api/users';
 import { register } from '../api/auth';
+import { getCampuses } from '../api/campuses';
 import { downloadImportTemplate, importScholars, triggerDownload } from '../api/userImport';
 import { Upload, Download, CheckCircle2, XCircle } from 'lucide-react';
 import Pagination from '../components/Pagination';
@@ -57,6 +58,10 @@ export default function UsersPage() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage]             = useState(1);
   const [pageSize, setPageSize]     = useState(20);
+  // Each coordinator is in charge of one campus, chosen when the account is made.
+  const [campuses, setCampuses]     = useState([]);
+  useEffect(() => { getCampuses(token).then(setCampuses).catch(() => {}); }, [token]);
+  const campusName = id => campuses.find(c => c.id === id)?.name;
 
   /* Debounce the search box so we don't hit the server on every keystroke */
   useEffect(() => {
@@ -229,6 +234,11 @@ export default function UsersPage() {
                     <td className="px-5 py-3.5" style={{ color: 'var(--text)' }}>{u.email}</td>
                     <td className="px-5 py-3.5">
                       <span className={`clay-badge ${ROLE_BADGE_CLASS[u.role] ?? ''}`}>{ROLE_LABEL[u.role] ?? u.role}</span>
+                      {u.role === 'ScholarshipCoordinator' && (
+                        <p className="text-xs mt-1" style={{ color: u.campusId ? 'var(--text-muted)' : 'var(--danger)' }}>
+                          {u.campusId ? campusName(u.campusId) ?? 'Campus' : 'No campus assigned'}
+                        </p>
+                      )}
                     </td>
                     <td className="px-5 py-3.5">
                       <span className={`clay-badge ${u.isActive ? 'badge-active' : 'badge-inactive'}`}>
@@ -283,6 +293,7 @@ export default function UsersPage() {
         editing ? (
           <EditUserModal
             user={editing}
+            campuses={campuses}
             token={token}
             onClose={() => setShowModal(false)}
             isSelf={editing.id === me?.id}
@@ -290,6 +301,7 @@ export default function UsersPage() {
           />
         ) : (
           <CreateUserModal
+            campuses={campuses}
             token={token}
             onClose={() => setShowModal(false)}
             onCreated={() => { setShowModal(false); toast('User created.', 'success'); load(); }}
@@ -440,8 +452,9 @@ function SummaryStat({ label, value, color }) {
 }
 
 /* ── Create User Modal ─────────────────────────────── */
-function CreateUserModal({ token, onClose, onCreated }) {
-  const [form, setForm] = useState({ firstName: '', middleName: '', lastName: '', email: '', password: '', role: 'Scholar' });
+function CreateUserModal({ campuses, token, onClose, onCreated }) {
+  // Coordinator first — making the campus coordinators' accounts is what this is mostly for.
+  const [form, setForm] = useState({ firstName: '', middleName: '', lastName: '', email: '', password: '', role: 'ScholarshipCoordinator', campusId: '' });
   const [error, setError]         = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -449,7 +462,9 @@ function CreateUserModal({ token, onClose, onCreated }) {
 
   const emailError = form.email && !EMAIL_RE.test(form.email.trim()) ? 'Enter a valid email address.' : '';
   const passwordOk = getPasswordStrength(form.password).passed === 5;
-  const canSubmit = form.firstName.trim() && form.lastName.trim() && !emailError && form.email && passwordOk;
+  const needsCampus = form.role === 'ScholarshipCoordinator';
+  const canSubmit = form.firstName.trim() && form.lastName.trim() && !emailError && form.email && passwordOk
+    && (!needsCampus || form.campusId);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -464,6 +479,7 @@ function CreateUserModal({ token, onClose, onCreated }) {
         email:      form.email,
         password:   form.password,
         role:       form.role,
+        campusId:   needsCampus ? Number(form.campusId) : null,
       }, token);
       onCreated();
     } catch (err) {
@@ -489,7 +505,7 @@ function CreateUserModal({ token, onClose, onCreated }) {
           <input value={form.middleName} onChange={e => set('middleName', e.target.value)} className="clay-input" placeholder="Santos" />
         </Field>
         <Field label="Email Address">
-          <input type="email" required value={form.email} onChange={e => set('email', e.target.value)} className="clay-input" placeholder="juan@psu.edu.ph" />
+          <input type="email" required value={form.email} onChange={e => set('email', e.target.value)} className="clay-input" placeholder="juan.delacruz@gmail.com" />
           <FieldError>{emailError}</FieldError>
         </Field>
         <Field label="Password">
@@ -501,6 +517,7 @@ function CreateUserModal({ token, onClose, onCreated }) {
             {ROLES.map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
           </select>
         </Field>
+        {needsCampus && <CampusField campuses={campuses} value={form.campusId} onChange={v => set('campusId', v)} />}
         <ModalButtons onClose={onClose} submitting={submitting} disabled={!canSubmit} label="Create User" />
       </form>
     </ClayModal>
@@ -508,13 +525,14 @@ function CreateUserModal({ token, onClose, onCreated }) {
 }
 
 /* ── Edit User Modal ───────────────────────────────── */
-function EditUserModal({ user, token, isSelf, onClose, onSaved }) {
+function EditUserModal({ user, campuses, token, isSelf, onClose, onSaved }) {
   const [form, setForm] = useState({
     firstName:  user.firstName  ?? '',
     middleName: user.middleName ?? '',
     lastName:   user.lastName   ?? '',
     email:      user.email      ?? '',
     role:       user.role       ?? 'Scholar',
+    campusId:   user.campusId != null ? String(user.campusId) : '',
   });
   const [error, setError]         = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -522,7 +540,9 @@ function EditUserModal({ user, token, isSelf, onClose, onSaved }) {
   function set(field, value) { setForm(f => ({ ...f, [field]: value })); }
 
   const emailError = form.email && !EMAIL_RE.test(form.email.trim()) ? 'Enter a valid email address.' : '';
-  const canSubmit = form.firstName.trim() && form.lastName.trim() && form.email && !emailError;
+  const needsCampus = form.role === 'ScholarshipCoordinator';
+  const canSubmit = form.firstName.trim() && form.lastName.trim() && form.email && !emailError
+    && (!needsCampus || form.campusId);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -536,6 +556,7 @@ function EditUserModal({ user, token, isSelf, onClose, onSaved }) {
         lastName:   form.lastName.trim(),
         email:      form.email.trim(),
         role:       form.role,
+        campusId:   needsCampus ? Number(form.campusId) : null,
       }, token);
       onSaved();
     } catch (err) {
@@ -574,9 +595,25 @@ function EditUserModal({ user, token, isSelf, onClose, onSaved }) {
             You cannot change your own role. Another administrator has to do it.
           </p>
         )}
+        {needsCampus && <CampusField campuses={campuses} value={form.campusId} onChange={v => set('campusId', v)} />}
         <ModalButtons onClose={onClose} submitting={submitting} disabled={!canSubmit} label="Save Changes" />
       </form>
     </ClayModal>
+  );
+}
+
+/* A coordinator works within one campus: its scholars, documents, messages and figures. */
+function CampusField({ campuses, value, onChange }) {
+  return (
+    <Field label="Campus">
+      <select required value={value} onChange={e => onChange(e.target.value)} className="clay-input">
+        <option value="">— Choose the campus —</option>
+        {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+      </select>
+      <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+        The coordinator sees only this campus’s scholars, grantees, documents, messages and reports. Each campus has one coordinator.
+      </p>
+    </Field>
   );
 }
 

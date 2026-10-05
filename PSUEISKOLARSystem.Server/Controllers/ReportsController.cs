@@ -40,6 +40,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             [FromQuery] int? programId,
             [FromQuery] int? campusId)
         {
+            campusId = await db.CampusOfAsync(User) ?? campusId;   // a coordinator: their campus only
             var scholars = await LoadScholarsAsync(scholarshipTypeId, programId, campusId);
 
             using var wb = new XLWorkbook();
@@ -99,6 +100,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             [FromQuery] int? programId,
             [FromQuery] int? campusId)
         {
+            campusId = await db.CampusOfAsync(User) ?? campusId;   // a coordinator: their campus only
             var scholars = await LoadScholarsAsync(scholarshipTypeId, programId, campusId);
 
             // The scholarship column is dropped: each section is already one scholarship.
@@ -295,9 +297,11 @@ namespace PSUEISKOLARSystem.Server.Controllers
             return File(pdf, "application/pdf", $"submissions_{DateTime.UtcNow:yyyyMMdd}.pdf");
         }
 
-        private Task<List<DocumentSubmission>> LoadSubmissionsAsync(string? academicYear, int? semester, string? status)
+        private async Task<List<DocumentSubmission>> LoadSubmissionsAsync(string? academicYear, int? semester, string? status)
         {
+            var campusScope = await db.CampusOfAsync(User);
             var query = db.DocumentSubmissions
+                .AtCampus(db, campusScope)
                 .Include(s => s.Scholar)
                 .Include(s => s.Requirement)
                 .Include(s => s.ReviewedBy)
@@ -310,7 +314,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             if (!string.IsNullOrWhiteSpace(status) && Enum.TryParse<DocumentStatus>(status, out var parsed))
                 query = query.Where(s => s.Status == parsed);
 
-            return query.OrderByDescending(s => s.SubmittedAt).ToListAsync();
+            return await query.OrderByDescending(s => s.SubmittedAt).ToListAsync();
         }
 
         private static string DescribeSubmissionFilters(string? academicYear, int? semester, string? status)

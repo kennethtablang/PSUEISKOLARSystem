@@ -34,7 +34,9 @@ namespace PSUEISKOLARSystem.Server.Controllers
             page = Math.Max(page, 1);
             pageSize = Math.Clamp(pageSize, 1, 100);
 
+            // A coordinator works only with their own campus's scholars.
             var query = db.ScholarProfiles
+                .AtCampus(await db.CampusOfAsync(User))
                 .Include(sp => sp.User)
                 .Include(sp => sp.Campus)
                 .Include(sp => sp.Program)
@@ -115,6 +117,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
         [HttpGet("{userId}")]
         public async Task<IActionResult> GetByUserId(string userId)
         {
+            if (!await db.CanSeeScholarAsync(await db.CampusOfAsync(User), userId)) return NotFound(new { message = "Scholar profile not found." });
             var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
             var isAdminOrCoord = User.IsInRole(UserRoles.Administrator) || User.IsInRole(UserRoles.ScholarshipCoordinator);
 
@@ -143,6 +146,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
         [HttpGet("{userId}/scholarship-history")]
         public async Task<IActionResult> GetScholarshipHistory(string userId)
         {
+            if (!await db.CanSeeScholarAsync(await db.CampusOfAsync(User), userId)) return NotFound(new { message = "Scholar profile not found." });
             var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
             var isAdminOrCoord = User.IsInRole(UserRoles.Administrator) || User.IsInRole(UserRoles.ScholarshipCoordinator);
             if (!isAdminOrCoord && currentUserId != userId) return Forbid();
@@ -327,6 +331,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
         [Authorize(Roles = $"{UserRoles.Administrator},{UserRoles.ScholarshipCoordinator}")]
         public async Task<IActionResult> SetLifecycle(string userId, LifecycleRequest dto)
         {
+            if (!await db.CanSeeScholarAsync(await db.CampusOfAsync(User), userId)) return NotFound(new { message = "Scholar profile not found." });
             if (!LifecycleStatuses.IsKnown(dto.Status))
                 return BadRequest(new { message = "Invalid lifecycle status." });
 
@@ -392,6 +397,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
         [HttpGet("{userId}/export")]
         public async Task<IActionResult> ExportData(string userId)
         {
+            if (!await db.CanSeeScholarAsync(await db.CampusOfAsync(User), userId)) return NotFound(new { message = "Scholar profile not found." });
             var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
             var isAdminOrCoord = User.IsInRole(UserRoles.Administrator) || User.IsInRole(UserRoles.ScholarshipCoordinator);
             if (!isAdminOrCoord && currentUserId != userId) return Forbid();
@@ -455,6 +461,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
         [HttpPut("{userId}")]
         public async Task<IActionResult> Upsert(string userId, UpsertScholarProfileDto dto)
         {
+            if (!await db.CanSeeScholarAsync(await db.CampusOfAsync(User), userId)) return NotFound(new { message = "Scholar profile not found." });
             var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
             var isAdminOrCoord = User.IsInRole(UserRoles.Administrator) || User.IsInRole(UserRoles.ScholarshipCoordinator);
 
@@ -541,6 +548,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
         [HttpGet("{userId}/grades")]
         public async Task<IActionResult> GetGrades(string userId)
         {
+            if (!await db.CanSeeScholarAsync(await db.CampusOfAsync(User), userId)) return NotFound(new { message = "Scholar profile not found." });
             var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
             var isAdminOrCoord = User.IsInRole(UserRoles.Administrator) || User.IsInRole(UserRoles.ScholarshipCoordinator);
 
@@ -576,6 +584,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
         [Authorize(Roles = $"{UserRoles.Administrator},{UserRoles.ScholarshipCoordinator}")]
         public async Task<IActionResult> AddGrade(string userId, AddGradeDto dto)
         {
+            if (!await db.CanSeeScholarAsync(await db.CampusOfAsync(User), userId)) return NotFound(new { message = "Scholar profile not found." });
             var profile = await db.ScholarProfiles
                 .Include(sp => sp.ScholarshipType)
                 .Include(sp => sp.User)
@@ -628,6 +637,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
         [Authorize(Roles = $"{UserRoles.Administrator},{UserRoles.ScholarshipCoordinator}")]
         public async Task<IActionResult> UpdateGrade(string userId, int gradeId, UpdateGradeDto dto)
         {
+            if (!await db.CanSeeScholarAsync(await db.CampusOfAsync(User), userId)) return NotFound(new { message = "Scholar profile not found." });
             var (profile, grade, failure) = await FindGradeAsync(userId, gradeId);
             if (failure is not null) return failure;
 
@@ -650,6 +660,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
         [Authorize(Roles = $"{UserRoles.Administrator},{UserRoles.ScholarshipCoordinator}")]
         public async Task<IActionResult> DeleteGrade(string userId, int gradeId)
         {
+            if (!await db.CanSeeScholarAsync(await db.CampusOfAsync(User), userId)) return NotFound(new { message = "Scholar profile not found." });
             var (profile, grade, failure) = await FindGradeAsync(userId, gradeId);
             if (failure is not null) return failure;
 

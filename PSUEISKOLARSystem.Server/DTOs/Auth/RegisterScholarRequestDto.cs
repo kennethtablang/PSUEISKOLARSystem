@@ -23,7 +23,7 @@ namespace PSUEISKOLARSystem.Server.DTOs.Auth
         [RegularExpression(@"^[A-Za-zÀ-ÿÑñ.\-\s]{1,100}$", ErrorMessage = "Last name may only contain letters, spaces, hyphens, and periods.")]
         public string LastName { get; set; } = string.Empty;
 
-        // Institutional address only — checked against PersonalOptions.InstitutionalDomain.
+        // The student's personal email address.
         [Required(ErrorMessage = "Email is required."), EmailAddress(ErrorMessage = "Enter a valid email address.")]
         public string Email { get; set; } = string.Empty;
 

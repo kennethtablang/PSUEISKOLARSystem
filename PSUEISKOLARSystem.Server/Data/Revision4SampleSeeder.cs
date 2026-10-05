@@ -40,7 +40,7 @@ namespace PSUEISKOLARSystem.Server.Data
             if (admin is null) return false;
 
             var campuses = await db.Campuses.ToDictionaryAsync(c => c.Code, c => c.Id);
-            if (!campuses.ContainsKey("LIN")) return false;
+            if (!campuses.ContainsKey("LN")) return false;
 
             /* ── Programs with majors ─────────────────────────────── */
             var bsba = new[] { ("BSBA-OM", "Operations Management"), ("BSBA-FM", "Financial Management") };
@@ -88,13 +88,13 @@ namespace PSUEISKOLARSystem.Server.Data
             /* ── Scholars ─────────────────────────────────────────── */
             var scholars = new (Person P, ScholarshipType Type)[]
             {
-                (new("demo.scholar1@psu.edu.ph", "24-LN-0101", "SANTIAGO", "MARICEL", "DOMINGO", "Female", "LIN", "BSBA-OM", 2,
+                (new("demo.scholar1@psu.edu.ph", "24-LN-0101", "SANTIAGO", "MARICEL", "DOMINGO", "Female", "LN", "BSBA-OM", 2,
                     "45 RIZAL ST., BAAY, LINGAYEN, PANGASINAN, REGION I", FatherDeceased: true), ched),
                 (new("demo.scholar2@psu.edu.ph", "24-INF-0102", "RAMOS", "CARLO", "VILLAR", "Male", "INF", "BSIT", 3,
                     "PUROK 3, BAMBAN, INFANTA, PANGASINAN, REGION I"), ched),
                 (new("demo.scholar3@psu.edu.ph", "24-BIN-0103", "FLORES", "JOANNA", "PASCUA", "Female", "BIN", "BSCS", 1,
                     "12 MABINI ST., BALOGO, BINMALEY, PANGASINAN, REGION I"), dost),
-                (new("demo.scholar4@psu.edu.ph", "24-BAY-0104", "TORRES", "MIGUEL", "AQUINO", "Male", "BAY", "BSCE", 4,
+                (new("demo.scholar4@psu.edu.ph", "24-BY-0104", "TORRES", "MIGUEL", "AQUINO", "Male", "BY", "BSCE", 4,
                     "88 QUEZON BLVD., ALINGGAN, BAYAMBANG, PANGASINAN, REGION I"), psu),
                 (new("demo.scholar5@psu.edu.ph", "24-ALA-0105", "NAVARRO", "KRISTINE", "LUNA", "Female", "ALA", "BSBA-FM", 2,
                     "7 BONIFACIO ST., AMANDIEGO, CITY OF ALAMINOS, PANGASINAN, REGION I"), lgu),
@@ -154,15 +154,15 @@ namespace PSUEISKOLARSystem.Server.Data
             /* ── Grantees ─────────────────────────────────────────── */
             var grantees = new (Person P, GrantType Grant)[]
             {
-                (new("demo.grantee1@psu.edu.ph", "24-LN-0201", "CABRAL", "JENNY", "MORALES", "Female", "LIN", "BSED", 1,
+                (new("demo.grantee1@psu.edu.ph", "24-LN-0201", "CABRAL", "JENNY", "MORALES", "Female", "LN", "BSED", 1,
                     "3 LUNA ST., BALANGOBONG, LINGAYEN, PANGASINAN, REGION I"), noDateGrant),
                 (new("demo.grantee2@psu.edu.ph", "24-URD-0202", "PADILLA", "ROMEO", "CRUZ", "Male", "URD", "BSA", 2,
                     "SITIO CENTRO, BOLAOEN, CITY OF URDANETA, PANGASINAN, REGION I"), noDateGrant),
                 (new("demo.grantee3@psu.edu.ph", "24-INF-0203", "LIM", "ANGELICA", "TAN", "Female", "INF", "BSCrim", 3,
                     "9 MAGSAYSAY ST., CATO, INFANTA, PANGASINAN, REGION I"), noDateGrant),
-                (new("demo.grantee4@psu.edu.ph", "24-BAY-0204", "SALVADOR", "DENNIS", "REYES", "Male", "BAY", "BSEE", 2,
+                (new("demo.grantee4@psu.edu.ph", "24-BY-0204", "SALVADOR", "DENNIS", "REYES", "Male", "BY", "BSEE", 2,
                     "PUROK 1, AMAMPEREZ, BAYAMBANG, PANGASINAN, REGION I"), datedGrant),
-                (new("demo.grantee5@psu.edu.ph", "24-LN-0205", "VALDEZ", "SHEENA", "BAUTISTA", "Female", "LIN", "BSN", 1,
+                (new("demo.grantee5@psu.edu.ph", "24-LN-0205", "VALDEZ", "SHEENA", "BAUTISTA", "Female", "LN", "BSN", 1,
                     "15 BURGOS ST., BALOCOC, LINGAYEN, PANGASINAN, REGION I"), datedGrant),
             };
             foreach (var (p, grant) in grantees)
@@ -191,9 +191,9 @@ namespace PSUEISKOLARSystem.Server.Data
             /* ── Listed, not yet signed up ────────────────────────── */
             var waiting = new (Person P, int? TypeId, GrantType? Grant)[]
             {
-                (new("", "25-LN-0301", "OCAMPO", "BEA", "SANTOS", "Female", "LIN", "", 1, ""), ched.Id, null),
-                (new("", "25-ASI-0302", "MERCADO", "JOSHUA", "DIAZ", "Male", "ASI", "", 1, ""), ched.Id, null),
-                (new("", "25-STM-0303", "GALANG", "RHEA", "MANALO", "Female", "STM", "", 1, ""), dost.Id, null),
+                (new("", "25-LN-0301", "OCAMPO", "BEA", "SANTOS", "Female", "LN", "", 1, ""), ched.Id, null),
+                (new("", "25-ASIN-0302", "MERCADO", "JOSHUA", "DIAZ", "Male", "ASIN", "", 1, ""), ched.Id, null),
+                (new("", "25-SM-0303", "GALANG", "RHEA", "MANALO", "Female", "SM", "", 1, ""), dost.Id, null),
                 (new("", "25-BIN-0304", "AGUSTIN", "PAOLO", "RIVERA", "Male", "BIN", "", 1, ""), psu.Id, null),
                 (new("", "25-URD-0305", "CORPUZ", "LOVELY", "ABAD", "Female", "URD", "", 1, ""), null, noDateGrant),
                 (new("", "25-ALA-0306", "ESPINO", "MARK", "TOLENTINO", "Male", "ALA", "", 1, ""), null, datedGrant),

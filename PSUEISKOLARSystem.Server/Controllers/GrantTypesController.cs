@@ -32,6 +32,12 @@ namespace PSUEISKOLARSystem.Server.Controllers
         {
             var granteeRoleId = await RoleIdAsync(UserRoles.Grantee);
 
+            // A coordinator's counts are their own campus's grantees.
+            var campusId = await db.CampusOfAsync(User);
+            var grants = db.OneTimeGrants.AsQueryable();
+            if (db.StudentsAt(campusId) is { } atCampus) grants = grants.Where(g => atCampus.Contains(g.ScholarId));
+            var lines = db.EligibilityRecords.AtCampus(campusId);
+
             var types = await db.GrantTypes
                 .OrderByDescending(t => t.IsActive)
                 .ThenBy(t => t.Name)
@@ -47,16 +53,16 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     t.CreatedAt,
                     t.DeactivatedAt,
                     t.AccountsClosedAt,
-                    GrantCount = db.OneTimeGrants.Count(g => g.GrantTypeId == t.Id),
-                    ReleasedCount = db.OneTimeGrants.Count(g => g.GrantTypeId == t.Id && g.ReleaseStatus == GrantReleaseStatuses.Released),
-                    PendingCount = db.OneTimeGrants.Count(g => g.GrantTypeId == t.Id && g.ReleaseStatus == GrantReleaseStatuses.Pending),
-                    ReleasedAmount = db.OneTimeGrants
+                    GrantCount = grants.Count(g => g.GrantTypeId == t.Id),
+                    ReleasedCount = grants.Count(g => g.GrantTypeId == t.Id && g.ReleaseStatus == GrantReleaseStatuses.Released),
+                    PendingCount = grants.Count(g => g.GrantTypeId == t.Id && g.ReleaseStatus == GrantReleaseStatuses.Pending),
+                    ReleasedAmount = grants
                         .Where(g => g.GrantTypeId == t.Id && g.ReleaseStatus == GrantReleaseStatuses.Released)
                         .Sum(g => (decimal?)g.Amount) ?? 0m,
-                    GranteeAccounts = db.OneTimeGrants
+                    GranteeAccounts = grants
                         .Where(g => g.GrantTypeId == t.Id && db.UserRoles.Any(ur => ur.UserId == g.ScholarId && ur.RoleId == granteeRoleId))
                         .Select(g => g.ScholarId).Distinct().Count(),
-                    MasterListLines = db.EligibilityRecords.Count(e => e.GrantTypeId == t.Id),
+                    MasterListLines = lines.Count(e => e.GrantTypeId == t.Id),
                 })
                 .ToListAsync();
 

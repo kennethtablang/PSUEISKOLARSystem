@@ -42,7 +42,8 @@ namespace PSUEISKOLARSystem.Server.Services
             string? Email,
             string? Role,
             bool? AccountActive,
-            IReadOnlyList<PersonEntry> Entries)
+            IReadOnlyList<PersonEntry> Entries,
+            IReadOnlyList<string>? OtherStudentIds = null)
         {
             public string FullName => $"{LastName}, {FirstName}{(MiddleName is null ? "" : " " + MiddleName)}";
         }
@@ -78,17 +79,33 @@ namespace PSUEISKOLARSystem.Server.Services
             var scholarBySid = scholarAccounts.GroupBy(a => a.StudentId).ToDictionary(g => g.Key, g => g.First());
             var granteeBySid = granteeAccounts.GroupBy(a => a.StudentId).ToDictionary(g => g.Key, g => g.First());
 
-            var people = lines
-                .GroupBy(l => l.StudentId)
-                .Select(g =>
+            /* One row per person. Lines are grouped by student number, and number groups that carry
+               the very same full name are folded together too — the same student listed under a
+               mistyped number once appeared on the Master List several times. */
+            var byNumber = lines.GroupBy(l => l.StudentId).ToList();
+            var people = byNumber
+                .GroupBy(g =>
                 {
+                    var newest = g.OrderByDescending(l => l.CreatedAt).First();
+                    return $"{newest.LastName}|{newest.FirstName}|{newest.MiddleName}";
+                })
+                .Select(person =>
+                {
+                    // The number with an account behind it leads; otherwise the most recent.
+                    var numbers = person
+                        .OrderByDescending(g => scholarBySid.ContainsKey(g.Key) || granteeBySid.ContainsKey(g.Key))
+                        .ThenByDescending(g => g.Max(l => l.CreatedAt))
+                        .Select(g => g.Key)
+                        .ToList();
+                    var g = person.SelectMany(n => n).ToList();
+                    var sid = numbers[0];
                     // The newest line carries the name as the office last wrote it.
                     var head = g.OrderByDescending(l => l.CreatedAt).First();
-                    scholarBySid.TryGetValue(g.Key, out var sa);
-                    granteeBySid.TryGetValue(g.Key, out var ga);
+                    var sa = numbers.Select(n => scholarBySid.GetValueOrDefault(n)).FirstOrDefault(a => a is not null);
+                    var ga = numbers.Select(n => granteeBySid.GetValueOrDefault(n)).FirstOrDefault(a => a is not null);
                     var userId = sa?.UserId ?? ga?.UserId;
                     return new PersonRow(
-                        g.Key, head.LastName, head.FirstName, head.MiddleName,
+                        sid, head.LastName, head.FirstName, head.MiddleName,
                         sa?.Sex ?? ga?.Sex ?? g.Select(l => l.Sex).FirstOrDefault(x => x != null),
                         sa?.CampusName ?? ga?.CampusName ?? g.Select(l => l.CampusName).FirstOrDefault(x => x != null),
                         HasAccount: userId != null || g.Any(l => l.ClaimedByUserId != null),
@@ -101,7 +118,8 @@ namespace PSUEISKOLARSystem.Server.Services
                                 l.Kind == EligibilityKinds.Scholar ? l.ScholarshipName ?? "Scholarship" : l.GrantName ?? "Grant",
                                 l.Kind == EligibilityKinds.Grantee ? l.Amount : null,
                                 l.ClaimedByUserId != null))
-                            .ToList());
+                            .ToList(),
+                        numbers.Skip(1).ToList());
                 })
                 .ToList();
 
@@ -115,17 +133,18 @@ namespace PSUEISKOLARSystem.Server.Services
             {
                 var campusName = await db.Campuses.Where(c => c.Id == cid).Select(c => c.Name).FirstOrDefaultAsync();
                 var sids = lines.Where(l => l.CampusId == cid).Select(l => l.StudentId).ToHashSet();
-                q = q.Where(p => sids.Contains(p.StudentId) || p.CampusName == campusName);
+                q = q.Where(p => sids.Contains(p.StudentId) || p.CampusName == campusName
+                              || (p.OtherStudentIds?.Any(sids.Contains) ?? false));
             }
             if (f.ScholarshipTypeId is int st)
             {
-                var sids = lines.Where(l => l.ScholarshipTypeId == st).Select(l => l.StudentId).ToHashSet();
-                q = q.Where(p => sids.Contains(p.StudentId));
+                var ids = lines.Where(l => l.ScholarshipTypeId == st).Select(l => l.Id).ToHashSet();
+                q = q.Where(p => p.Entries.Any(e => ids.Contains(e.LineId)));
             }
             if (f.GrantTypeId is int gt)
             {
-                var sids = lines.Where(l => l.GrantTypeId == gt).Select(l => l.StudentId).ToHashSet();
-                q = q.Where(p => sids.Contains(p.StudentId));
+                var ids = lines.Where(l => l.GrantTypeId == gt).Select(l => l.Id).ToHashSet();
+                q = q.Where(p => p.Entries.Any(e => ids.Contains(e.LineId)));
             }
             if (!string.IsNullOrWhiteSpace(f.Search))
             {

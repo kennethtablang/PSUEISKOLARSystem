@@ -58,7 +58,8 @@ namespace PSUEISKOLARSystem.Server.Services
                 announcement.Title,
                 preview,
                 NotificationCategories.Announcement,
-                "/dashboard");
+                // Names the announcement, so opening the notification shows it in full.
+                $"/dashboard?announcement={announcement.Id}");
 
             var emailTargets = scholars.Where(s => s.EmailOptIn).ToList();
             var emails = SendEmailsAsync(emailTargets, announcement.Title, announcement.Content);

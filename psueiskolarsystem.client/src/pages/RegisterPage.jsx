@@ -9,10 +9,10 @@ import PasswordStrengthMeter, { getPasswordStrength } from '../components/Passwo
 import Logo from '../components/Logo';
 import AddressPicker from '../components/AddressPicker';
 import {
-  SectionTitle, NameInput, ContactInput, InstitutionalEmailInput, BirthDateAge,
+  SectionTitle, NameInput, ContactInput, PersonalEmailInput, BirthDateAge,
   PersonalQuestions, FamilyQuestions,
 } from '../components/PersonalDetailsFields';
-import { EMPTY_PERSONAL, INSTITUTIONAL_DOMAIN, personalToApi, personalFromApi, localMobile } from '../constants/personal';
+import { EMPTY_PERSONAL, EMAIL_RE, personalToApi, personalFromApi, localMobile } from '../constants/personal';
 
 const HIGHLIGHTS = [
   { Icon: UserCheck,  label: 'Scholar Profiling',   desc: 'Academic records and personal information' },
@@ -32,7 +32,7 @@ const EMPTY_FORM = {
   programId: '', yearLevel: '1', birthDate: '', address: '', contactLocal: '',
   personal: EMPTY_PERSONAL,
   // Step 4
-  emailLocal: '', password: '', confirmPassword: '', consent: false,
+  email: '', password: '', confirmPassword: '', consent: false,
 };
 
 const LABEL = 'block text-xs font-bold mb-2 uppercase tracking-wider';
@@ -57,8 +57,8 @@ export default function RegisterPage() {
   useTitle('Create Account');
   const navigate = useNavigate();
 
-  const email = form.emailLocal ? `${form.emailLocal}@${INSTITUTIONAL_DOMAIN}` : '';
-  const emailValid = /^[a-z0-9._-]+$/.test(form.emailLocal);
+  const email = form.email.trim().toLowerCase();
+  const emailValid = EMAIL_RE.test(email);
   const emailStatus = emailValid && emailCheck.email === email ? emailCheck.status : (emailValid ? 'checking' : null);
   const programs = form.campusId && loadedPrograms.campusId === form.campusId ? loadedPrograms.list : [];
 
@@ -141,7 +141,7 @@ export default function RegisterPage() {
   /* Grantee → scholar: rather than opening a second account, the student signs in with their
      grantee account; the rest of the form is pre-filled from it for them to update. */
   async function handleGranteeSignIn() {
-    if (!/^[a-z0-9._-]+$/.test(form.emailLocal)) { setError(`Enter your grantee account's email (the part before @${INSTITUTIONAL_DOMAIN}).`); return; }
+    if (!emailValid) { setError("Enter your grantee account's email address."); return; }
     if (!form.password) { setError('Enter the password of your grantee account.'); return; }
 
     setChecking(true);
@@ -202,7 +202,7 @@ export default function RegisterPage() {
 
     // A converting grantee keeps the email and password of the account they already have.
     if (!granteeAccount) {
-      if (!/^[a-z0-9._-]+$/.test(form.emailLocal)) { setError(`Enter your institutional email (the part before @${INSTITUTIONAL_DOMAIN}).`); return; }
+      if (!emailValid) { setError('Enter a valid personal email address, e.g. juan.delacruz@gmail.com.'); return; }
       if (emailStatus === 'taken') { setError('An account with this email already exists.'); return; }
       if (getPasswordStrength(form.password).passed !== 5) { setError('Password does not meet the requirements below.'); return; }
       if (form.password !== form.confirmPassword) { setError('Passwords do not match.'); return; }
@@ -516,7 +516,7 @@ export default function RegisterPage() {
                         </div>
                         <div>
                           <label htmlFor="reg-grantee-email" className={LABEL} style={{ color: 'var(--text)' }}>Grantee Account Email</label>
-                          <InstitutionalEmailInput id="reg-grantee-email" required value={form.emailLocal} onChange={v => set('emailLocal', v)} />
+                          <PersonalEmailInput id="reg-grantee-email" required value={form.email} onChange={v => set('email', v)} />
                         </div>
                         <div>
                           <label htmlFor="reg-grantee-password" className={LABEL} style={{ color: 'var(--text)' }}>Grantee Account Password</label>
@@ -613,14 +613,14 @@ export default function RegisterPage() {
                     <SectionTitle>Account</SectionTitle>
 
                     <div>
-                      <label htmlFor="reg-email" className={LABEL} style={{ color: 'var(--text)' }}>Institutional Email Address</label>
-                      <InstitutionalEmailInput id="reg-email" required value={form.emailLocal} onChange={v => set('emailLocal', v)} />
+                      <label htmlFor="reg-email" className={LABEL} style={{ color: 'var(--text)' }}>Personal Email Address</label>
+                      <PersonalEmailInput id="reg-email" required value={form.email} onChange={v => set('email', v)} />
                       {emailStatus === 'checking' && <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Checking availability…</p>}
                       {emailStatus === 'available' && <p className="text-xs mt-1" style={{ color: '#16a34a' }}>✓ This email is available.</p>}
                       {emailStatus === 'taken' && (
                         <p className="text-xs mt-1 font-medium" style={{ color: 'var(--danger)' }}>An account with this email already exists.</p>
                       )}
-                      <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Personal email addresses are not accepted.</p>
+                      <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Use an email you will keep — your sign-in and all notices go here.</p>
                     </div>
 
                     <div>

@@ -35,8 +35,14 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
             if (!IsStaff)
                 baseQuery = baseQuery.Where(m => m.ScholarId == UserId);   // scholars see only their own
-            else if (!string.IsNullOrEmpty(scholarId))
-                baseQuery = baseQuery.Where(m => m.ScholarId == scholarId);
+            else
+            {
+                // A coordinator's inbox holds their own campus's scholars; the admin's holds all.
+                if (db.StudentsAt(await db.CampusOfAsync(User)) is { } atCampus)
+                    baseQuery = baseQuery.Where(m => atCampus.Contains(m.ScholarId));
+                if (!string.IsNullOrEmpty(scholarId))
+                    baseQuery = baseQuery.Where(m => m.ScholarId == scholarId);
+            }
 
             // Aggregate per thread in SQL — last-message time + unread counts — instead of
             // pulling every message into memory.
@@ -94,6 +100,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
         public async Task<IActionResult> Thread([FromQuery] string scholarId, [FromQuery] int? requirementId)
         {
             if (!IsStaff && scholarId != UserId) return Forbid();
+            if (IsStaff && !await db.CanSeeScholarAsync(await db.CampusOfAsync(User), scholarId)) return NotFound();
 
             var messages = await db.Messages
                 .Include(m => m.Sender)
@@ -143,6 +150,8 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
             var scholar = await db.Users.FindAsync(scholarId);
             if (scholar is null) return BadRequest(new { message = "Scholar not found." });
+            if (IsStaff && !await db.CanSeeScholarAsync(await db.CampusOfAsync(User), scholarId))
+                return BadRequest(new { message = "That scholar is at another campus — their own coordinator handles their messages." });
 
             // A thread belongs to a scholar. Without this, staff could open one "for" another
             // administrator or coordinator, which then surfaced in every staff inbox as a
@@ -181,14 +190,23 @@ namespace PSUEISKOLARSystem.Server.Controllers
             var senderName = (await db.Users.FindAsync(UserId))?.FullName ?? "Someone";
             var preview = message.Body.Length > 140 ? message.Body[..140] + "…" : message.Body;
 
-            // Recipients: scholar->staff notifies coordinators/admins; staff->scholar notifies the scholar.
+            /* Recipients. A scholar's message goes to the coordinator of the scholar's own campus
+               (a Lingayen scholar reaches the Lingayen coordinator, nobody else's) and to the
+               administrator, who oversees every campus and may answer in any conversation. Staff
+               writing to a scholar notify the scholar. */
+            var scholarCampus = await db.ScholarProfiles
+                .Where(sp => sp.UserId == scholarId)
+                .Select(sp => sp.CampusId)
+                .FirstOrDefaultAsync();
             List<string> recipientIds = IsStaff
                 ? [scholarId]
                 : await db.Users
                     .Join(db.UserRoles, u => u.Id, ur => ur.UserId, (u, ur) => new { u, ur })
                     .Join(db.Roles, x => x.ur.RoleId, r => r.Id, (x, r) => new { x.u, RoleName = r.Name })
-                    .Where(x => (x.RoleName == UserRoles.Administrator || x.RoleName == UserRoles.ScholarshipCoordinator)
-                                && x.u.IsActive)
+                    .Where(x => x.u.IsActive &&
+                                (x.RoleName == UserRoles.Administrator ||
+                                 (x.RoleName == UserRoles.ScholarshipCoordinator &&
+                                  (x.u.CampusId == null || x.u.CampusId == scholarCampus))))
                     .Select(x => x.u.Id)
                     .Distinct()
                     .ToListAsync();
@@ -297,8 +315,11 @@ namespace PSUEISKOLARSystem.Server.Controllers
         public async Task<IActionResult> UnreadCount()
         {
             // Automatic acknowledgements never count as something a human must read.
+            var staffMessages = db.Messages.AsQueryable();
+            if (IsStaff && db.StudentsAt(await db.CampusOfAsync(User)) is { } atCampus)
+                staffMessages = staffMessages.Where(m => atCampus.Contains(m.ScholarId));
             int count = IsStaff
-                ? await db.Messages.CountAsync(m => !m.ReadByStaff && !m.IsAutoReply && m.SenderId != UserId)
+                ? await staffMessages.CountAsync(m => !m.ReadByStaff && !m.IsAutoReply && m.SenderId != UserId)
                 : await db.Messages.CountAsync(m => m.ScholarId == UserId && !m.ReadByScholar && m.SenderId != UserId);
             return Ok(new { count });
         }

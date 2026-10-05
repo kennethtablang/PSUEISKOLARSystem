@@ -26,6 +26,14 @@ namespace PSUEISKOLARSystem.Server.Models
         public bool IsActive { get; set; } = true;
 
         /// <summary>
+        /// Null for a type the administrator made, which applies to every campus. Set when a
+        /// campus coordinator made it: the type is then exclusive to that campus and hidden
+        /// from the other campuses' coordinators.
+        /// </summary>
+        public int? CampusId { get; set; }
+        public Campus? Campus { get; set; }
+
+        /// <summary>
         /// How often the scholarship pays out — see <see cref="ScholarshipFrequencies"/>.
         /// A recurring type (per semester / per year) is monitored release-by-release in
         /// <see cref="ScholarshipRelease"/>; a one-time type is not.

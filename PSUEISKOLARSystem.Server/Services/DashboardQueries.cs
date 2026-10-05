@@ -133,22 +133,28 @@ namespace PSUEISKOLARSystem.Server.Services
         public async Task<DashboardDto> ForStaffAsync(string userId, string role, CancellationToken ct = default)
         {
             var isAdmin = role == UserRoles.Administrator;
+            // A coordinator's dashboard counts their own campus only.
+            var campusId = isAdmin ? null
+                : await db.Users.Where(u => u.Id == userId).Select(u => u.CampusId).FirstOrDefaultAsync(ct);
+            var atCampus = db.StudentsAt(campusId);
 
             var announcements = await AnnouncementFeed.LoadAsync(db, userId, role, ct);
-            var overview = await analytics.OverviewAsync(ct: ct);
+            var overview = await analytics.OverviewAsync(ct: ct, campusId: campusId);
 
             var scholarRoleId = await db.Roles
                 .Where(r => r.Name == UserRoles.Scholar)
                 .Select(r => r.Id)
                 .FirstOrDefaultAsync(ct);
 
-            var pendingApprovals = await db.Users
+            var users = atCampus is null ? db.Users : db.Users.Where(u => atCampus.Contains(u.Id));
+            var pendingApprovals = await users
                 .CountAsync(u => u.ApprovalStatus == ApprovalStatuses.Pending &&
                                  db.UserRoles.Any(ur => ur.RoleId == scholarRoleId && ur.UserId == u.Id), ct);
 
             // Scholars whose scholarship needs a renewal decision. One count, not the two
             // paged list calls the page used to make just to read their totals.
             var renewalCount = await db.ScholarProfiles
+                .AtCampus(campusId)
                 .CountAsync(sp => sp.LifecycleStatus == LifecycleStatuses.Lapsed
                                || sp.LifecycleStatus == LifecycleStatuses.Suspended, ct);
 
@@ -165,7 +171,8 @@ namespace PSUEISKOLARSystem.Server.Services
                                      db.UserRoles.Any(ur => ur.RoleId == coordRoleId && ur.UserId == u.Id), ct);
             }
 
-            var grantBuckets = await db.OneTimeGrants
+            var campusGrants = atCampus is null ? db.OneTimeGrants : db.OneTimeGrants.Where(g => atCampus.Contains(g.ScholarId));
+            var grantBuckets = await campusGrants
                 .GroupBy(g => g.ReleaseStatus)
                 .Select(g => new { Status = g.Key, Count = g.Count(), Amount = g.Sum(x => x.Amount) })
                 .ToListAsync(ct);
@@ -182,7 +189,8 @@ namespace PSUEISKOLARSystem.Server.Services
                 AmountFor(GrantReleaseStatuses.Released),
                 CountFor(GrantReleaseStatuses.Cancelled));
 
-            var activity = await RecentActivityAsync(8, ct);
+            // A coordinator sees what happened at their campus: their own actions and their students'.
+            var activity = await RecentActivityAsync(8, ct, atCampus is null ? null : userId, atCampus);
 
             return new DashboardDto(role, announcements, null,
                 new StaffDashboardDto(overview, coordinators, renewalCount, pendingApprovals, grants, activity));
@@ -213,9 +221,14 @@ namespace PSUEISKOLARSystem.Server.Services
                 .ToListAsync(ct);
         }
 
-        private async Task<List<ActivityEntryDto>> RecentActivityAsync(int take, CancellationToken ct)
+        private async Task<List<ActivityEntryDto>> RecentActivityAsync(
+            int take, CancellationToken ct, string? coordinatorId = null, IQueryable<string>? students = null)
         {
-            var logs = await db.AuditLogs
+            var source = db.AuditLogs.AsQueryable();
+            if (students is not null)
+                source = source.Where(l => l.UserId == coordinatorId || students.Contains(l.UserId));
+
+            var logs = await source
                 .OrderByDescending(l => l.TimestampUtc)
                 .Take(take)
                 .Select(l => new { l.Id, l.UserId, l.Action, l.Details, l.TimestampUtc })
