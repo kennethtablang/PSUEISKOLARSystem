@@ -674,7 +674,7 @@ namespace PSUEISKOLARSystem.Server.Services
             return userDto;
         }
 
-        public async Task<IReadOnlyList<string>> ForgotPasswordAsync(string email)
+        public async Task<bool> ForgotPasswordAsync(string email)
         {
             var typed = email.Trim();
             var user = await userManager.FindByEmailAsync(typed);
@@ -689,13 +689,13 @@ namespace PSUEISKOLARSystem.Server.Services
                     .ToListAsync();
                 if (owners.Count == 1) user = owners[0];
             }
-            if (user is null) return [];
+            if (user is null) return false;
 
             // A deactivated account cannot reset its password — except a past grantee's, which
             // they need in order to turn it into a scholar account. The reset alone does not
             // let them sign in; only that conversion reactivates the account.
             if (!user.IsActive && !await dbContext.GranteeProfiles.AnyAsync(gp => gp.UserId == user.Id))
-                return [];
+                return false;
 
             var token = await userManager.GeneratePasswordResetTokenAsync(user);
             var resetLink = $"{_emailSettings.AppBaseUrl}/reset-password" +
@@ -712,7 +712,11 @@ namespace PSUEISKOLARSystem.Server.Services
             var name = user.FullName;
             foreach (var to in destinations)
                 mail.Queue($"password reset to {to}", s => s.SendPasswordResetEmailAsync(to, name, resetLink));
-            return destinations.Select(d => MaskEmail(d)!).ToList();
+
+            // Only whether an account matched — never where the link went. This endpoint is
+            // anonymous, so naming the destinations would tell anyone who types an office
+            // address that it has a recovery inbox, and part of what that inbox is.
+            return true;
         }
 
         public async Task SendRecoveryEmailCodeAsync(string userId, string recoveryEmail, string password)
@@ -744,6 +748,8 @@ namespace PSUEISKOLARSystem.Server.Services
 
             user.RecoveryEmail = address;
             await userManager.UpdateAsync(user);
+            // A reset link already sent to the previous recovery address must stop working.
+            await userManager.UpdateSecurityStampAsync(user);
             dbContext.AuditLogs.Add(new AuditLog
             {
                 UserId  = user.Id,
@@ -763,6 +769,9 @@ namespace PSUEISKOLARSystem.Server.Services
 
             user.RecoveryEmail = null;
             await userManager.UpdateAsync(user);
+            // Removing it is how a compromised recovery inbox is cut off, so any reset link
+            // already delivered there must stop working too.
+            await userManager.UpdateSecurityStampAsync(user);
             dbContext.AuditLogs.Add(new AuditLog
             {
                 UserId  = user.Id,

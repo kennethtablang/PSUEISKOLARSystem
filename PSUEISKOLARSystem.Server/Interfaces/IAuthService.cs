@@ -19,9 +19,9 @@ namespace PSUEISKOLARSystem.Server.Interfaces
         Task<GranteeConversionPrefillDto> GetGranteeAccountForConversionAsync(GranteeAccountLookupDto request);
         /// <summary>
         /// Emails a reset link for the account signed in with — or recovered through — the
-        /// address. Returns the masked addresses it went to; empty when no account matched.
+        /// address, to its sign-in and recovery inboxes. False when no account matched.
         /// </summary>
-        Task<IReadOnlyList<string>> ForgotPasswordAsync(string email);
+        Task<bool> ForgotPasswordAsync(string email);
         Task SendRecoveryEmailCodeAsync(string userId, string recoveryEmail, string password);
         Task<UserDto> ConfirmRecoveryEmailAsync(string userId, string recoveryEmail, string code);
         Task<UserDto> RemoveRecoveryEmailAsync(string userId, string password);

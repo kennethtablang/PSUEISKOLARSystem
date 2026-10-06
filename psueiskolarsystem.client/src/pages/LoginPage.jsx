@@ -567,7 +567,6 @@ function ForgotPasswordModal({ onClose }) {
   const [email, setEmail] = useState('');
   const [step, setStep] = useState(1); // 1 = form, 2 = result
   const [found, setFound] = useState(false);
-  const [sentTo, setSentTo] = useState([]);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -578,7 +577,6 @@ function ForgotPasswordModal({ onClose }) {
     try {
       const data = await forgotPassword(email);
       setFound(data.found);
-      setSentTo(data.sentTo ?? []);
       setStep(2);
     } catch (err) {
       setError(err.message);
@@ -663,13 +661,8 @@ function ForgotPasswordModal({ onClose }) {
               </div>
               <p className="font-black text-base mb-1" style={{ color: 'var(--text-strong)' }}>Check Your Inbox</p>
               <p className="text-sm leading-relaxed" style={{ color: 'var(--text)' }}>
-                A password reset link has been sent to{' '}
-                {sentTo.length > 0
-                  ? sentTo.map((to, i) => (
-                      <span key={to}>{i > 0 && ' and '}<strong>{to}</strong></span>
-                    ))
-                  : <strong>{email}</strong>}.
-                Please check your email and follow the instructions.
+                A password reset link has been sent for <strong>{email}</strong>. Staff accounts
+                with a recovery email receive it there as well — check both inboxes.
               </p>
             </div>
             <p className="text-xs text-center mb-4" style={{ color: 'var(--text-faint)' }}>

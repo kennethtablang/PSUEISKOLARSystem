@@ -128,8 +128,8 @@ namespace PSUEISKOLARSystem.Server.Controllers
         [EnableRateLimiting("auth")]
         public async Task<IActionResult> ForgotPassword(ForgotPasswordRequestDto request)
         {
-            var sentTo = await authService.ForgotPasswordAsync(request.Email);
-            return Ok(new { found = sentTo.Count > 0, sentTo });
+            var found = await authService.ForgotPasswordAsync(request.Email);
+            return Ok(new { found });
         }
 
         [HttpPost("reset-password")]
@@ -326,12 +326,15 @@ namespace PSUEISKOLARSystem.Server.Controllers
         [HttpPost("recovery-email/confirm")]
         [Authorize(Roles = $"{UserRoles.Administrator},{UserRoles.ScholarshipCoordinator}")]
         [EnableRateLimiting("auth")]
-        public async Task<ActionResult<UserDto>> ConfirmRecoveryEmail(RecoveryEmailConfirmRequest dto)
+        public async Task<ActionResult<AuthResponseDto>> ConfirmRecoveryEmail(RecoveryEmailConfirmRequest dto)
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
             try
             {
-                return Ok(await authService.ConfirmRecoveryEmailAsync(userId, dto.Email ?? "", dto.Code ?? ""));
+                // The change rotates the security stamp (old reset links die with it), which
+                // also ends this session — continue it on a new token, as a password change does.
+                await authService.ConfirmRecoveryEmailAsync(userId, dto.Email ?? "", dto.Code ?? "");
+                return Ok(await RenewSessionAsync(userId));
             }
             catch (BadRequestException ex) { return BadRequest(new { message = ex.Message }); }
             catch (NotFoundException ex) { return NotFound(new { message = ex.Message }); }
@@ -340,12 +343,13 @@ namespace PSUEISKOLARSystem.Server.Controllers
         // POST /api/auth/recovery-email/remove — stop sending reset links to the personal address.
         [HttpPost("recovery-email/remove")]
         [Authorize(Roles = $"{UserRoles.Administrator},{UserRoles.ScholarshipCoordinator}")]
-        public async Task<ActionResult<UserDto>> RemoveRecoveryEmail(RecoveryEmailRemoveRequest dto)
+        public async Task<ActionResult<AuthResponseDto>> RemoveRecoveryEmail(RecoveryEmailRemoveRequest dto)
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
             try
             {
-                return Ok(await authService.RemoveRecoveryEmailAsync(userId, dto.Password ?? ""));
+                await authService.RemoveRecoveryEmailAsync(userId, dto.Password ?? "");
+                return Ok(await RenewSessionAsync(userId));
             }
             catch (BadRequestException ex) { return BadRequest(new { message = ex.Message }); }
             catch (NotFoundException ex) { return NotFound(new { message = ex.Message }); }

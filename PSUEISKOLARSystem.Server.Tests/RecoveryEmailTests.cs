@@ -25,16 +25,32 @@ public class RecoveryEmailTests
         var dto = await host.Auth.ConfirmRecoveryEmailAsync(admin.Id, "myself@gmail.com", code);
         Assert.Equal("myself@gmail.com", dto.RecoveryEmail);
 
-        // Typing the recovery address on the sign-in page finds the admin account and sends
-        // the link to both inboxes.
-        var sentTo = await host.Auth.ForgotPasswordAsync("myself@gmail.com");
-        Assert.Equal(2, sentTo.Count);
-        Assert.EndsWith("@psu.edu.ph", sentTo[0]);
-        Assert.EndsWith("@gmail.com", sentTo[1]);
-        Assert.DoesNotContain("myself@gmail.com", sentTo);   // masked
+        // Typing the recovery address on the sign-in page finds the admin account; so does
+        // the sign-in address.
+        Assert.True(await host.Auth.ForgotPasswordAsync("myself@gmail.com"));
+        Assert.True(await host.Auth.ForgotPasswordAsync("admin@psu.edu.ph"));
+    }
 
-        // The sign-in address works too, and also reaches the recovery inbox.
-        Assert.Equal(2, (await host.Auth.ForgotPasswordAsync("admin@psu.edu.ph")).Count);
+    [Fact]
+    public async Task Changing_or_removing_it_voids_reset_links_already_sent()
+    {
+        using var host = new AuthHost();
+        var admin = await host.AddUserAsync("admin@psu.edu.ph", Password, UserRoles.Administrator);
+        await host.Auth.SendRecoveryEmailCodeAsync(admin.Id, "myself@gmail.com", Password);
+        await host.Auth.ConfirmRecoveryEmailAsync(admin.Id, "myself@gmail.com", host.Email.RecoveryCodes[0].Code);
+
+        // A link that went to the recovery inbox before it was removed.
+        var user = (await host.Users.FindByIdAsync(admin.Id))!;
+        var outstanding = await host.Users.GeneratePasswordResetTokenAsync(user);
+
+        await host.Auth.RemoveRecoveryEmailAsync(admin.Id, Password);
+
+        user = (await host.Users.FindByIdAsync(admin.Id))!;
+        Assert.False(await host.Users.VerifyUserTokenAsync(user,
+            host.Users.Options.Tokens.PasswordResetTokenProvider,
+            Microsoft.AspNetCore.Identity.UserManager<PSUEISKOLARSystem.Server.Models.ApplicationUser>.ResetPasswordTokenPurpose,
+            outstanding));
+        Assert.Null(user.RecoveryEmail);
     }
 
     [Fact]
@@ -48,7 +64,7 @@ public class RecoveryEmailTests
 
         await Assert.ThrowsAsync<BadRequestException>(() =>
             host.Auth.ConfirmRecoveryEmailAsync(admin.Id, "someone-else@gmail.com", code));
-        Assert.Empty(await host.Auth.ForgotPasswordAsync("someone-else@gmail.com"));
+        Assert.False(await host.Auth.ForgotPasswordAsync("someone-else@gmail.com"));
     }
 
     [Fact]
@@ -84,7 +100,7 @@ public class RecoveryEmailTests
         using var host = new AuthHost();
         await host.AddUserAsync("admin@psu.edu.ph", Password, UserRoles.Administrator);
 
-        Assert.Empty(await host.Auth.ForgotPasswordAsync("nobody@gmail.com"));
+        Assert.False(await host.Auth.ForgotPasswordAsync("nobody@gmail.com"));
     }
 }
 

@@ -534,7 +534,7 @@ export default function ProfilePage() {
 
             {/* Staff sign in with an office address; a personal one lets them get back in
                 when they forget the password. */}
-            {!isStudent && <RecoveryEmailCard token={token} user={user} onUser={refreshUser} />}
+            {!isStudent && <RecoveryEmailCard token={token} user={user} onSession={renewSession} />}
 
             {/* Guided tour */}
             <div className="clay-card p-5">
@@ -582,7 +582,9 @@ export default function ProfilePage() {
   );
 }
 
-function RecoveryEmailCard({ token, user, onUser }) {
+// Saving or removing the address signs out other sessions (so reset links already sent to an
+// old address stop working); the server hands this tab a fresh session to continue on.
+function RecoveryEmailCard({ token, user, onSession }) {
   const toast = useToast();
   const current = user?.recoveryEmail ?? null;
   // idle → enter (address + password) → code (sent, waiting for it); remove = confirm removal
@@ -613,8 +615,7 @@ function RecoveryEmailCard({ token, user, onUser }) {
     e.preventDefault();
     setBusy(true); setMsg(null);
     try {
-      await confirmRecoveryEmail(email.trim(), code, token);
-      await onUser();
+      onSession(await confirmRecoveryEmail(email.trim(), code, token));
       toast('Recovery email saved.', 'success');
       reset();
     } catch (err) {
@@ -626,8 +627,7 @@ function RecoveryEmailCard({ token, user, onUser }) {
     e.preventDefault();
     setBusy(true); setMsg(null);
     try {
-      await removeRecoveryEmail(password, token);
-      await onUser();
+      onSession(await removeRecoveryEmail(password, token));
       toast('Recovery email removed.', 'success');
       reset();
     } catch (err) {
