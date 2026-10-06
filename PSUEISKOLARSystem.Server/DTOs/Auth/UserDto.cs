@@ -11,6 +11,9 @@ namespace PSUEISKOLARSystem.Server.DTOs.Auth
         public string Role { get; set; } = string.Empty;
         public bool IsActive { get; set; }
 
+        // Staff only: the personal address that can also receive a password-reset link.
+        public string? RecoveryEmail { get; set; }
+
         // A coordinator's campus; null for every other role.
         public int? CampusId { get; set; }
         public bool TwoFactorEnabled { get; set; }

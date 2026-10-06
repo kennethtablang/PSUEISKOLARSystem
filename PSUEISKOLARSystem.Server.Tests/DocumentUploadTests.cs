@@ -12,6 +12,7 @@ namespace PSUEISKOLARSystem.Server.Tests;
 /// through when a replacement was permitted, so the upload carried on and inserted a *second*
 /// row for the period. That is the case worth a test that cannot rot.
 /// </summary>
+[Collection(SystemSettingsCollection.Name)]
 public class DocumentUploadTests
 {
     private const string Scholar = "scholar-1";

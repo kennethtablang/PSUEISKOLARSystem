@@ -32,6 +32,16 @@ export function exportSubmissions(token, { academicYear, semester, status } = {}
   return downloadFile(`${API}/submissions.${format}${qs}`, token, `submissions_${today()}.${format}`);
 }
 
+/**
+ * The auto-generated summary report — highlights plus a table per breakdown. A coordinator
+ * always gets their own campus (the server enforces it); the administrator gets every campus
+ * unless they pass one.
+ */
+export function exportSummary(token, { campusId } = {}, format = 'pdf') {
+  const qs = campusId ? `?campusId=${encodeURIComponent(campusId)}` : '';
+  return downloadFile(`${API}/summary.${format}${qs}`, token, `summary-report_${today()}.${format}`);
+}
+
 // Full data export: a ZIP holding one CSV per table (admin only).
 export function downloadBackup(token) {
   const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');

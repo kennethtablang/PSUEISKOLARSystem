@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/UIContext';
-import { updateProfile, enable2fa, disable2fa, updateNotificationPreferences } from '../api/auth';
+import { updateProfile, enable2fa, disable2fa, updateNotificationPreferences, sendRecoveryEmailCode, confirmRecoveryEmail, removeRecoveryEmail } from '../api/auth';
 import { uploadMyAvatar, deleteMyAvatar, clearAvatarCache } from '../api/avatars';
 import { exportScholarData } from '../api/scholars';
 import { useTutorial } from '../context/TutorialContext';
@@ -532,6 +532,10 @@ export default function ProfilePage() {
               {twoFaMsg && <StatusMsg msg={twoFaMsg} />}
             </div>
 
+            {/* Staff sign in with an office address; a personal one lets them get back in
+                when they forget the password. */}
+            {!isStudent && <RecoveryEmailCard token={token} user={user} onUser={refreshUser} />}
+
             {/* Guided tour */}
             <div className="clay-card p-5">
               <h2 style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-strong)' }} className="mb-1.5">
@@ -575,6 +579,164 @@ export default function ProfilePage() {
         />
       )}
     </Layout>
+  );
+}
+
+function RecoveryEmailCard({ token, user, onUser }) {
+  const toast = useToast();
+  const current = user?.recoveryEmail ?? null;
+  // idle → enter (address + password) → code (sent, waiting for it); remove = confirm removal
+  const [step, setStep]         = useState('idle');
+  const [email, setEmail]       = useState('');
+  const [password, setPassword] = useState('');
+  const [code, setCode]         = useState('');
+  const [busy, setBusy]         = useState(false);
+  const [msg, setMsg]           = useState(null);
+
+  function reset() {
+    setStep('idle'); setEmail(''); setPassword(''); setCode(''); setMsg(null);
+  }
+
+  async function handleSend(e) {
+    e.preventDefault();
+    setBusy(true); setMsg(null);
+    try {
+      await sendRecoveryEmailCode(email.trim(), password, token);
+      setStep('code');
+      setMsg({ ok: true, text: `We sent a 6-digit code to ${email.trim()}. Enter it below within a few minutes.` });
+    } catch (err) {
+      setMsg({ ok: false, text: err.message });
+    } finally { setBusy(false); }
+  }
+
+  async function handleConfirm(e) {
+    e.preventDefault();
+    setBusy(true); setMsg(null);
+    try {
+      await confirmRecoveryEmail(email.trim(), code, token);
+      await onUser();
+      toast('Recovery email saved.', 'success');
+      reset();
+    } catch (err) {
+      setMsg({ ok: false, text: err.message });
+    } finally { setBusy(false); }
+  }
+
+  async function handleRemove(e) {
+    e.preventDefault();
+    setBusy(true); setMsg(null);
+    try {
+      await removeRecoveryEmail(password, token);
+      await onUser();
+      toast('Recovery email removed.', 'success');
+      reset();
+    } catch (err) {
+      setMsg({ ok: false, text: err.message });
+    } finally { setBusy(false); }
+  }
+
+  const label = 'block text-xs font-bold mb-1.5 uppercase tracking-wider';
+
+  return (
+    <div className="clay-card p-5">
+      <div className="flex items-center gap-3 mb-3">
+        <div style={{
+          width: 40, height: 40, borderRadius: 13, flexShrink: 0,
+          background: current ? 'rgba(0,48,135,0.08)' : 'rgba(0,0,0,0.04)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Mail size={18} style={{ color: current ? 'var(--accent)' : 'var(--text-muted)' }} strokeWidth={2} />
+        </div>
+        <div className="min-w-0">
+          <h2 style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-strong)' }}>Recovery Email</h2>
+          <span className="text-xs font-bold px-2 py-0.5 rounded-full inline-block mt-1"
+            style={current
+              ? { background: '#d4f5e2', color: '#065f46', border: '1px solid #a7f3d0' }
+              : { background: 'rgba(0,0,0,0.06)', color: 'var(--text-muted)', border: '1px solid rgba(0,0,0,0.1)' }}>
+            {current ? 'Set' : 'Not set'}
+          </span>
+        </div>
+      </div>
+
+      <p style={{ fontSize: '0.78rem', color: 'var(--text)', lineHeight: 1.5 }} className="mb-3">
+        {current
+          ? <>Password-reset links are also sent to <strong style={{ wordBreak: 'break-all' }}>{current}</strong>. On the sign-in page, use <em>Forgot password?</em> with either address.</>
+          : 'Add a personal email you can always open. If you forget your password, use Forgot password? on the sign-in page and the reset link will be sent there too.'}
+      </p>
+
+      {step === 'idle' && (
+        <div className="flex gap-2">
+          <button onClick={() => { setMsg(null); setStep('enter'); }}
+            className="clay-btn clay-btn-primary text-sm px-4 py-2 flex-1">
+            {current ? 'Change' : 'Add recovery email'}
+          </button>
+          {current && (
+            <button onClick={() => { setMsg(null); setStep('remove'); }}
+              className="clay-btn clay-btn-ghost text-sm px-4 py-2" style={{ color: '#c03030' }}>
+              Remove
+            </button>
+          )}
+        </div>
+      )}
+
+      {step === 'enter' && (
+        <form onSubmit={handleSend} className="space-y-3">
+          <div>
+            <label htmlFor="recovery-email" className={label} style={{ color: 'var(--text)' }}>Personal email</label>
+            <input id="recovery-email" type="email" required value={email} onChange={e => setEmail(e.target.value)}
+              className="clay-input" placeholder="name@gmail.com" autoComplete="email" autoFocus />
+          </div>
+          <div>
+            <label htmlFor="recovery-password" className={label} style={{ color: 'var(--text)' }}>Current password</label>
+            <input id="recovery-password" type="password" required value={password} onChange={e => setPassword(e.target.value)}
+              className="clay-input" placeholder="••••••••" autoComplete="current-password" />
+          </div>
+          <div className="flex gap-2">
+            <button type="button" onClick={reset} className="clay-btn clay-btn-ghost text-sm px-4 py-2 flex-1">Cancel</button>
+            <button type="submit" disabled={busy} className="clay-btn clay-btn-primary text-sm px-4 py-2 flex-1">
+              {busy ? 'Sending…' : 'Send code'}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {step === 'code' && (
+        <form onSubmit={handleConfirm} className="space-y-3">
+          <div>
+            <label htmlFor="recovery-code" className={label} style={{ color: 'var(--text)' }}>Code from the email</label>
+            <input id="recovery-code" type="text" inputMode="numeric" required value={code}
+              onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              className="clay-input" placeholder="123456" autoComplete="one-time-code" autoFocus
+              style={{ letterSpacing: '0.3em', fontFamily: 'monospace', textAlign: 'center' }} />
+          </div>
+          <div className="flex gap-2">
+            <button type="button" onClick={() => { setCode(''); setMsg(null); setStep('enter'); }}
+              className="clay-btn clay-btn-ghost text-sm px-4 py-2 flex-1">Back</button>
+            <button type="submit" disabled={busy || code.length < 6} className="clay-btn clay-btn-primary text-sm px-4 py-2 flex-1">
+              {busy ? 'Confirming…' : 'Confirm'}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {step === 'remove' && (
+        <form onSubmit={handleRemove} className="space-y-3">
+          <div>
+            <label htmlFor="recovery-remove-password" className={label} style={{ color: 'var(--text)' }}>Current password</label>
+            <input id="recovery-remove-password" type="password" required value={password} onChange={e => setPassword(e.target.value)}
+              className="clay-input" placeholder="••••••••" autoComplete="current-password" autoFocus />
+          </div>
+          <div className="flex gap-2">
+            <button type="button" onClick={reset} className="clay-btn clay-btn-ghost text-sm px-4 py-2 flex-1">Cancel</button>
+            <button type="submit" disabled={busy} className="clay-btn clay-btn-ghost text-sm px-4 py-2 flex-1" style={{ color: '#c03030' }}>
+              {busy ? 'Removing…' : 'Remove'}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {msg && <StatusMsg msg={msg} />}
+    </div>
   );
 }
 

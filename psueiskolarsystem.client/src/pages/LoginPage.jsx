@@ -567,6 +567,7 @@ function ForgotPasswordModal({ onClose }) {
   const [email, setEmail] = useState('');
   const [step, setStep] = useState(1); // 1 = form, 2 = result
   const [found, setFound] = useState(false);
+  const [sentTo, setSentTo] = useState([]);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -577,6 +578,7 @@ function ForgotPasswordModal({ onClose }) {
     try {
       const data = await forgotPassword(email);
       setFound(data.found);
+      setSentTo(data.sentTo ?? []);
       setStep(2);
     } catch (err) {
       setError(err.message);
@@ -603,7 +605,8 @@ function ForgotPasswordModal({ onClose }) {
         {step === 1 ? (
           <>
             <p className="text-sm mb-5 leading-relaxed" style={{ color: 'var(--text)' }}>
-              Enter your registered email address and we will send you a password reset link.
+              Enter the email address you sign in with — or, for staff accounts, the recovery
+              email set in your profile — and we will send you a password reset link.
             </p>
 
             {error && (
@@ -633,6 +636,7 @@ function ForgotPasswordModal({ onClose }) {
                     placeholder="you@example.com"
                     className="clay-input"
                     style={{ paddingLeft: '38px' }}
+                    autoComplete="email"
                     autoFocus
                   />
                 </div>
@@ -659,7 +663,12 @@ function ForgotPasswordModal({ onClose }) {
               </div>
               <p className="font-black text-base mb-1" style={{ color: 'var(--text-strong)' }}>Check Your Inbox</p>
               <p className="text-sm leading-relaxed" style={{ color: 'var(--text)' }}>
-                A password reset link has been sent to <strong>{email}</strong>.
+                A password reset link has been sent to{' '}
+                {sentTo.length > 0
+                  ? sentTo.map((to, i) => (
+                      <span key={to}>{i > 0 && ' and '}<strong>{to}</strong></span>
+                    ))
+                  : <strong>{email}</strong>}.
                 Please check your email and follow the instructions.
               </p>
             </div>
@@ -680,7 +689,9 @@ function ForgotPasswordModal({ onClose }) {
               </div>
               <p className="font-black text-base mb-1" style={{ color: 'var(--text-strong)' }}>Email Not Found</p>
               <p className="text-sm" style={{ color: 'var(--text)' }}>
-                That email is not registered. Please contact your system administrator for assistance.
+                That email is not registered as a sign-in or recovery address. Scholars and grantees
+                can ask their campus coordinator; staff can ask the system administrator to send a
+                reset link from User Management.
               </p>
             </div>
             <button onClick={onClose}

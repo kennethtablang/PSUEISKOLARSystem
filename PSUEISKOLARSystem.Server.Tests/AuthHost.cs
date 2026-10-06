@@ -14,6 +14,20 @@ using PSUEISKOLARSystem.Server.Settings;
 namespace PSUEISKOLARSystem.Server.Tests;
 
 /// <summary>
+/// <see cref="SystemSettingsStore"/> caches the settings row in a static, so every test that
+/// signs in, uploads, or sets a policy shares one cache across the whole process. Run in
+/// parallel, one class's host (default settings) could refill it between another's
+/// <see cref="AuthHost.SetPolicyAsync"/> and the sign-in that depends on it — the lockout
+/// threshold test then saw Identity's default instead of its 3 and failed intermittently.
+/// Classes in this collection run one at a time.
+/// </summary>
+[CollectionDefinition(Name, DisableParallelization = true)]
+public sealed class SystemSettingsCollection
+{
+    public const string Name = "System settings cache";
+}
+
+/// <summary>
 /// A container just large enough to run <see cref="AuthService"/> for real.
 /// <para>
 /// Sign-in is the one path where hand-rolling the collaborators would test the mock rather
@@ -129,6 +143,13 @@ public sealed class AuthHost : IDisposable
 
         public Task<IAsyncDisposable> BeginBatchAsync() => Task.FromResult<IAsyncDisposable>(new NoBatch());
         public Task SendPasswordResetEmailAsync(string toEmail, string toName, string resetLink) => Task.CompletedTask;
+        public List<(string To, string Code)> RecoveryCodes { get; } = [];
+
+        public Task SendRecoveryEmailCodeAsync(string toEmail, string toName, string code)
+        {
+            RecoveryCodes.Add((toEmail, code));
+            return Task.CompletedTask;
+        }
         public Task SendEmailVerificationAsync(string toEmail, string toName, string verifyLink) => Task.CompletedTask;
         public Task SendDocumentUploadConfirmationAsync(string toEmail, string toName, string requirementName, string academicYear, int semester) => Task.CompletedTask;
         public Task SendDocumentStatusEmailAsync(string toEmail, string toName, string requirementName, string status, string? feedback) => Task.CompletedTask;

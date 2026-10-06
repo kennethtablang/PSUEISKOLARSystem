@@ -437,8 +437,9 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 return "Minimum GWA must be between 1.00 and 5.00.";
             if (dto.SlotLimit is int slots && slots < 1)
                 return "The slot limit must be at least 1. Leave it blank for an unlimited scholarship.";
-            if (!string.IsNullOrWhiteSpace(dto.Category) && !ScholarshipCategories.All.Contains(dto.Category.Trim()))
-                return "The category must be Government or Private.";
+            // Every type is listed under Government or Private, so the category is required.
+            if (string.IsNullOrWhiteSpace(dto.Category) || !ScholarshipCategories.All.Contains(dto.Category.Trim()))
+                return "Choose whether the scholarship is Government or Private.";
             if (dto.Frequency is not null && !ScholarshipFrequencies.All.Contains(dto.Frequency))
                 return "Payout frequency must be one-time, per semester, or per year.";
             if (dto.Amount is decimal amount && (amount <= 0 || amount > 10_000_000m))

@@ -5,12 +5,13 @@ import { useAuth } from '../context/AuthContext';
 import AnnouncementCard from '../components/AnnouncementCard';
 import CollapsibleSection from '../components/CollapsibleSection';
 import { getDashboard } from '../api/dashboard';
+import { exportSummary } from '../api/reports';
 import { PieChart, Pie, Cell, Tooltip } from 'recharts';
 import { useTheme } from '../context/ThemeContext';
 import { vizTokens, tooltipStyle } from '../constants/viz';
 import InfoTip from '../components/InfoTip';
 import DocumentTracker from '../components/DocumentTracker';
-import { GraduationCap, ClipboardList, AlertTriangle, BarChart2, Inbox, Clock, FileCheck, ArrowRight, RefreshCw, CalendarClock, MessageSquare, Megaphone, FolderOpen, User, Activity, UserCheck, Banknote, ShieldX, ShieldQuestion } from 'lucide-react';
+import { GraduationCap, ClipboardList, AlertTriangle, BarChart2, Inbox, Clock, FileCheck, ArrowRight, RefreshCw, CalendarClock, MessageSquare, Megaphone, FolderOpen, User, Activity, UserCheck, Banknote, ShieldX, ShieldQuestion, MapPin, Download, FileText } from 'lucide-react';
 import { useTitle } from '../hooks/useTitle';
 import { useMyCampus } from '../hooks/useMyCampus';
 import { useNow, daysUntil } from '../hooks/useNow';
@@ -94,6 +95,17 @@ export default function DashboardPage() {
   }
 
   const isStaff = user?.role !== 'Scholar';
+  const isCoordinator = user?.role === 'ScholarshipCoordinator';
+
+  // The auto-generated summary report: a coordinator's covers their campus only.
+  const [reporting, setReporting] = useState(null);   // 'pdf' | 'xlsx' while downloading
+  const [reportError, setReportError] = useState('');
+  async function downloadSummary(format) {
+    setReporting(format); setReportError('');
+    try { await exportSummary(token, {}, format); }
+    catch (e) { setReportError(e.message); }
+    finally { setReporting(null); }
+  }
 
   return (
     <Layout>
@@ -107,6 +119,11 @@ export default function DashboardPage() {
             <h1 className="page-title">
               Welcome back, {user?.fullName?.split(' ')[0]}
             </h1>
+            {isCoordinator && myCampus && (
+              <p className="text-xs font-black uppercase tracking-wider mt-1 flex items-center gap-1.5" style={{ color: 'var(--accent)' }}>
+                <MapPin size={12} strokeWidth={2.6} /> {myCampus.name} Dashboard
+              </p>
+            )}
             <p className="page-subtitle">
               {user?.role === 'ScholarshipCoordinator'
                 ? `${myCampus ? `PSU ${myCampus.name}` : 'Pangasinan State University'} · Coordinator`
@@ -197,6 +214,39 @@ export default function DashboardPage() {
           );
         })()}
 
+        {/* Campus scope + auto-generated report (admin / coordinator). A coordinator's whole
+            dashboard is their campus's; say so, and offer the written-up version of it. */}
+        {isStaff && user?.role !== 'Grantee' && (
+          <div className="clay-card p-4 mb-6 flex items-center gap-4 flex-wrap">
+            <div className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0" style={{ background: 'var(--accent-wash)' }}>
+              <FileText size={20} strokeWidth={2.2} style={{ color: 'var(--accent)' }} />
+            </div>
+            <div className="flex-1 min-w-[220px]">
+              <p className="text-sm font-black" style={{ color: 'var(--text-strong)' }}>
+                {isCoordinator
+                  ? `Showing ${myCampus ? myCampus.name : 'your campus'} only`
+                  : 'Showing every campus'}
+              </p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--text)' }}>
+                {isCoordinator
+                  ? 'Every figure here comes from the scholars and grantees studying at your campus. Download the summary report for a ready-to-print write-up of it.'
+                  : 'Download the summary report for a ready-to-print write-up of the whole university, or pick a campus on the Data Visualization page.'}
+              </p>
+              {reportError && <p className="text-xs mt-1" style={{ color: 'var(--danger)' }}>{reportError}</p>}
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => downloadSummary('pdf')} disabled={!!reporting}
+                className="clay-btn clay-btn-primary px-4 py-2 text-xs flex items-center gap-1.5">
+                <Download size={13} strokeWidth={2.5} /> {reporting === 'pdf' ? 'Generating…' : 'Summary Report (PDF)'}
+              </button>
+              <button onClick={() => downloadSummary('xlsx')} disabled={!!reporting}
+                className="clay-btn clay-btn-ghost px-4 py-2 text-xs flex items-center gap-1.5">
+                <Download size={13} strokeWidth={2.5} /> {reporting === 'xlsx' ? 'Generating…' : 'Excel (.xlsx)'}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Admin / Coordinator stats */}
         {stats && user?.role !== 'Scholar' && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -215,7 +265,7 @@ export default function DashboardPage() {
             {user?.role === 'ScholarshipCoordinator' && (
               <>
                 <StatCard label="Scholars" value={stats.totalScholars} Icon={GraduationCap} color="#dce8ff" iconColor="#003087"
-                  info="Every scholar profile on record, whatever their lifecycle status." />
+                  info="Every scholar profile at your campus, whatever their lifecycle status." />
                 <StatCard label="No GWA Yet" value={stats.noGwa} Icon={BarChart2} color="#fff3cd" iconColor="#c07800"
                   info="Scholars with no grade recorded at all, so their compliance can't be assessed. Record a GWA from their profile." />
                 <StatCard label="Flagged GWA" value={stats.flagged} Icon={AlertTriangle} color={stats.flagged > 0 ? '#ffe8d6' : '#d4f5e2'} iconColor={stats.flagged > 0 ? '#c05000' : '#108050'}
@@ -257,6 +307,14 @@ export default function DashboardPage() {
                 { name: 'Pending', value: overview.submissions.pending, color: '#e0a000' },
                 { name: 'Rejected', value: overview.submissions.incomplete, color: '#e0603a' },
               ]}
+            />
+            <TypeBreakdownCard
+              title="Scholars by Scholarship Type"
+              info={isCoordinator
+                ? 'How the scholars at your campus are spread across scholarship types.'
+                : 'How every scholar is spread across scholarship types.'}
+              rows={overview.byScholarshipType ?? []}
+              total={overview.totalScholars}
             />
           </div>
         )}
@@ -617,6 +675,43 @@ function QuickAction({ to, Icon, label }) {
       <span className="text-xs font-bold flex-1 min-w-0" style={{ color: 'var(--text-strong)' }}>{label}</span>
       <ArrowRight size={14} strokeWidth={2.5} style={{ color: 'var(--text-faint)', flexShrink: 0 }} />
     </Link>
+  );
+}
+
+function TypeBreakdownCard({ title, info, rows, total }) {
+  return (
+    <div className="clay-card p-5">
+      <h3 className="text-xs font-bold uppercase tracking-wider mb-3 flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
+        {title}
+        {info && <InfoTip text={info} size={12} />}
+      </h3>
+      {rows.length === 0 ? (
+        <p className="text-sm text-center py-8" style={{ color: 'var(--text-faint)' }}>No data yet.</p>
+      ) : (
+        <div className="space-y-2.5">
+          {rows.slice(0, 5).map(r => {
+            const pct = total > 0 ? Math.round((r.count / total) * 100) : 0;
+            return (
+              <div key={r.type}>
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="truncate" style={{ color: 'var(--text)' }}>{r.type}</span>
+                  <span className="ml-auto font-bold tabular-nums" style={{ color: 'var(--text-strong)' }}>{r.count}</span>
+                  <span className="text-xs tabular-nums w-9 text-right" style={{ color: 'var(--text-muted)' }}>{pct}%</span>
+                </div>
+                <div style={{ height: 6, borderRadius: 4, background: 'var(--surface-2)', marginTop: 4 }}>
+                  <div style={{ width: `${pct}%`, height: '100%', borderRadius: 4, background: 'var(--accent)' }} />
+                </div>
+              </div>
+            );
+          })}
+          {rows.length > 5 && (
+            <Link to="/analytics" className="text-xs font-bold" style={{ color: 'var(--accent)' }}>
+              +{rows.length - 5} more on Data Visualization
+            </Link>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

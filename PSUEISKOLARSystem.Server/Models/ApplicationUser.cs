@@ -18,6 +18,15 @@ namespace PSUEISKOLARSystem.Server.Models
         public bool IsActive { get; set; } = true;
 
         /// <summary>
+        /// A second, personal address that can receive a password-reset link. Staff sign in
+        /// with an office address (admin@psu.edu.ph) that may not be a mailbox anyone reads;
+        /// this lets them recover the account through an inbox they own. Only set after a code
+        /// sent to it has been entered, so a typo can't lock anyone out.
+        /// </summary>
+        [System.ComponentModel.DataAnnotations.MaxLength(256)]
+        public string? RecoveryEmail { get; set; }
+
+        /// <summary>
         /// The campus a scholarship coordinator is in charge of. A coordinator sees only that
         /// campus's scholars, grantees, documents, messages and figures; null for the
         /// administrator, who sees every campus. Students' campus lives on their profile.

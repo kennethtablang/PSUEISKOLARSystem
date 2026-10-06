@@ -171,13 +171,16 @@ export default function CrossMatchList({ scope, campuses, canEdit = true }) {
         </p>
         {canEdit && (
           <div className="flex flex-wrap gap-2">
+            {/* The file type is in the label so nobody has to ask what the template is. */}
             <button onClick={() => downloadMasterListTemplate(token, typeFilter).catch(err => toast(err.message, 'error'))}
+              title="Download an Excel workbook (.xlsx) with the columns to fill in"
               className="clay-btn clay-btn-ghost text-sm px-3 flex items-center gap-2">
-              <Download size={14} /> Template
+              <Download size={14} /> List Template <span className="text-xs font-bold" style={{ color: 'var(--text-muted)' }}>(.xlsx)</span>
             </button>
             <button onClick={() => fileRef.current?.click()} disabled={importing || closedGrant}
+              title="Upload the filled-in list — Excel (.xlsx) or CSV (.csv)"
               className="clay-btn clay-btn-ghost text-sm px-3 flex items-center gap-2">
-              <Upload size={14} /> {importing ? 'Importing…' : 'Import'}
+              <Upload size={14} /> {importing ? 'Importing…' : <>Import List <span className="text-xs font-bold" style={{ color: 'var(--text-muted)' }}>(.xlsx / .csv)</span></>}
             </button>
             <input ref={fileRef} type="file" accept=".xlsx,.csv" className="hidden" onChange={onFile} />
             <button onClick={openNew} disabled={closedGrant} title={closedGrant ? 'Reactivate the grant type to add grantees.' : undefined}

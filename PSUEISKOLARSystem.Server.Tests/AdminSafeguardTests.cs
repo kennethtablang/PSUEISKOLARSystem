@@ -17,6 +17,7 @@ namespace PSUEISKOLARSystem.Server.Tests;
 /// against LocalDB.
 /// </para>
 /// </summary>
+[Collection(SystemSettingsCollection.Name)]
 public class AdminSafeguardTests
 {
     private const string Pw = "Str0ng!Passw0rd";

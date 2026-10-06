@@ -12,6 +12,7 @@ namespace PSUEISKOLARSystem.Server.Tests;
 /// instead of waiting for approval. A match opens the account at once; a miss, or a rejected
 /// profile, must never leave an account behind.
 /// </summary>
+[Collection(SystemSettingsCollection.Name)]
 public class ScholarRegistrationTests
 {
     private record Lookups(int CampusId, int ProgramId, int TypeId);
@@ -93,15 +94,19 @@ public class ScholarRegistrationTests
         Assert.Null(await host.Users.FindByEmailAsync("ana@psu.edu.ph"));
     }
 
+    // Revision 5: students sign up with a personal email they actually read, not only a
+    // @psu.edu.ph address.
     [Fact]
-    public async Task A_personal_email_is_refused()
+    public async Task A_personal_email_is_accepted()
     {
         using var host = new AuthHost();
         var l = await SeedLookupsAsync(host);
         await AddLineAsync(host, EligibilityKinds.Scholar, "22-LN-5555", typeId: l.TypeId);
 
-        await Assert.ThrowsAsync<BadRequestException>(() =>
-            host.Auth.RegisterScholarAsync(Request("ana@gmail.com", "22-LN-5555", l)));
+        var user = await host.Auth.RegisterScholarAsync(Request("ana@gmail.com", "22-LN-5555", l));
+
+        Assert.Equal("ana@gmail.com", user.Email);
+        Assert.Equal(UserRoles.Scholar, user.Role);
     }
 
     [Fact]

@@ -128,8 +128,8 @@ namespace PSUEISKOLARSystem.Server.Controllers
         [EnableRateLimiting("auth")]
         public async Task<IActionResult> ForgotPassword(ForgotPasswordRequestDto request)
         {
-            var found = await authService.ForgotPasswordAsync(request.Email);
-            return Ok(new { found });
+            var sentTo = await authService.ForgotPasswordAsync(request.Email);
+            return Ok(new { found = sentTo.Count > 0, sentTo });
         }
 
         [HttpPost("reset-password")]
@@ -300,6 +300,60 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 return BadRequest(new { message = ex.Message });
             }
         }
+
+        // POST /api/auth/recovery-email/send-code — staff: email a confirmation code to the
+        // personal address they want to recover the account through. Needs the password.
+        [HttpPost("recovery-email/send-code")]
+        [Authorize(Roles = $"{UserRoles.Administrator},{UserRoles.ScholarshipCoordinator}")]
+        [EnableRateLimiting("auth")]
+        public async Task<IActionResult> SendRecoveryEmailCode(RecoveryEmailCodeRequest dto)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            try
+            {
+                await authService.SendRecoveryEmailCodeAsync(userId, dto.Email ?? "", dto.Password ?? "");
+                return Ok(new { message = $"A code was sent to {dto.Email?.Trim()}." });
+            }
+            catch (BadRequestException ex) { return BadRequest(new { message = ex.Message }); }
+            catch (NotFoundException ex) { return NotFound(new { message = ex.Message }); }
+            catch (Exception)
+            {
+                return StatusCode(502, new { message = "The code could not be emailed. Check the address, or try again later." });
+            }
+        }
+
+        // POST /api/auth/recovery-email/confirm — the code from that email saves the address.
+        [HttpPost("recovery-email/confirm")]
+        [Authorize(Roles = $"{UserRoles.Administrator},{UserRoles.ScholarshipCoordinator}")]
+        [EnableRateLimiting("auth")]
+        public async Task<ActionResult<UserDto>> ConfirmRecoveryEmail(RecoveryEmailConfirmRequest dto)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            try
+            {
+                return Ok(await authService.ConfirmRecoveryEmailAsync(userId, dto.Email ?? "", dto.Code ?? ""));
+            }
+            catch (BadRequestException ex) { return BadRequest(new { message = ex.Message }); }
+            catch (NotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        }
+
+        // POST /api/auth/recovery-email/remove — stop sending reset links to the personal address.
+        [HttpPost("recovery-email/remove")]
+        [Authorize(Roles = $"{UserRoles.Administrator},{UserRoles.ScholarshipCoordinator}")]
+        public async Task<ActionResult<UserDto>> RemoveRecoveryEmail(RecoveryEmailRemoveRequest dto)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            try
+            {
+                return Ok(await authService.RemoveRecoveryEmailAsync(userId, dto.Password ?? ""));
+            }
+            catch (BadRequestException ex) { return BadRequest(new { message = ex.Message }); }
+            catch (NotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        }
+
+        public record RecoveryEmailCodeRequest(string? Email, string? Password);
+        public record RecoveryEmailConfirmRequest(string? Email, string? Code);
+        public record RecoveryEmailRemoveRequest(string? Password);
 
         public record NotificationPrefsDto(
             bool EmailAnnouncements,

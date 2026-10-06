@@ -674,25 +674,125 @@ namespace PSUEISKOLARSystem.Server.Services
             return userDto;
         }
 
-        public async Task<bool> ForgotPasswordAsync(string email)
+        public async Task<IReadOnlyList<string>> ForgotPasswordAsync(string email)
         {
-            var user = await userManager.FindByEmailAsync(email);
-            if (user is null) return false;
+            var typed = email.Trim();
+            var user = await userManager.FindByEmailAsync(typed);
+
+            // Not a sign-in address — it may be a staff member's recovery address. Only used
+            // when exactly one account holds it; uniqueness is enforced when it is set.
+            if (user is null && typed.Length > 0)
+            {
+                var owners = await dbContext.Users
+                    .Where(u => u.RecoveryEmail == typed)
+                    .Take(2)
+                    .ToListAsync();
+                if (owners.Count == 1) user = owners[0];
+            }
+            if (user is null) return [];
 
             // A deactivated account cannot reset its password — except a past grantee's, which
             // they need in order to turn it into a scholar account. The reset alone does not
             // let them sign in; only that conversion reactivates the account.
             if (!user.IsActive && !await dbContext.GranteeProfiles.AnyAsync(gp => gp.UserId == user.Id))
-                return false;
+                return [];
 
             var token = await userManager.GeneratePasswordResetTokenAsync(user);
             var resetLink = $"{_emailSettings.AppBaseUrl}/reset-password" +
                             $"?email={Uri.EscapeDataString(user.Email!)}" +
                             $"&token={Uri.EscapeDataString(token)}";
 
-            string to = user.Email!, name = user.FullName;
-            mail.Queue($"password reset to {to}", s => s.SendPasswordResetEmailAsync(to, name, resetLink));
-            return true;
+            // The sign-in address always gets the link; a recovery address gets it too, since
+            // an office address may be one nobody can open.
+            var destinations = new List<string> { user.Email! };
+            if (!string.IsNullOrWhiteSpace(user.RecoveryEmail)
+                && !string.Equals(user.RecoveryEmail, user.Email, StringComparison.OrdinalIgnoreCase))
+                destinations.Add(user.RecoveryEmail);
+
+            var name = user.FullName;
+            foreach (var to in destinations)
+                mail.Queue($"password reset to {to}", s => s.SendPasswordResetEmailAsync(to, name, resetLink));
+            return destinations.Select(d => MaskEmail(d)!).ToList();
+        }
+
+        public async Task SendRecoveryEmailCodeAsync(string userId, string recoveryEmail, string password)
+        {
+            var user = await userManager.FindByIdAsync(userId)
+                ?? throw new NotFoundException("User not found.");
+            if (!await userManager.CheckPasswordAsync(user, password))
+                throw new BadRequestException("Incorrect password.");
+
+            var address = await ValidateRecoveryEmailAsync(user, recoveryEmail);
+            var code = await userManager.GenerateUserTokenAsync(
+                user, TokenOptions.DefaultEmailProvider, RecoveryEmailPurpose(address));
+
+            // Sent straight away rather than queued: the person is on the page waiting for it,
+            // and a failed send should be reported to them, not only logged.
+            await emailService.SendRecoveryEmailCodeAsync(address, user.FullName, code);
+        }
+
+        public async Task<UserDto> ConfirmRecoveryEmailAsync(string userId, string recoveryEmail, string code)
+        {
+            var user = await userManager.FindByIdAsync(userId)
+                ?? throw new NotFoundException("User not found.");
+
+            var address = await ValidateRecoveryEmailAsync(user, recoveryEmail);
+            var valid = await userManager.VerifyUserTokenAsync(
+                user, TokenOptions.DefaultEmailProvider, RecoveryEmailPurpose(address), code.Trim());
+            if (!valid)
+                throw new BadRequestException("That code is incorrect or has expired. Send a new one and try again.");
+
+            user.RecoveryEmail = address;
+            await userManager.UpdateAsync(user);
+            dbContext.AuditLogs.Add(new AuditLog
+            {
+                UserId  = user.Id,
+                Action  = "RecoveryEmailSet",
+                Details = $"Recovery email set to {MaskEmail(address)}",
+            });
+            await dbContext.SaveChangesAsync();
+            return await GetCurrentUserAsync(userId);
+        }
+
+        public async Task<UserDto> RemoveRecoveryEmailAsync(string userId, string password)
+        {
+            var user = await userManager.FindByIdAsync(userId)
+                ?? throw new NotFoundException("User not found.");
+            if (!await userManager.CheckPasswordAsync(user, password))
+                throw new BadRequestException("Incorrect password.");
+
+            user.RecoveryEmail = null;
+            await userManager.UpdateAsync(user);
+            dbContext.AuditLogs.Add(new AuditLog
+            {
+                UserId  = user.Id,
+                Action  = "RecoveryEmailRemoved",
+                Details = "Recovery email removed",
+            });
+            await dbContext.SaveChangesAsync();
+            return await GetCurrentUserAsync(userId);
+        }
+
+        // The address is part of the purpose, so a code only confirms the address it was sent to.
+        private static string RecoveryEmailPurpose(string address) => $"RecoveryEmail:{address.ToLowerInvariant()}";
+
+        private async Task<string> ValidateRecoveryEmailAsync(ApplicationUser user, string recoveryEmail)
+        {
+            var roles = await userManager.GetRolesAsync(user);
+            if (!roles.Contains(UserRoles.Administrator) && !roles.Contains(UserRoles.ScholarshipCoordinator))
+                throw new BadRequestException("A recovery email is only used by staff accounts.");
+
+            var address = recoveryEmail.Trim();
+            if (address.Length > 256 || !new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(address))
+                throw new BadRequestException("Enter a valid email address.");
+            if (string.Equals(address, user.Email, StringComparison.OrdinalIgnoreCase))
+                throw new BadRequestException("Use a different address from the one you sign in with.");
+
+            var taken = await dbContext.Users.AnyAsync(u => u.Id != user.Id
+                && (u.Email == address || u.RecoveryEmail == address));
+            if (taken)
+                throw new BadRequestException("That email address is already used by another account.");
+            return address;
         }
 
         public async Task ResetPasswordAsync(ResetPasswordRequestDto request)

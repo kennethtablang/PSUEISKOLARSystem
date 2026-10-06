@@ -16,6 +16,7 @@ namespace PSUEISKOLARSystem.Server.Tests;
 /// restore the compiled-in five.
 /// </para>
 /// </summary>
+[Collection(SystemSettingsCollection.Name)]
 public class LoginTests
 {
     private const string Password = "Str0ng!Passw0rd";

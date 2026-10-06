@@ -90,6 +90,110 @@ namespace PSUEISKOLARSystem.Server.Services
             return document.GeneratePdf();
         }
 
+        /// <summary>
+        /// The auto-generated summary: highlight sentences, then one small table per section.
+        /// Portrait, because the tables are narrow and the report is meant to be read through.
+        /// </summary>
+        public static byte[] BuildSummary(SummaryReport.Result report)
+        {
+            var document = Document.Create(container =>
+            {
+                container.Page(page =>
+                {
+                    page.Size(PageSizes.A4);
+                    page.Margin(32);
+                    page.DefaultTextStyle(t => t.FontSize(9).FontColor(Ink));
+
+                    page.Header().Element(h => SummaryHeader(h, report.Title, report.Scope));
+                    page.Content().PaddingTop(12).Column(col =>
+                    {
+                        col.Item().Background(HeaderRow).Padding(10).Column(box =>
+                        {
+                            box.Item().Text("Highlights").FontSize(11).SemiBold().FontColor(PsuBlue);
+                            foreach (var line in report.Highlights)
+                                box.Item().PaddingTop(4).Row(row =>
+                                {
+                                    row.ConstantItem(10).Text("•").FontColor(PsuBlue);
+                                    row.RelativeItem().Text(line).FontSize(9);
+                                });
+                        });
+
+                        foreach (var section in report.Sections)
+                        {
+                            col.Item().PaddingTop(14).ShowEntire().Column(block =>
+                            {
+                                block.Item().Text(section.Heading).FontSize(11).SemiBold().FontColor(PsuBlue);
+                                block.Item().PaddingTop(4).Element(c => SummaryTable(c, section));
+                                if (section.Note is not null)
+                                    block.Item().PaddingTop(3).Text(section.Note).FontSize(8).Italic().FontColor(Muted);
+                            });
+                        }
+                    });
+                    page.Footer().Element(Footer);
+                });
+            });
+
+            return document.GeneratePdf();
+        }
+
+        private static void SummaryHeader(IContainer container, string title, string scope)
+        {
+            container.Column(column =>
+            {
+                column.Item().Row(row =>
+                {
+                    row.RelativeItem().Column(left =>
+                    {
+                        left.Item().Text("Pangasinan State University").FontSize(8).FontColor(Muted).LetterSpacing(0.08f);
+                        left.Item().PaddingTop(2).Text(title).FontSize(16).SemiBold().FontColor(PsuBlue);
+                        left.Item().Text($"Scope: {scope}").FontSize(8).FontColor(Muted);
+                    });
+                    row.ConstantItem(150).AlignRight().Column(right =>
+                    {
+                        right.Item().AlignRight().Text("PSU e-Iskolar").FontSize(9).SemiBold().FontColor(PsuBlue);
+                        right.Item().AlignRight().Text($"Generated {DateTime.UtcNow.AddHours(8):MMM d, yyyy h:mm tt} (PHT)")
+                            .FontSize(7).FontColor(Muted);
+                    });
+                });
+                column.Item().PaddingTop(6).LineHorizontal(1).LineColor(PsuBlue);
+            });
+        }
+
+        private static void SummaryTable(IContainer container, SummaryReport.Section section)
+        {
+            if (section.Rows.Count == 0)
+            {
+                container.Padding(6).Text("Nothing to report yet.").FontSize(8.5f).Italic().FontColor(Muted);
+                return;
+            }
+
+            container.Table(table =>
+            {
+                table.ColumnsDefinition(d =>
+                {
+                    foreach (var w in section.Widths) d.RelativeColumn(w);
+                });
+                table.Header(header =>
+                {
+                    for (int c = 0; c < section.Headers.Length; c++)
+                    {
+                        var cell = header.Cell().Background(HeaderRow).Padding(4);
+                        (c == 0 ? cell : cell.AlignRight()).Text(section.Headers[c]).SemiBold().FontSize(8).FontColor(PsuBlue);
+                    }
+                });
+                for (int i = 0; i < section.Rows.Count; i++)
+                {
+                    var bg = i % 2 == 1 ? ZebraRow : "#ffffff";
+                    var row = section.Rows[i];
+                    for (int c = 0; c < section.Headers.Length; c++)
+                    {
+                        var cell = table.Cell().Background(bg).BorderBottom(0.5f).BorderColor("#e5e7eb").Padding(4);
+                        (c == 0 ? cell : cell.AlignRight()).Text(c < row.Length ? row[c] : "").FontSize(8.5f);
+                    }
+                }
+            });
+        }
+
         private static void Header(IContainer container, string title, string subtitle, int rowCount)
         {
             container.Column(column =>

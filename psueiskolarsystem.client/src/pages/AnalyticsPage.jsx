@@ -9,9 +9,10 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
   AreaChart, Area,
 } from 'recharts';
-import { GraduationCap, FileCheck, Clock, AlertTriangle, TrendingUp, Download, Loader, Table2, ChartColumn, ArrowRight, Minus, TrendingDown, BanknoteArrowUp, Wallet, HandCoins, UserX, Users, UserCheck } from 'lucide-react';
+import { GraduationCap, FileCheck, Clock, AlertTriangle, TrendingUp, Download, Loader, Table2, ChartColumn, ArrowRight, Minus, TrendingDown, BanknoteArrowUp, Wallet, HandCoins, UserX, Users, UserCheck, FileText, MapPin } from 'lucide-react';
 import { useTitle } from '../hooks/useTitle';
-import { exportScholars, exportSubmissions } from '../api/reports';
+import { exportScholars, exportSubmissions, exportSummary } from '../api/reports';
+import { useMyCampus } from '../hooks/useMyCampus';
 import { getAnalyticsTrends, getAnalyticsDisbursements, getAnalyticsDemographics, getAnalyticsGrantees } from '../api/analytics';
 import { getScholarshipTypes, getPrograms } from '../api/lookups';
 import { getCampuses } from '../api/campuses';
@@ -31,9 +32,13 @@ const CHART_MARGIN = { top: 4, right: 10, left: 0, bottom: 0 };
 
 export default function AnalyticsPage() {
   useTitle('Data Visualization');
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const toast = useToast();
   const { resolved } = useTheme();
+  // A coordinator's every figure is their own campus's (the server scopes it), so the
+  // campus pickers would offer nothing; they are hidden and the campus is named instead.
+  const isCoordinator = user?.role === 'ScholarshipCoordinator';
+  const myCampus = useMyCampus();
   const { subscribeToAnalytics } = useNotifications();
   const [data, setData] = useState(null);
   const [period, setPeriod] = useState(''); // '' = all-time, else "AY__semester"
@@ -45,6 +50,8 @@ export default function AnalyticsPage() {
   const [money, setMoney] = useState(null);         // release + grant disbursement figures
   const [scholarshipTypes, setScholarshipTypes] = useState([]);
   const [campuses, setCampuses] = useState([]);
+  // null hides every campus picker on the page.
+  const pickCampuses = isCoordinator ? null : campuses;
   // Scholar roster export filters: a type exports that scholarship alone; none splits by type.
   const [reportTypeId, setReportTypeId] = useState('');
   const [reportCampusId, setReportCampusId] = useState('');
@@ -172,7 +179,17 @@ export default function AnalyticsPage() {
         <div className="page-head">
           <div style={{ minWidth: 0 }}>
             <h1 className="page-title">Data Visualization &amp; Reports</h1>
-            <p className="page-subtitle">Descriptive analytics for Pangasinan State University scholars and grantees</p>
+            <p className="page-subtitle">
+              {isCoordinator
+                ? `Descriptive analytics for the scholars and grantees studying at ${myCampus ? `PSU ${myCampus.name}` : 'your campus'}`
+                : 'Descriptive analytics for Pangasinan State University scholars and grantees'}
+            </p>
+            {isCoordinator && myCampus && (
+              <span className="clay-badge mt-2 inline-flex items-center gap-1"
+                style={{ background: 'var(--accent-wash)', color: 'var(--accent)', border: '1px solid rgba(0,48,135,0.15)' }}>
+                <MapPin size={10} strokeWidth={2.6} /> {myCampus.name} only
+              </span>
+            )}
             <span className="page-title-bar" />
           </div>
           {/* Filters in one row above the charts. Exports live in the rail so this row
@@ -204,7 +221,9 @@ export default function AnalyticsPage() {
             {/* KPI row — four single numbers; each is the chart */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <KpiCard Icon={GraduationCap} label="Total Scholars" value={totalScholars} color="#dce8ff" iconColor="#003087"
-                info="Every scholar profile on record, including archived and graduated ones. Not affected by the period filter." />
+                info={isCoordinator
+                  ? 'Every scholar profile at your campus, including archived and graduated ones. Not affected by the period filter.'
+                  : 'Every scholar profile on record, including archived and graduated ones. Not affected by the period filter.'} />
               <KpiCard Icon={FileCheck} label="Verified Docs" value={submissions.verified} color="#d4f5e2" iconColor="#10a060"
                 info="Submissions a coordinator has reviewed and accepted, within the selected period." />
               <KpiCard Icon={Clock} label="Pending Review" value={submissions.pending} color="#fff3cd" iconColor="#c07800"
@@ -319,10 +338,10 @@ export default function AnalyticsPage() {
             <PeriodComparison trends={trends} t={t} />
 
             {/* ── Scholar's Data sheet: who the scholars and grantees are ── */}
-            <Demographics token={token} t={t} campuses={campuses} liveTick={liveTick} />
+            <Demographics token={token} t={t} campuses={pickCampuses} liveTick={liveTick} />
 
             {/* ── Grantee accounts and one-time grants ── */}
-            <GranteeAnalytics token={token} t={t} campuses={campuses} liveTick={liveTick} />
+            <GranteeAnalytics token={token} t={t} campuses={pickCampuses} liveTick={liveTick} />
           </div>
 
           {/* ── Right rail: composition and the numbers behind the charts ── */}
@@ -333,6 +352,8 @@ export default function AnalyticsPage() {
                 every colour against every other — six categorical steps don't clear
                 that all-pairs bar (see constants/viz.js). One measure, one colour,
                 names in text: nothing rests on hue. */}
+            <SummaryReportCard campuses={pickCampuses} campusName={isCoordinator ? myCampus?.name : null} />
+
             <MeterList
               title="Scholars by Scholarship Type"
               subtitle={`Share of ${totalScholars} scholar${totalScholars !== 1 ? 's' : ''}`}
@@ -342,7 +363,7 @@ export default function AnalyticsPage() {
               track={t.grid}
             />
 
-            <ReportBuilder campuses={campuses} scholarshipTypes={scholarshipTypes} />
+            <ReportBuilder campuses={pickCampuses} scholarshipTypes={scholarshipTypes} />
 
             {/* No program panel here — that would restate the bar chart beside it. Its
                 numbers are one click away via the chart's table toggle instead. */}
@@ -359,11 +380,13 @@ export default function AnalyticsPage() {
                     <option value="">All scholarship types (one sheet each)</option>
                     {scholarshipTypes.map(st => <option key={st.id} value={st.id}>{st.name} only</option>)}
                   </select>
-                  <select value={reportCampusId} onChange={e => setReportCampusId(e.target.value)}
-                    className="clay-input text-xs mb-2" style={{ height: 34, minHeight: 34 }} aria-label="Campus to export">
-                    <option value="">All campuses</option>
-                    {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
+                  {pickCampuses && (
+                    <select value={reportCampusId} onChange={e => setReportCampusId(e.target.value)}
+                      className="clay-input text-xs mb-2" style={{ height: 34, minHeight: 34 }} aria-label="Campus to export">
+                      <option value="">All campuses</option>
+                      {pickCampuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  )}
                   <ExportRow
                     label=""
                     exporting={exporting}
@@ -1126,17 +1149,19 @@ function Demographics({ token, t, campuses, liveTick }) {
               </button>
             ))}
           </div>
-          <select value={campusId} onChange={e => setCampusId(e.target.value)} className="clay-input text-xs"
-            style={{ height: 32, minHeight: 32, width: 'auto' }} aria-label="Campus">
-            <option value="">All campuses</option>
-            {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
+          {campuses && (
+            <select value={campusId} onChange={e => setCampusId(e.target.value)} className="clay-input text-xs"
+              style={{ height: 32, minHeight: 32, width: 'auto' }} aria-label="Campus">
+              <option value="">All campuses</option>
+              {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          )}
         </div>
       </div>
 
       {!d ? <div className="clay-card"><EmptyChart /></div> : (
         <>
-          {!campusId && (
+          {!campusId && campuses && (
             <CountBars title="By Campus" subtitle={`Where the ${who} study`} rows={d.byCampus} t={t} name="People" horizontal
               info="Campus picked at sign-up. Profiles created before campuses existed were placed under Lingayen." />
           )}
@@ -1205,11 +1230,13 @@ function GranteeAnalytics({ token, t, campuses, liveTick }) {
             Grantee accounts, and every grant paid under each grant type — including closed ones
           </p>
         </div>
-        <select value={campusId} onChange={e => setCampusId(e.target.value)} className="clay-input text-xs"
-          style={{ height: 32, minHeight: 32, width: 'auto' }} aria-label="Campus">
-          <option value="">All campuses</option>
-          {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
+        {campuses && (
+          <select value={campusId} onChange={e => setCampusId(e.target.value)} className="clay-input text-xs"
+            style={{ height: 32, minHeight: 32, width: 'auto' }} aria-label="Campus">
+            <option value="">All campuses</option>
+            {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        )}
       </div>
 
       {!g ? <div className="clay-card"><EmptyChart /></div> : (
@@ -1259,7 +1286,7 @@ function GranteeAnalytics({ token, t, campuses, liveTick }) {
           </ChartCard>
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            {!campusId && (
+            {!campusId && campuses && (
               <CountBars title="Grantees by Campus" subtitle="Active and deactivated accounts" t={t} name="Grantees" horizontal
                 rows={g.byCampus.map(c => ({ name: c.name, count: c.count }))} />
             )}
@@ -1281,6 +1308,56 @@ function GranteeAnalytics({ token, t, campuses, liveTick }) {
         </>
       )}
     </section>
+  );
+}
+
+/* ── Auto-generated summary report ──────────────────── */
+
+/**
+ * The written-up version of this page: highlight sentences composed from the figures, then a
+ * table per breakdown (type, category, program, year level, sex, releases, grants…). Nothing
+ * to configure — a coordinator's always covers their campus; the administrator may pick one.
+ */
+function SummaryReportCard({ campuses, campusName }) {
+  const { token } = useAuth();
+  const toast = useToast();
+  const [campusId, setCampusId] = useState('');
+  const [busy, setBusy] = useState('');
+
+  async function run(format) {
+    setBusy(format);
+    try { await exportSummary(token, { campusId: campusId || undefined }, format); }
+    catch (e) { toast(e.message, 'error'); }
+    finally { setBusy(''); }
+  }
+
+  return (
+    <div className="clay-card p-5">
+      <div className="flex items-center gap-2">
+        <FileText size={15} strokeWidth={2.4} style={{ color: 'var(--accent)' }} />
+        <h2 className="text-sm font-black" style={{ color: 'var(--text-strong)' }}>Summary Report</h2>
+      </div>
+      <p className="text-xs mt-0.5 mb-3" style={{ color: 'var(--text-muted)' }}>
+        {campusName
+          ? `Generated automatically from ${campusName}'s current figures — highlights plus every breakdown on this page.`
+          : 'Generated automatically from the current figures — highlights plus every breakdown on this page.'}
+      </p>
+      {campuses && (
+        <select value={campusId} onChange={e => setCampusId(e.target.value)} className="clay-input text-xs mb-2"
+          style={{ height: 34, minHeight: 34 }} aria-label="Campus for the summary report">
+          <option value="">All campuses</option>
+          {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+      )}
+      <div className="grid grid-cols-2 gap-2">
+        <button onClick={() => run('pdf')} disabled={!!busy} className="clay-btn clay-btn-primary text-xs py-2 flex items-center justify-center gap-1.5">
+          <Download size={13} /> {busy === 'pdf' ? 'Generating…' : 'PDF'}
+        </button>
+        <button onClick={() => run('xlsx')} disabled={!!busy} className="clay-btn clay-btn-ghost text-xs py-2 flex items-center justify-center gap-1.5">
+          <Download size={13} /> {busy === 'xlsx' ? 'Generating…' : 'Excel'}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -1340,10 +1417,12 @@ function ReportBuilder({ campuses, scholarshipTypes }) {
         <select value={kind} onChange={e => { setKind(e.target.value); set('status', ''); }} className={ctl} style={ctlSt} aria-label="Report of">
           {REPORT_KINDS.map(k => <option key={k.key} value={k.key}>{k.label}</option>)}
         </select>
-        <select value={f.campusId} onChange={e => set('campusId', e.target.value)} className={ctl} style={ctlSt} aria-label="Campus">
-          <option value="">All campuses</option>
-          {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
+        {campuses && (
+          <select value={f.campusId} onChange={e => set('campusId', e.target.value)} className={ctl} style={ctlSt} aria-label="Campus">
+            <option value="">All campuses</option>
+            {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        )}
         {kind !== 'grantees' && (
           <select value={f.scholarshipTypeId} onChange={e => set('scholarshipTypeId', e.target.value)} className={ctl} style={ctlSt} aria-label="Scholarship">
             <option value="">All scholarships</option>

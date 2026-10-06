@@ -49,6 +49,20 @@ export async function forgotPassword(email) {
   return apiSend(`${API}/forgot-password`, 'POST', { email }, null, 'Request failed.');
 }
 
+/** Staff: email a confirmation code to the personal address to recover the account through. */
+export async function sendRecoveryEmailCode(email, password, token) {
+  return apiSend(`${API}/recovery-email/send-code`, 'POST', { email, password }, token, 'Could not send the code.');
+}
+
+/** Staff: the code from that email saves the recovery address. Returns the updated user. */
+export async function confirmRecoveryEmail(email, code, token) {
+  return apiSend(`${API}/recovery-email/confirm`, 'POST', { email, code }, token, 'Could not confirm the code.');
+}
+
+export async function removeRecoveryEmail(password, token) {
+  return apiSend(`${API}/recovery-email/remove`, 'POST', { password }, token, 'Could not remove the recovery email.');
+}
+
 export async function checkEmailAvailable(email, signal) {
   const res = await apiFetch(`${API}/email-available?email=${encodeURIComponent(email)}`,
     { fallback: 'Check failed.', signal });

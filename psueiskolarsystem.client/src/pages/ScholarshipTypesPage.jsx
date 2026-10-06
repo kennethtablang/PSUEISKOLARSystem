@@ -14,7 +14,7 @@ import { ErrorBox, ModalButtons } from './UsersPage';
 import Field from '../components/Field';
 import Modal from '../components/Modal';
 import { TableSkeleton, EmptyState } from '../components/ListState';
-import { Plus, Trash2, ChevronRight, MapPin, Globe2 } from 'lucide-react';
+import { Plus, Trash2, ChevronRight, MapPin, Globe2, Landmark, Building2 } from 'lucide-react';
 import { SCHOLARSHIP_FREQUENCIES } from '../constants/grants';
 import { CATEGORIES, canManageType } from '../constants/scholarshipTypes';
 
@@ -32,6 +32,8 @@ export default function ScholarshipTypesPage() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [search, setSearch] = useState('');
+  // '' = both, listed in two groups; otherwise only that category.
+  const [category, setCategory] = useState('');
   // The house standard, so a new type starts at the institution's own figure rather than a
   // number baked into the form. Falls back to 2.50 if settings can't be read.
   const [defaultGwa, setDefaultGwa] = useState('2.50');
@@ -43,13 +45,22 @@ export default function ScholarshipTypesPage() {
   }, [token]);
 
   const q = search.toLowerCase();
-  const displayed = q
+  const searched = q
     ? types.filter(t =>
         t.name.toLowerCase().includes(q) ||
         (t.category ?? '').toLowerCase().includes(q) ||
         (t.campusName ?? '').toLowerCase().includes(q) ||
         (t.description ?? '').toLowerCase().includes(q))
     : types;
+  const displayed = category ? searched.filter(t => t.category === category) : searched;
+
+  // The list is categorised: Government types first, then Private, each under its own heading.
+  // A type somehow saved without a category is shown last rather than dropped.
+  const groups = [
+    ...CATEGORIES.map(c => ({ key: c, rows: displayed.filter(t => t.category === c) })),
+    { key: 'Uncategorised', rows: displayed.filter(t => !CATEGORIES.includes(t.category)) },
+  ].filter(g => g.rows.length > 0);
+  const countOf = c => searched.filter(t => t.category === c).length;
 
   async function load() {
     setLoading(true);
@@ -107,7 +118,7 @@ export default function ScholarshipTypesPage() {
           )}
         </div>
 
-        <div className="mb-4">
+        <div className="mb-4 flex items-center gap-3 flex-wrap">
           <input
             type="search"
             value={search}
@@ -116,6 +127,17 @@ export default function ScholarshipTypesPage() {
             style={{ height: 36, minHeight: 36, fontSize: 12.5, padding: '0 10px', width: '100%', maxWidth: 280 }}
             placeholder="Search scholarship types…"
           />
+          {/* Government / Private: the two kinds of scholarship the office manages. */}
+          <div className="flex gap-1" role="group" aria-label="Category">
+            {[{ value: '', label: 'All', count: searched.length }, ...CATEGORIES.map(c => ({ value: c, label: c, count: countOf(c) }))].map(o => (
+              <button key={o.label} onClick={() => setCategory(o.value)} aria-pressed={category === o.value}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold inline-flex items-center gap-1.5"
+                style={category === o.value ? { background: '#002570', color: '#fff' } : { background: 'var(--surface-inset)', color: 'var(--text)' }}>
+                {o.label}
+                <span className="tabular-nums" style={{ opacity: 0.7 }}>{o.count}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="clay-card overflow-hidden">
@@ -132,8 +154,20 @@ export default function ScholarshipTypesPage() {
                   ))}
                 </tr>
               </thead>
-              <tbody>
-                {displayed.map(st => {
+              {groups.map(g => (
+              <tbody key={g.key}>
+                <tr>
+                  <td colSpan={4} className="px-5 pt-4 pb-2" style={{ background: 'var(--surface-inset)' }}>
+                    <span className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-wider" style={{ color: 'var(--accent)' }}>
+                      {g.key === 'Government' ? <Landmark size={14} strokeWidth={2.4} /> : <Building2 size={14} strokeWidth={2.4} />}
+                      {g.key === 'Uncategorised' ? 'No category' : `${g.key} scholarships`}
+                      <span className="font-bold normal-case tracking-normal" style={{ color: 'var(--text-muted)' }}>
+                        · {g.rows.length} type{g.rows.length === 1 ? '' : 's'}
+                      </span>
+                    </span>
+                  </td>
+                </tr>
+                {g.rows.map(st => {
                   const manage = canManageType(user, st);
                   return (
                     <tr key={st.id} className="clay-table-row cursor-pointer" style={{ opacity: st.isActive ? 1 : 0.7 }}
@@ -170,6 +204,7 @@ export default function ScholarshipTypesPage() {
                   );
                 })}
               </tbody>
+              ))}
             </table></div>
           )}
         </div>
@@ -274,7 +309,7 @@ export function ScholarshipTypeModal({ initial, defaultGwa = '2.50', token, onCl
 
   const frequencyHint = SCHOLARSHIP_FREQUENCIES.find(f => f.value === form.frequency)?.hint ?? '';
 
-  const canSubmit = form.name.trim() && form.minimumGwa !== '' && !gwaError && !slotError && !amountError;
+  const canSubmit = form.name.trim() && form.category && form.minimumGwa !== '' && !gwaError && !slotError && !amountError;
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -336,8 +371,8 @@ export function ScholarshipTypeModal({ initial, defaultGwa = '2.50', token, onCl
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Category">
-            <select value={form.category} onChange={e => set('category', e.target.value)} className="clay-input">
-              <option value="">— Choose —</option>
+            <select required value={form.category} onChange={e => set('category', e.target.value)} className="clay-input">
+              <option value="" disabled>— Government or Private —</option>
               {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </Field>

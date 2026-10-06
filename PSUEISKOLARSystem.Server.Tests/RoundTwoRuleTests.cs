@@ -15,6 +15,7 @@ namespace PSUEISKOLARSystem.Server.Tests;
 /// Rules added while fixing the second batch of pages: validation the forms relied on but the
 /// API did not enforce, and the session that ended itself after a password change.
 /// </summary>
+[Collection(SystemSettingsCollection.Name)]
 public class RoundTwoRuleTests
 {
     private static string Message(IActionResult result)

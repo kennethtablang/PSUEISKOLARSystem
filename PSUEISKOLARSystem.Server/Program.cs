@@ -112,6 +112,7 @@ namespace PSUEISKOLARSystem.Server
             builder.Services.AddScoped<IAnnouncementDelivery, AnnouncementDelivery>();
             builder.Services.AddScoped<DatabaseExporter>();
             builder.Services.AddScoped<AnalyticsQueries>();
+            builder.Services.AddScoped<SummaryReport>();
             builder.Services.AddScoped<DashboardQueries>();
 
             // Singleton: it holds no state and takes its own scope per send, which is the

@@ -337,17 +337,21 @@ namespace PSUEISKOLARSystem.Server.Data
         }
 
         /// <summary>
-        /// Scholarship types are Government or Private only. Types still carrying one of the
-        /// older categories (Institutional, Local (LGU), International, Other) are moved onto
-        /// one of the two. Runs every start; a no-op once done.
+        /// Scholarship types are Government or Private only, and every type is one of the two
+        /// (the list is grouped by it). Types still carrying an older category (Institutional,
+        /// Local (LGU), International, Other) are moved onto one of the two, and types saved
+        /// with none are placed by their name. Runs every start; a no-op once done.
         /// </summary>
         private static async Task CollapseScholarshipCategoriesAsync(ApplicationDbContext db)
         {
             var stale = await db.ScholarshipTypes
-                .Where(t => t.Category != null && !ScholarshipCategories.All.Contains(t.Category))
+                .Where(t => t.Category == null || !ScholarshipCategories.All.Contains(t.Category))
                 .ToListAsync();
             if (stale.Count == 0) return;
-            foreach (var t in stale) t.Category = ScholarshipCategories.FromLegacy(t.Category);
+            foreach (var t in stale)
+                t.Category = t.Category is null
+                    ? ScholarshipCategories.FromName(t.Name)
+                    : ScholarshipCategories.FromLegacy(t.Category);
             await db.SaveChangesAsync();
         }
 
