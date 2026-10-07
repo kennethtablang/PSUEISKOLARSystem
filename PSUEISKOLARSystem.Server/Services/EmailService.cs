@@ -114,22 +114,25 @@ namespace PSUEISKOLARSystem.Server.Services
             {
                 try
                 {
+                    string serverResponse;
                     if (_inBatch)
                     {
                         var client = await ConnectedBatchClientAsync();
-                        await client.SendAsync(message);
+                        serverResponse = await client.SendAsync(message);
                     }
                     else
                     {
                         using var client = new SmtpClient();
                         await client.ConnectAsync(_s.SmtpHost, _s.SmtpPort, SecureSocketOptions.StartTls);
                         await client.AuthenticateAsync(_s.Username, _s.Password);
-                        await client.SendAsync(message);
+                        serverResponse = await client.SendAsync(message);
                         await client.DisconnectAsync(true);
                     }
 
-                    if (attempt > 1)
-                        logger.LogInformation("Email '{Subject}' to {Recipients} sent on attempt {Attempt}.", message.Subject, recipients, attempt);
+                    // Logged on success too: "the student never got it" is otherwise
+                    // indistinguishable from "it was never sent".
+                    logger.LogInformation("Email '{Subject}' to {Recipients} accepted by relay on attempt {Attempt}: {Response}",
+                        message.Subject, recipients, attempt, serverResponse);
                     return;
                 }
                 catch (Exception ex) when (attempt < maxAttempts)

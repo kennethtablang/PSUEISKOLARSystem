@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.Extensions.Options;
 using Microsoft.OpenApi;
 using PSUEISKOLARSystem.Server.Data;
 using PSUEISKOLARSystem.Server.Infrastructure;
@@ -199,6 +200,15 @@ namespace PSUEISKOLARSystem.Server
             });
 
             var app = builder.Build();
+
+            // The SMTP login lives in user-secrets (never in git), so a fresh clone has none and
+            // every email fails quietly in the background. Say so once, loudly, at startup.
+            var smtp = app.Services.GetRequiredService<IOptions<EmailSettings>>().Value;
+            if (string.IsNullOrWhiteSpace(smtp.Username) || string.IsNullOrWhiteSpace(smtp.Password))
+                app.Logger.LogWarning(
+                    "EmailSettings:Username/Password are not set — no emails (verification, password reset, " +
+                    "notifications) will be sent. Set them with: dotnet user-secrets set \"EmailSettings:Username\" \"<gmail>\" " +
+                    "and dotnet user-secrets set \"EmailSettings:Password\" \"<app password>\" (see README.md).");
 
             using (var scope = app.Services.CreateScope())
             {
