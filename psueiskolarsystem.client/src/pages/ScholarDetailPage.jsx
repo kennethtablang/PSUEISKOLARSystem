@@ -296,7 +296,7 @@ export default function ScholarDetailPage() {
             )}
             {(isAdminOrCoord || isOwnProfile) && (
               <button onClick={() => setEditing(true)} className="clay-btn clay-btn-ghost px-4 py-2 text-sm">
-                {isOwnProfile ? 'Edit Contact Info' : 'Edit Profile'}
+                {isOwnProfile ? (profile?.detailsReviewPending ? 'Update My Details' : 'Edit Contact Info') : 'Edit Profile'}
               </button>
             )}
           </div>
@@ -313,6 +313,35 @@ export default function ScholarDetailPage() {
           </div>
         ) : (
           <>
+            {/* Upgraded from a grantee account: the profile still holds what they filled in as a
+                grantee, so the scholar is asked to bring it up to date once. */}
+            {profile.convertedFromGranteeAt && (isOwnProfile ? profile.detailsReviewPending : true) && (
+              <div className="flex items-start gap-3 p-4 rounded-2xl mb-5"
+                style={{ background: 'var(--tone-info-bg)', border: '1.5px solid var(--tone-info-border)', color: 'var(--text)' }}>
+                <Award size={16} strokeWidth={2.5} className="mt-0.5 shrink-0" style={{ color: 'var(--accent)' }} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold" style={{ color: 'var(--text-strong)' }}>
+                    {isOwnProfile ? 'Your grantee account is now your scholar account' : 'Upgraded from a grantee account'}
+                  </p>
+                  <p className="text-xs mt-0.5">
+                    {isOwnProfile
+                      ? <>The scholarship office listed you under <strong>{profile.scholarshipTypeName ?? 'a scholarship'}</strong>, so
+                          your grantee account was upgraded instead of opening a new one. Your one-time grants are still below.
+                          Please update your year level, course and details.</>
+                      : <>This scholar&apos;s grantee account became their scholar account on{' '}
+                          {new Date(profile.convertedFromGranteeAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}.
+                          Their one-time grants are kept below.
+                          {profile.detailsReviewPending && ' They have not confirmed their year level and details yet.'}</>}
+                  </p>
+                </div>
+                {isOwnProfile && (
+                  <button onClick={() => setEditing(true)} className="clay-btn clay-btn-primary px-3 py-1.5 text-xs shrink-0">
+                    Update My Details
+                  </button>
+                )}
+              </div>
+            )}
+
             {/* GWA threshold alert */}
             {profile.latestGwa != null && profile.minimumGwa != null && profile.latestGwa > profile.minimumGwa && (
               <div className="flex items-start gap-3 p-4 rounded-2xl mb-5 tone-attention"
@@ -895,9 +924,18 @@ function EditProfileModal({ profile, userId, programs, campuses, scholarshipType
     ? programs.filter(p => p.campusIds?.includes(Number(form.campusId)) || String(p.id) === String(form.programId))
     : programs;
 
+  // A scholar whose grantee account was just upgraded updates their year level, course and
+  // Scholar's Data sheet once; after that only contact details, like every scholar.
+  const confirming = scholarMode && !!profile?.detailsReviewPending;
+
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
+
+    if (confirming && !form.programId) {
+      setError('Choose your course.');
+      return;
+    }
 
     const sid = form.studentId.trim();
     if (!scholarMode && !/^[A-Za-z0-9-]{3,30}$/.test(sid)) {
@@ -928,7 +966,8 @@ function EditProfileModal({ profile, userId, programs, campuses, scholarshipType
         birthDate: form.birthDate || null,
         address: form.address.trim() || null,
         scholarshipChangeReason: isTransfer ? (form.scholarshipChangeReason.trim() || null) : null,
-        personal: scholarMode ? null : personalToApi(form.personal),
+        // Just upgraded from a grantee account: the year level, course and sheet go too, once.
+        personal: scholarMode && !confirming ? null : personalToApi(form.personal),
       }, token);
       onSaved();
     } catch (err) {
@@ -936,6 +975,46 @@ function EditProfileModal({ profile, userId, programs, campuses, scholarshipType
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (confirming) {
+    return (
+      <ClayModal title="Update Your Scholar Details" onClose={onClose} width={680} dismissible={!submitting}>
+        {error && <ErrorBox>{error}</ErrorBox>}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <p className="text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+            Your grantee account is now your scholar account under{' '}
+            <strong>{profile?.scholarshipTypeName ?? 'your scholarship'}</strong> — set by the scholarship office.
+            What you filled in as a grantee is below; update anything that has changed. After you save,
+            only your contact number and address can be changed here.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Field label="Year Level">
+              <select value={form.yearLevel} onChange={e => set('yearLevel', e.target.value)} className="clay-input">
+                {[1, 2, 3, 4, 5, 6].map(y => <option key={y} value={y}>Year {y}</option>)}
+              </select>
+            </Field>
+            <Field label="Course">
+              <select required value={form.programId} onChange={e => set('programId', e.target.value)} className="clay-input">
+                <option value="">— Select Course —</option>
+                {campusPrograms.map(p => <option key={p.id} value={p.id}>{p.name} ({p.code})</option>)}
+              </select>
+            </Field>
+          </div>
+          <Field label="Contact Number">
+            <ContactInput value={form.contactLocal} onChange={v => set('contactLocal', v)} />
+          </Field>
+          <AddressPicker value={form.address} onChange={v => set('address', v)} />
+
+          <SectionTitle>Personal Information</SectionTitle>
+          <PersonalQuestions value={form.personal} onChange={v => set('personal', v)} />
+          <SectionTitle>Family Information</SectionTitle>
+          <FamilyQuestions value={form.personal} onChange={v => set('personal', v)} />
+
+          <ModalButtons onClose={onClose} submitting={submitting} label="Save My Details" />
+        </form>
+      </ClayModal>
+    );
   }
 
   if (scholarMode) {

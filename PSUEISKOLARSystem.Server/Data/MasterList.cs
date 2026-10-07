@@ -109,49 +109,60 @@ namespace PSUEISKOLARSystem.Server.Data
 
         /// <summary>
         /// When the office adds a line for a student who already has an account — a scholar
-        /// who has just been awarded a grant, or a past grantee receiving another — the line
-        /// is applied straight away instead of waiting for a sign-up that will never come.
-        /// Returns a short description of what happened, or null when no account exists yet.
-        /// The caller saves.
+        /// who has just been awarded a grant, a past grantee receiving another, or a past
+        /// grantee now listed as a scholar — the line is applied straight away instead of
+        /// waiting for a sign-up that will never come. Returns a short description of what
+        /// happened, or null when no account exists yet. The caller saves; the ids of grantee
+        /// accounts upgraded to scholar accounts are added to <paramref name="upgraded"/> so
+        /// the caller can tell those students once the change is saved.
         /// </summary>
-        public static async Task<string?> ApplyToExistingAccountAsync(ApplicationDbContext db, EligibilityRecord line, string? actorId)
+        public static async Task<string?> ApplyToExistingAccountAsync(
+            ApplicationDbContext db, EligibilityRecord line, string? actorId, ICollection<string>? upgraded = null)
         {
             var scholarUserId = await db.ScholarProfiles
                 .Where(sp => sp.StudentId == line.StudentId)
                 .Select(sp => sp.UserId)
                 .FirstOrDefaultAsync();
 
-            var granteeUserId = scholarUserId is null
-                ? await db.GranteeProfiles
-                    .Where(gp => gp.StudentId == line.StudentId)
-                    .Select(gp => gp.UserId)
-                    .FirstOrDefaultAsync()
-                : null;
-
             /* The same student under another number: the office's lists are typed by hand. A
-               single account with exactly this name is that student — their grant is recorded on
-               it rather than waiting for a sign-up that will never come. */
-            if (scholarUserId is null && granteeUserId is null && line.Kind == EligibilityKinds.Grantee)
+               single scholar account with exactly this name is that student. */
+            if (scholarUserId is null)
             {
                 var named = await db.ScholarProfiles
-                    .Where(sp => sp.User.FirstName == line.FirstName && sp.User.LastName == line.LastName
+                    .Where(sp => sp.StudentId != line.StudentId
+                              && sp.User.FirstName == line.FirstName && sp.User.LastName == line.LastName
                               && (line.MiddleName == null || sp.User.MiddleName == null || sp.User.MiddleName == line.MiddleName))
                     .Select(sp => sp.UserId)
                     .Take(2)
                     .ToListAsync();
-                if (named.Count == 1) scholarUserId = named[0];
+                // A scholar line only goes by name when no grantee account claims the number.
+                if (named.Count == 1 && (line.Kind == EligibilityKinds.Grantee
+                        || !await db.GranteeProfiles.AnyAsync(gp => gp.StudentId == line.StudentId)))
+                    scholarUserId = named[0];
             }
+
+            // A grantee account, by number or by unambiguous name (see FindGranteeAccountAsync).
+            var grantee = scholarUserId is null
+                ? await FindGranteeAccountAsync(db, line.StudentId, line.FirstName, line.LastName, line.MiddleName)
+                : null;
+            var granteeUserId = grantee?.UserId;
 
             var userId = scholarUserId ?? granteeUserId;
             if (userId is null) return null;
 
             if (line.Kind == EligibilityKinds.Scholar)
             {
-                // A scholar line for a past grantee stays open: when they sign up as a scholar
-                // they are asked to reuse their grantee account, which turns it into their
-                // scholar account (see AuthService.RegisterScholarAsync).
+                /* A past grantee now listed as a scholar: their grantee account becomes their
+                   scholar account at once — no second account and no second sign-up. The
+                   one-time grants they received stay on it. */
                 if (scholarUserId is null)
-                    return "this student already has a grantee account — it becomes their scholar account when they sign up";
+                {
+                    var refusal = await UpgradeGranteeToScholarAsync(db, grantee!, line, actorId);
+                    if (refusal is not null)
+                        return $"this student has a grantee account that could not be upgraded yet: {refusal}";
+                    upgraded?.Add(grantee!.UserId);
+                    return "their grantee account was upgraded to a scholar account — their one-time grants stay on their profile";
+                }
 
                 // A scholar already holding a different scholarship matched again: a student may
                 // hold one scholarship at a time, so the line is left open and the office is told
@@ -180,6 +191,136 @@ namespace PSUEISKOLARSystem.Server.Data
             return scholarUserId is not null
                 ? "grant recorded on the existing scholar's profile"
                 : "grant recorded on the existing grantee account";
+        }
+
+        /// <summary>
+        /// Grantee → scholar, done by the office's listing rather than by the student signing up
+        /// again. The grantee account is reactivated and becomes a scholar account: same email and
+        /// password, a scholar profile built from the grantee profile, the scholarship from the
+        /// line, and every one-time grant left where it is. The student confirms their year
+        /// level, course and data sheet the next time they sign in (<see cref="ScholarProfile.DetailsReviewPending"/>).
+        /// Returns why it could not be done (e.g. the scholarship is full), or null. The caller saves.
+        /// </summary>
+        public static async Task<string?> UpgradeGranteeToScholarAsync(
+            ApplicationDbContext db, GranteeProfile grantee, EligibilityRecord line, string? actorId)
+        {
+            if (line.Kind != EligibilityKinds.Scholar || line.ScholarshipTypeId is not int typeId)
+                return "the line is not for a scholarship";
+
+            var userId = grantee.UserId;
+            if (await db.ScholarProfiles.AnyAsync(sp => sp.UserId == userId || sp.StudentId == line.StudentId))
+                return $"student no. {line.StudentId} is already registered to a scholar account";
+
+            // The ledger enforces one scholarship per student and the slot quota.
+            var rejection = await ScholarshipRegistry.SetAsync(db, userId, typeId, actorId ?? userId, actorIsStaff: true,
+                "Grantee account upgraded to a scholar account from the cross-matching list.");
+            if (rejection is not null) return rejection;
+
+            var user = grantee.User ?? await db.Users.FirstAsync(u => u.Id == userId);
+            var profile = new ScholarProfile
+            {
+                UserId = userId,
+                // The scholar account goes by the number the scholar list uses.
+                StudentId = line.StudentId,
+                CampusId = line.CampusId ?? grantee.CampusId,
+                ProgramId = grantee.ProgramId,
+                ScholarshipTypeId = typeId,
+                YearLevel = grantee.YearLevel,
+                ContactNumber = grantee.ContactNumber,
+                BirthDate = grantee.BirthDate,
+                Address = grantee.Address,
+                ConvertedFromGranteeAt = DateTime.UtcNow,
+                DetailsReviewPending = true,
+            };
+            DTOs.Scholars.PersonalDetailsDto.From(grantee.Personal).ApplyTo(profile.Personal);
+            db.ScholarProfiles.Add(profile);
+            db.GranteeProfiles.Remove(grantee);
+
+            // Grantee role out, Scholar role in. A new stamp retires sessions still carrying the old role.
+            var roleIds = await db.Roles
+                .Where(r => r.Name == UserRoles.Grantee || r.Name == UserRoles.Scholar)
+                .ToDictionaryAsync(r => r.Name!, r => r.Id);
+            if (roleIds.TryGetValue(UserRoles.Grantee, out var granteeRole))
+            {
+                var old = await db.UserRoles.FirstOrDefaultAsync(ur => ur.UserId == userId && ur.RoleId == granteeRole);
+                if (old is not null) db.UserRoles.Remove(old);
+            }
+            if (roleIds.TryGetValue(UserRoles.Scholar, out var scholarRole)
+                && !await db.UserRoles.AnyAsync(ur => ur.UserId == userId && ur.RoleId == scholarRole))
+                db.UserRoles.Add(new Microsoft.AspNetCore.Identity.IdentityUserRole<string> { UserId = userId, RoleId = scholarRole });
+
+            user.IsActive = true;
+            user.SecurityStamp = Guid.NewGuid().ToString();
+
+            line.ClaimedByUserId = userId;
+            line.ClaimedAt = DateTime.UtcNow;
+
+            db.AuditLogs.Add(new AuditLog
+            {
+                UserId = actorId ?? userId,
+                Action = "UpgradeGranteeToScholar",
+                Details = $"{user.FullName} ({line.StudentId}): grantee account upgraded to a scholar account — " +
+                          "listed on a scholarship's cross-matching list; one-time grants kept",
+            });
+            return null;
+        }
+
+        /// <summary>
+        /// Tells students whose grantee account has just become a scholar account. Call after saving.
+        /// </summary>
+        public static async Task NotifyUpgradedAsync(ApplicationDbContext db, INotificationService notifications, IEnumerable<string> userIds)
+        {
+            foreach (var userId in userIds.Distinct())
+            {
+                var type = await db.ScholarProfiles
+                    .Where(sp => sp.UserId == userId)
+                    .Select(sp => sp.ScholarshipType != null ? sp.ScholarshipType.Name : null)
+                    .FirstOrDefaultAsync();
+                await notifications.CreateAsync(
+                    userId,
+                    "Your account is now a scholar account",
+                    $"The scholarship office listed you under {type ?? "a scholarship"}, so your grantee account has been upgraded to " +
+                    "your scholar account. Sign in with the same email and password. Your one-time grants are still on your profile — " +
+                    "please update your year level, course and details.",
+                    NotificationCategories.Account,
+                    "/my-profile");
+            }
+        }
+
+        /// <summary>
+        /// Applies every open line that points at a student who already has an account: grants
+        /// for scholars and grantees, and scholar lines for past grantees (upgrading them). Lines
+        /// listed before the matching account existed — or before this rule did — would otherwise
+        /// stay open forever. Run at startup. Returns how many lines were applied.
+        /// </summary>
+        public static async Task<int> ReconcileAsync(ApplicationDbContext db, INotificationService? notifications)
+        {
+            var open = await db.EligibilityRecords
+                .Include(e => e.GrantType)
+                .Include(e => e.ScholarshipType)
+                .Where(e => e.ClaimedByUserId == null
+                         && (db.ScholarProfiles.Any(sp => sp.StudentId == e.StudentId
+                                                      || (sp.User.FirstName == e.FirstName && sp.User.LastName == e.LastName))
+                          || db.GranteeProfiles.Any(gp => gp.StudentId == e.StudentId
+                                                      || (gp.User.FirstName == e.FirstName && gp.User.LastName == e.LastName))))
+                .OrderBy(e => e.CreatedAt)
+                .ToListAsync();
+
+            var upgraded = new List<string>();
+            var applied = 0;
+            foreach (var line in open)
+            {
+                // A grant type closed since the line was added has paid out; leave its lines be.
+                if (line.Kind == EligibilityKinds.Grantee && line.GrantType is { IsActive: false }) continue;
+                if (await ApplyToExistingAccountAsync(db, line, actorId: null, upgraded) is null) continue;
+                if (line.ClaimedByUserId is not null) applied++;
+                // Each line is saved on its own so the next one sees the account it may have created.
+                await db.SaveChangesAsync();
+            }
+
+            if (notifications is not null && upgraded.Count > 0)
+                await NotifyUpgradedAsync(db, notifications, upgraded);
+            return applied;
         }
 
         /// <summary>

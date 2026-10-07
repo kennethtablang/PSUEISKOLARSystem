@@ -210,6 +210,13 @@ namespace PSUEISKOLARSystem.Server
                 // Development only — the sample accounts share a published password.
                 if (app.Environment.IsDevelopment())
                     await Revision4SampleSeeder.SeedAsync(scope.ServiceProvider);
+
+                // Cross-matching lines left open although the student already has an account —
+                // listed before the account existed, or before lines were applied on the spot —
+                // are applied now: grants recorded, past grantees upgraded to scholar accounts.
+                var reconciled = await MasterList.ReconcileAsync(dbContext, scope.ServiceProvider.GetService<INotificationService>());
+                if (reconciled > 0)
+                    app.Logger.LogInformation("Applied {Count} open cross-matching line(s) to existing accounts.", reconciled);
             }
 
             // First in the pipeline so the headers reach static assets and error responses too.

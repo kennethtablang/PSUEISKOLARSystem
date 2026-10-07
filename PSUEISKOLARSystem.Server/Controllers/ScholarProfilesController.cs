@@ -484,10 +484,35 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 if (profile is null)
                     return BadRequest(new { message = "Your scholar profile has not been set up yet. Contact the scholarship office." });
 
+                /* Just upgraded from a grantee account: the profile still holds what they filled in
+                   as a grantee, so this once they also update their year level, course and
+                   Scholar's Data sheet. The scholarship itself came from the office's list. */
+                var confirming = profile.DetailsReviewPending;
+                if (confirming)
+                {
+                    if (dto.YearLevel is < 1 or > 6)
+                        return BadRequest(new { message = "Choose a year level from 1 to 6." });
+                    if (dto.ProgramId is not int programId)
+                        return BadRequest(new { message = "Choose your course." });
+                    if (profile.CampusId is int campusId && !await db.CampusPrograms.AnyAsync(cp => cp.CampusId == campusId && cp.ProgramId == programId))
+                        return BadRequest(new { message = "The selected course is not offered at your campus." });
+                    if (dto.Personal is null)
+                        return BadRequest(new { message = "Fill in your personal and family information." });
+                    if (dto.Personal.Validate() is string sheetError)
+                        return BadRequest(new { message = sheetError });
+
+                    profile.YearLevel = dto.YearLevel;
+                    profile.ProgramId = programId;
+                    dto.Personal.ApplyTo(profile.Personal);
+                    profile.DetailsReviewPending = false;
+                }
+
                 profile.ContactNumber = string.IsNullOrWhiteSpace(dto.ContactNumber) ? null : dto.ContactNumber.Trim();
                 profile.Address = string.IsNullOrWhiteSpace(dto.Address) ? null : dto.Address.Trim();
 
-                db.Audit(this, "UpdateScholarProfile", $"{user.FullName} updated their contact details");
+                db.Audit(this, "UpdateScholarProfile", confirming
+                    ? $"{user.FullName} updated their details after their grantee account became a scholar account"
+                    : $"{user.FullName} updated their contact details");
                 await db.SaveChangesAsync();
                 return NoContent();
             }
@@ -745,6 +770,8 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 BirthDate = sp.BirthDate,
                 Address = sp.Address,
                 EnrolledAt = sp.EnrolledAt,
+                ConvertedFromGranteeAt = sp.ConvertedFromGranteeAt,
+                DetailsReviewPending = sp.DetailsReviewPending,
                 Personal = PersonalDetailsDto.From(sp.Personal),
                 LatestGwa = latest?.Gwa,
                 MeetsRequirement = latest?.MeetsRequirement,

@@ -28,6 +28,12 @@ namespace PSUEISKOLARSystem.Server.DTOs.Scholars
         public string? Address { get; set; }
         public DateTime EnrolledAt { get; set; }
 
+        /// <summary>When the student's grantee account was upgraded into this scholar account, if it was.</summary>
+        public DateTime? ConvertedFromGranteeAt { get; set; }
+
+        /// <summary>Upgraded from a grantee account and not yet confirmed by the student.</summary>
+        public bool DetailsReviewPending { get; set; }
+
         public PersonalDetailsDto Personal { get; set; } = new();
 
         // Grants recorded against this scholar — a scholar can also be a grantee.

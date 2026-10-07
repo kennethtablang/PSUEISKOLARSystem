@@ -205,6 +205,11 @@ namespace PSUEISKOLARSystem.Server.Services
 
             if (matches.Count == 0)
             {
+                // A past grantee the office has since listed as a scholar: their grantee account
+                // already became their scholar account, so there is nothing to sign up for.
+                if (await UpgradedAccountMessageAsync(request.StudentId, request.FirstName, request.LastName, request.MiddleName) is { } upgraded)
+                    return new EligibilityCheckResultDto { Matched = false, Message = upgraded };
+
                 var sid = MasterList.NormalizeStudentId(request.StudentId);
                 var alreadyRegistered =
                     await dbContext.ScholarProfiles.AnyAsync(sp => sp.StudentId == sid) ||
@@ -238,6 +243,34 @@ namespace PSUEISKOLARSystem.Server.Services
                     .Select(m => m.GrantType!.Name)
                     .ToList(),
             };
+        }
+
+        /// <summary>
+        /// Null unless this student's grantee account was upgraded to a scholar account (see
+        /// <see cref="MasterList.UpgradeGranteeToScholarAsync"/>) — then what to tell them instead
+        /// of opening a second account. Found by student number or by unambiguous name.
+        /// </summary>
+        private async Task<string?> UpgradedAccountMessageAsync(string studentId, string firstName, string lastName, string? middleName)
+        {
+            var sid = MasterList.NormalizeStudentId(studentId);
+            var first = MasterList.NormalizeName(firstName);
+            var last = MasterList.NormalizeName(lastName);
+            var middle = MasterList.NormalizeOptionalName(middleName);
+
+            var upgraded = await dbContext.ScholarProfiles
+                .Where(sp => sp.ConvertedFromGranteeAt != null
+                          && (sp.StudentId == sid || (sp.User.FirstName == first && sp.User.LastName == last)))
+                .Select(sp => new { sp.StudentId, sp.User.Email, sp.User.MiddleName })
+                .ToListAsync();
+            var account = upgraded.FirstOrDefault(a => a.StudentId == sid)
+                ?? (upgraded.Count(a => a.MiddleName is null || middle is null || a.MiddleName == middle) == 1
+                    ? upgraded.First(a => a.MiddleName is null || middle is null || a.MiddleName == middle)
+                    : null);
+            if (account is null) return null;
+
+            return $"You already have an account. Your grantee account ({MaskEmail(account.Email)}) was upgraded to a " +
+                   "scholar account when the scholarship office listed you as a scholar. Sign in with the same email and " +
+                   "password — your one-time grants are still on your profile. Forgot the password? Use Forgot Password on the sign-in page.";
         }
 
         private const string NoMatchMessage =
@@ -274,20 +307,29 @@ namespace PSUEISKOLARSystem.Server.Services
                     .Any(m => m.Kind == EligibilityKinds.Scholar)))
                 return await ConvertGranteeToScholarAsync(existingGrantee, email, request);
 
-            if (await userManager.FindByEmailAsync(email) is not null)
-                throw new BadRequestException("An account with this email already exists.");
+            if (await userManager.FindByEmailAsync(email) is { } taken)
+                // Their own grantee account, already upgraded by the office's listing: say so.
+                throw new BadRequestException(
+                    (await dbContext.ScholarProfiles.AnyAsync(sp => sp.UserId == taken.Id && sp.ConvertedFromGranteeAt != null)
+                        ? await UpgradedAccountMessageAsync(studentId, request.FirstName, request.LastName, request.MiddleName)
+                        : null)
+                    ?? "An account with this email already exists.");
 
             // Profile checks run before the account exists, so a rejected profile never
             // leaves a half-registered user behind.
             var campus = await ValidateSheetAsync(request);
 
             if (await dbContext.ScholarProfiles.AnyAsync(sp => sp.StudentId == studentId))
-                throw new BadRequestException($"Student ID {studentId} is already registered to another account.");
+                throw new BadRequestException(
+                    await UpgradedAccountMessageAsync(studentId, request.FirstName, request.LastName, request.MiddleName)
+                    ?? $"Student ID {studentId} is already registered to another account.");
 
             var matches = await MasterList.FindMatchesAsync(
                 dbContext, studentId, request.FirstName, request.LastName, request.MiddleName, campus.Id);
             if (matches.Count == 0)
-                throw new BadRequestException(NoMatchMessage);
+                // Already upgraded from their grantee account by the office's listing: say so.
+                throw new BadRequestException(
+                    await UpgradedAccountMessageAsync(studentId, request.FirstName, request.LastName, request.MiddleName) ?? NoMatchMessage);
 
             var scholarLine = matches.FirstOrDefault(m => m.Kind == EligibilityKinds.Scholar);
             var granteeLines = matches.Where(m => m.Kind == EligibilityKinds.Grantee).ToList();

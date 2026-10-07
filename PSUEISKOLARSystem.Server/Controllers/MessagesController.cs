@@ -27,9 +27,11 @@ namespace PSUEISKOLARSystem.Server.Controllers
         private string UserId => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
         private bool IsStaff => User.IsInRole(UserRoles.Administrator) || User.IsInRole(UserRoles.ScholarshipCoordinator);
 
-        // GET /api/messages/threads[?scholarId=]
+        // GET /api/messages/threads[?scholarId=&campusId=]
+        // campusId lets the administrator read one campus's conversations at a time — the
+        // scholars of that campus and its coordinator. A coordinator is always held to their own.
         [HttpGet("threads")]
-        public async Task<IActionResult> Threads([FromQuery] string? scholarId)
+        public async Task<IActionResult> Threads([FromQuery] string? scholarId, [FromQuery] int? campusId)
         {
             var baseQuery = db.Messages.AsQueryable();
 
@@ -38,7 +40,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             else
             {
                 // A coordinator's inbox holds their own campus's scholars; the admin's holds all.
-                if (db.StudentsAt(await db.CampusOfAsync(User)) is { } atCampus)
+                if (db.StudentsAt(await db.CampusOfAsync(User) ?? campusId) is { } atCampus)
                     baseQuery = baseQuery.Where(m => atCampus.Contains(m.ScholarId));
                 if (!string.IsNullOrEmpty(scholarId))
                     baseQuery = baseQuery.Where(m => m.ScholarId == scholarId);
@@ -68,6 +70,19 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 .Include(m => m.Requirement)
                 .ToListAsync();
 
+            // The campus each student studies at, so the inbox can be read campus by campus.
+            var studentIds = grouped.Select(g => g.ScholarId).Distinct().ToList();
+            var campusOf = await db.ScholarProfiles
+                .Where(sp => studentIds.Contains(sp.UserId))
+                .Select(sp => new { sp.UserId, sp.CampusId, CampusName = sp.Campus != null ? sp.Campus.Name : null })
+                .Concat(db.GranteeProfiles
+                    .Where(gp => studentIds.Contains(gp.UserId))
+                    .Select(gp => new { gp.UserId, gp.CampusId, CampusName = gp.Campus != null ? gp.Campus.Name : null }))
+                .ToListAsync();
+            var campusByStudent = campusOf
+                .GroupBy(c => c.UserId)
+                .ToDictionary(g => g.Key, g => g.First());
+
             var lastByKey = lastMsgs
                 .GroupBy(m => new { m.ScholarId, m.RequirementId })
                 .ToDictionary(g => (g.Key.ScholarId, g.Key.RequirementId),
@@ -78,10 +93,13 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 .Select(g =>
                 {
                     lastByKey.TryGetValue((g.ScholarId, g.RequirementId), out var last);
+                    campusByStudent.TryGetValue(g.ScholarId, out var campus);
                     return new
                     {
                         g.ScholarId,
                         ScholarName = last?.Scholar.FullName,
+                        campus?.CampusId,
+                        campus?.CampusName,
                         g.RequirementId,
                         RequirementName = last?.Requirement != null ? last.Requirement.Name : null,
                         LastBody = last?.Body,

@@ -117,12 +117,14 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 scope ?? dto.CampusId, dto.ScholarshipTypeId, dto.GrantTypeId, dto.GrantAmount, dto.Notes, sex: dto.Sex, scope: scope);
             if (error is not null) return BadRequest(new { message = error });
 
-            var applied = await MasterList.ApplyToExistingAccountAsync(db, line!, ActorId);
+            var upgraded = new List<string>();
+            var applied = await MasterList.ApplyToExistingAccountAsync(db, line!, ActorId, upgraded);
             db.EligibilityRecords.Add(line!);
             db.Audit(this, "AddMasterListLine",
                 $"Added {line!.Kind} {line.LastName}, {line.FirstName} ({line.StudentId}) to the master list" +
                 (applied is null ? "" : $" — {applied}"));
             await db.SaveChangesAsync();
+            await MasterList.NotifyUpgradedAsync(db, notifications, upgraded);
             var conflict = await NotifyIfConflictAsync(line);
 
             return Ok(new { line.Id, applied, conflict });
@@ -157,11 +159,13 @@ namespace PSUEISKOLARSystem.Server.Controllers
             // A corrected line may now point at a student who already has an account.
             if (line.GrantTypeId is int grantTypeId)
                 line.GrantType = await db.GrantTypes.FindAsync(grantTypeId);
-            var applied = await MasterList.ApplyToExistingAccountAsync(db, line, ActorId);
+            var upgraded = new List<string>();
+            var applied = await MasterList.ApplyToExistingAccountAsync(db, line, ActorId, upgraded);
 
             db.Audit(this, "UpdateMasterListLine", $"Updated master-list line for {line.LastName}, {line.FirstName} ({line.StudentId})" +
                 (applied is null ? "" : $" — {applied}"));
             await db.SaveChangesAsync();
+            await MasterList.NotifyUpgradedAsync(db, notifications, upgraded);
             var conflict = await NotifyIfConflictAsync(line);
             return Ok(new { line.Id, applied, conflict });
         }
@@ -260,6 +264,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
             var results = new List<ImportRowResult>();
             var addedLines = new List<EligibilityRecord>();
+            var upgraded = new List<string>();
             var created = 0;
 
             for (int i = 0; i < rows.Count; i++)
@@ -333,7 +338,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     continue;
                 }
 
-                var applied = await MasterList.ApplyToExistingAccountAsync(db, line!, ActorId);
+                var applied = await MasterList.ApplyToExistingAccountAsync(db, line!, ActorId, upgraded);
                 db.EligibilityRecords.Add(line!);
                 addedLines.Add(line!);
                 created++;
@@ -344,6 +349,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             {
                 db.Audit(this, "ImportMasterList", $"Imported {created} master-list line(s) from {file.FileName}");
                 await db.SaveChangesAsync();
+                await MasterList.NotifyUpgradedAsync(db, notifications, upgraded);
                 foreach (var added in addedLines) await NotifyIfConflictAsync(added);
             }
 
