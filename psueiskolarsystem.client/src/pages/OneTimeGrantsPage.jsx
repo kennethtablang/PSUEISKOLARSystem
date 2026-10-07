@@ -32,7 +32,6 @@ export default function OneTimeGrantsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
-  const [typeFilter, setTypeFilter] = useState('');
   const [grantTypes, setGrantTypes] = useState([]);
   const [grantTypeFilter, setGrantTypeFilter] = useState('');
   const [recipientFilter, setRecipientFilter] = useState('');
@@ -49,7 +48,9 @@ export default function OneTimeGrantsPage() {
   }, [search]);
 
   useEffect(() => {
-    // The scholarship a grant is filed under — the scholar itself is searched on demand.
+    // The scholarship a grant is filed under, offered in the grant form — the scholar
+    // itself is searched on demand. The list is not filtered by scholarship: this page is
+    // about the grant types.
     getScholarshipTypes(token).then(setScholarshipTypes).catch(() => {});
     getGrantTypes(token).then(setGrantTypes).catch(() => {});
   }, [token]);
@@ -60,7 +61,6 @@ export default function OneTimeGrantsPage() {
     try {
       setData(await getOneTimeGrants(token, {
         status: status || undefined,
-        scholarshipTypeId: typeFilter || undefined,
         grantTypeId: grantTypeFilter || undefined,
         recipient: recipientFilter || undefined,
         search: debouncedSearch || undefined,
@@ -72,7 +72,7 @@ export default function OneTimeGrantsPage() {
     } finally {
       setLoading(false);
     }
-  }, [token, status, typeFilter, grantTypeFilter, recipientFilter, debouncedSearch, pageSize]);
+  }, [token, status, grantTypeFilter, recipientFilter, debouncedSearch, pageSize]);
 
   useEffect(() => { load(1); }, [load]);
 
@@ -141,10 +141,6 @@ export default function OneTimeGrantsPage() {
             <option value="">Scholars &amp; grantees</option>
             <option value="scholar">Scholars</option>
             <option value="grantee">Grantees</option>
-          </select>
-          <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} className="clay-input" style={{ ...ctlStyle, width: 'auto' }}>
-            <option value="">All scholarships</option>
-            {scholarshipTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
         </div>
 

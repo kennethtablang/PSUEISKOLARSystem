@@ -188,7 +188,9 @@ export default function ScholarshipTypeDetailPage() {
 /* ── Scholars under the type ─────────────────────────────────────── */
 
 function ScholarsTab({ typeId, campuses, programs }) {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  // A coordinator works within one campus, so they have no campus to pick.
+  const isAdmin = user?.role === 'Administrator';
   const toast = useToast();
   const navigate = useNavigate();
   const [filters, setFilters] = useState({ search: '', campusId: '', programId: '', yearLevel: '', sex: '', lifecycleStatus: '' });
@@ -218,10 +220,12 @@ function ScholarsTab({ typeId, campuses, programs }) {
           <option value="">Male &amp; Female</option>
           {SEX_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
-        <select value={filters.campusId} onChange={e => set('campusId', e.target.value)} className="clay-input" style={{ ...ctlStyle, width: 'auto' }} aria-label="Campus">
-          <option value="">All Campuses</option>
-          {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
+        {isAdmin && (
+          <select value={filters.campusId} onChange={e => set('campusId', e.target.value)} className="clay-input" style={{ ...ctlStyle, width: 'auto' }} aria-label="Campus">
+            <option value="">All Campuses</option>
+            {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        )}
         <select value={filters.programId} onChange={e => set('programId', e.target.value)} className="clay-input" style={{ ...ctlStyle, width: 'auto', maxWidth: 260 }} aria-label="Program">
           <option value="">All Programs</option>
           {programs.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}

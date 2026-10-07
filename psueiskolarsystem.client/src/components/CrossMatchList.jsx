@@ -24,7 +24,9 @@ import { ListChecks, Plus, Upload, Download, Pencil, Trash2, CheckCircle2, Clock
  * `{ kind: 'Grantee', grantTypeId, typeName, defaultAmount, isActive }`.
  */
 export default function CrossMatchList({ scope, campuses, canEdit = true }) {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  // A coordinator works within one campus, so they have no campus to pick.
+  const isAdmin = user?.role === 'Administrator';
   const toast = useToast();
   const confirm = useConfirm();
   const isScholar = scope.kind === 'Scholar';
@@ -215,10 +217,12 @@ export default function CrossMatchList({ scope, campuses, canEdit = true }) {
           <option value="claimed">Account created</option>
           <option value="unclaimed">Not yet signed up</option>
         </select>
-        <select value={filters.campusId} onChange={e => setFilter('campusId', e.target.value)} className="clay-input" style={{ ...ctlStyle, width: 'auto' }} aria-label="Campus">
-          <option value="">All Campuses</option>
-          {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
+        {isAdmin && (
+          <select value={filters.campusId} onChange={e => setFilter('campusId', e.target.value)} className="clay-input" style={{ ...ctlStyle, width: 'auto' }} aria-label="Campus">
+            <option value="">All Campuses</option>
+            {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        )}
       </div>
 
       <div className="rounded-2xl overflow-hidden" style={{ border: '1.5px solid var(--hairline)' }}>

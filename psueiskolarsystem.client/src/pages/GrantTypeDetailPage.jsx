@@ -126,7 +126,9 @@ export default function GrantTypeDetailPage() {
 }
 
 function GranteesTab({ type, campuses }) {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  // A coordinator works within one campus, so they have no campus to pick.
+  const isAdmin = user?.role === 'Administrator';
   const toast = useToast();
   const navigate = useNavigate();
   const [filters, setFilters] = useState({ search: '', campusId: '', yearLevel: '', sex: '', active: '' });
@@ -156,10 +158,12 @@ function GranteesTab({ type, campuses }) {
           <option value="">Male &amp; Female</option>
           {SEX_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
-        <select value={filters.campusId} onChange={e => set('campusId', e.target.value)} className="clay-input" style={{ ...ctlStyle, width: 'auto' }} aria-label="Campus">
-          <option value="">All Campuses</option>
-          {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
+        {isAdmin && (
+          <select value={filters.campusId} onChange={e => set('campusId', e.target.value)} className="clay-input" style={{ ...ctlStyle, width: 'auto' }} aria-label="Campus">
+            <option value="">All Campuses</option>
+            {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        )}
         <select value={filters.yearLevel} onChange={e => set('yearLevel', e.target.value)} className="clay-input" style={{ ...ctlStyle, width: 'auto' }} aria-label="Year level">
           <option value="">All Years</option>
           {[1, 2, 3, 4, 5, 6].map(y => <option key={y} value={y}>Year {y}</option>)}

@@ -4,6 +4,7 @@ import { resetPassword } from '../api/auth';
 import { useTitle } from '../hooks/useTitle';
 import { Lock, ShieldCheck, KeyRound, CheckCircle, ArrowLeft, ArrowRight, AlertTriangle } from 'lucide-react';
 import PasswordStrengthMeter, { getPasswordStrength } from '../components/PasswordStrengthMeter';
+import PasswordInput from '../components/PasswordInput';
 import Logo from '../components/Logo';
 
 const TIPS = [
@@ -370,9 +371,8 @@ export default function ResetPasswordPage() {
                       <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
                         <Lock size={15} style={{ color: 'var(--text-muted)' }} strokeWidth={2} />
                       </span>
-                      <input
+                      <PasswordInput
                         id="reset-new-password"
-                        type="password"
                         required
                         minLength={8}
                         value={newPassword}
@@ -397,9 +397,8 @@ export default function ResetPasswordPage() {
                       <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
                         <Lock size={15} style={{ color: 'var(--text-muted)' }} strokeWidth={2} />
                       </span>
-                      <input
+                      <PasswordInput
                         id="reset-confirm-password"
-                        type="password"
                         required
                         minLength={8}
                         value={confirmPassword}

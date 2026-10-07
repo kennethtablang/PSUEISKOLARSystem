@@ -100,7 +100,11 @@ namespace PSUEISKOLARSystem.Server.Controllers
         [AllowAnonymous]
         public async Task<IActionResult> GetScholarshipTypes()
         {
+            // A coordinator's pickers offer the general types and their own campus's only —
+            // another campus's types are seen by that campus and the administrator.
+            var campusId = await db.CampusOfAsync(User);
             var types = await db.ScholarshipTypes
+                .VisibleAt(campusId)
                 .Where(st => st.IsActive)
                 .OrderBy(st => st.Name)
                 .Select(st => new
@@ -113,6 +117,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     st.SlotLimit,
                     st.Frequency,
                     st.Amount,
+                    st.CampusId,
                     // Slot figures so a picker can show "3 of 50 left" and grey out full ones
                     // before the save is rejected.
                     ScholarCount = db.ScholarProfiles.Count(sp => sp.ScholarshipTypeId == st.Id),

@@ -46,7 +46,9 @@ const STATUS_LABEL = {
  */
 export default function ScholarshipReleasesPage() {
   useTitle('Scholarship Releases');
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  // A coordinator works within one campus, so they have no campus to pick.
+  const isAdmin = user?.role === 'Administrator';
   const toast = useToast();
   const confirm = useConfirm();
 
@@ -275,16 +277,18 @@ export default function ScholarshipReleasesPage() {
                 ))}
               </select>
 
-              <select
-                value={campusId}
-                onChange={e => setCampusId(e.target.value)}
-                className="clay-input"
-                style={{ ...ctlStyle, width: 'auto' }}
-                aria-label="Campus"
-              >
-                <option value="">All campuses</option>
-                {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              {isAdmin && (
+                <select
+                  value={campusId}
+                  onChange={e => setCampusId(e.target.value)}
+                  className="clay-input"
+                  style={{ ...ctlStyle, width: 'auto' }}
+                  aria-label="Campus"
+                >
+                  <option value="">All campuses</option>
+                  {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              )}
 
               <select
                 value={yearLevel}
@@ -510,7 +514,8 @@ export default function ScholarshipReleasesPage() {
           academicYear={academicYear.trim()}
           semester={semester}
           campuses={campuses}
-          initialCampusId={campusId}
+          pickCampus={isAdmin}
+          initialCampusId={isAdmin ? campusId : campuses[0]?.id}
           token={token}
           onClose={() => setScheduling(false)}
           onSaved={res => {
@@ -730,7 +735,7 @@ function ReleasePayoutModal({ row, typeName, token, onClose, onSaved }) {
  * not all receive on the same day, so the office picks the campuses receiving on this date;
  * every holder there is included unless the office narrows the list by hand.
  */
-function ScheduleReleaseModal({ type, academicYear, semester, campuses, initialCampusId, token, onClose, onSaved }) {
+function ScheduleReleaseModal({ type, academicYear, semester, campuses, pickCampus, initialCampusId, token, onClose, onSaved }) {
   const [campusIds, setCampusIds] = useState(() => new Set(initialCampusId ? [Number(initialCampusId)] : []));
   const [scheduledDate, setScheduledDate] = useState(localDateInput);
   const [amount, setAmount] = useState(type.amount != null ? String(type.amount) : '');
@@ -815,24 +820,27 @@ function ScheduleReleaseModal({ type, academicYear, semester, campuses, initialC
     >
       {error && <ErrorBox>{error}</ErrorBox>}
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <p className="block text-xs font-bold mb-1.5 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
-            Campuses receiving on this date
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {campuses.map(c => {
-              const on = campusIds.has(c.id);
-              return (
-                <button key={c.id} type="button" onClick={() => toggleCampus(c.id)}
-                  className="px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1"
-                  style={on ? { background: '#002570', color: '#fff' } : { background: 'var(--surface-inset)', color: 'var(--text)' }}
-                  aria-pressed={on}>
-                  {on && <Check size={11} strokeWidth={3} />}{c.name}
-                </button>
-              );
-            })}
+        {/* A coordinator schedules for their own campus only, which is chosen for them. */}
+        {pickCampus && (
+          <div>
+            <p className="block text-xs font-bold mb-1.5 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
+              Campuses receiving on this date
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {campuses.map(c => {
+                const on = campusIds.has(c.id);
+                return (
+                  <button key={c.id} type="button" onClick={() => toggleCampus(c.id)}
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1"
+                    style={on ? { background: '#002570', color: '#fff' } : { background: 'var(--surface-inset)', color: 'var(--text)' }}
+                    aria-pressed={on}>
+                    {on && <Check size={11} strokeWidth={3} />}{c.name}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
 
         {semester === BOTH_SEMESTERS && (
           <p className="text-xs rounded-xl px-3 py-2" style={{ background: 'var(--surface-inset)', color: 'var(--text)' }}>

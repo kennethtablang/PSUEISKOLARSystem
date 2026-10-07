@@ -27,8 +27,10 @@ const EMPTY_FILTERS = { search: '', kind: '', status: '', campusId: '', sex: '',
  */
 export default function MasterListPage() {
   useTitle('Master List');
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const toast = useToast();
+  // A coordinator works within one campus, so they have no campus to pick.
+  const isAdmin = user?.role === 'Administrator';
   const navigate = useNavigate();
 
   const [rows, setRows] = useState([]);
@@ -144,10 +146,12 @@ export default function MasterListPage() {
             <option value="claimed">Account created</option>
             <option value="unclaimed">Not yet signed up</option>
           </select>
-          <select value={filters.campusId} onChange={e => setFilter('campusId', e.target.value)} className="clay-input" style={{ ...ctlStyle, width: 'auto' }} aria-label="Campus">
-            <option value="">All Campuses</option>
-            {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
+          {isAdmin && (
+            <select value={filters.campusId} onChange={e => setFilter('campusId', e.target.value)} className="clay-input" style={{ ...ctlStyle, width: 'auto' }} aria-label="Campus">
+              <option value="">All Campuses</option>
+              {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          )}
           <select value={filters.scholarshipTypeId} onChange={e => setFilter('scholarshipTypeId', e.target.value)} className="clay-input" style={{ ...ctlStyle, width: 'auto' }} aria-label="Scholarship">
             <option value="">Any scholarship</option>
             {types.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}

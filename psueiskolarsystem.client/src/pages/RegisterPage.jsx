@@ -6,6 +6,7 @@ import { getCampuses } from '../api/campuses';
 import { useTitle } from '../hooks/useTitle';
 import { Lock, UserCheck, FolderUp, TrendingUp, Bell, ArrowRight, ArrowLeft, AlertTriangle, GraduationCap, CheckCircle2, XCircle, ShieldCheck, IdCard, BadgeCheck, RefreshCw } from 'lucide-react';
 import PasswordStrengthMeter, { getPasswordStrength } from '../components/PasswordStrengthMeter';
+import PasswordInput from '../components/PasswordInput';
 import Logo from '../components/Logo';
 import AddressPicker from '../components/AddressPicker';
 import {
@@ -524,7 +525,7 @@ export default function RegisterPage() {
                             <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
                               <Lock size={14} style={{ color: 'var(--text-muted)' }} strokeWidth={2} />
                             </span>
-                            <input id="reg-grantee-password" type="password" required value={form.password}
+                            <PasswordInput id="reg-grantee-password" required value={form.password}
                               onChange={e => set('password', e.target.value)} placeholder="The password you used as a grantee"
                               className="clay-input" style={{ paddingLeft: '36px' }} autoComplete="current-password" />
                           </div>
@@ -629,7 +630,7 @@ export default function RegisterPage() {
                         <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
                           <Lock size={14} style={{ color: 'var(--text-muted)' }} strokeWidth={2} />
                         </span>
-                        <input id="reg-password" type="password" required value={form.password}
+                        <PasswordInput id="reg-password" required value={form.password}
                           onChange={e => set('password', e.target.value)} placeholder="Create a strong password"
                           className="clay-input" style={{ paddingLeft: '36px' }} autoComplete="new-password" />
                       </div>
@@ -642,7 +643,7 @@ export default function RegisterPage() {
                         <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
                           <Lock size={14} style={{ color: 'var(--text-muted)' }} strokeWidth={2} />
                         </span>
-                        <input id="reg-confirm-password" type="password" required value={form.confirmPassword}
+                        <PasswordInput id="reg-confirm-password" required value={form.confirmPassword}
                           onChange={e => set('confirmPassword', e.target.value)} placeholder="Re-enter password"
                           className="clay-input" style={{ paddingLeft: '36px' }} autoComplete="new-password" />
                       </div>

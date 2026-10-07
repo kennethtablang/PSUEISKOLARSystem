@@ -5,6 +5,7 @@ import { login, forgotPassword, verifyTwoFactorLogin, resendVerification } from 
 import { useTitle } from '../hooks/useTitle';
 import { Mail, Lock, UserCheck, FolderUp, TrendingUp, Bell, ArrowRight, KeyRound, UserPlus, AlertTriangle, ShieldCheck, MailCheck } from 'lucide-react';
 import Modal from '../components/Modal';
+import PasswordInput from '../components/PasswordInput';
 import Logo from '../components/Logo';
 
 const HIGHLIGHTS = [
@@ -411,9 +412,8 @@ export default function LoginPage() {
                   <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
                     <Lock size={15} style={{ color: 'var(--text-muted)' }} strokeWidth={2} />
                   </span>
-                  <input
+                  <PasswordInput
                     id="signin-password"
-                    type="password"
                     required
                     value={password}
                     onChange={e => setPassword(e.target.value)}

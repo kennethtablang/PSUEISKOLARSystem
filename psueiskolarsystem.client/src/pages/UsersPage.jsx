@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import Layout from '../components/Layout';
+import PasswordInput from '../components/PasswordInput';
 import { useAuth } from '../context/AuthContext';
 import { getUsers, updateUser, setUserStatus, deleteUser, sendPasswordReset } from '../api/users';
 import { register } from '../api/auth';
@@ -509,7 +510,7 @@ function CreateUserModal({ campuses, token, onClose, onCreated }) {
           <FieldError>{emailError}</FieldError>
         </Field>
         <Field label="Password">
-          <input type="password" required minLength={8} value={form.password} onChange={e => set('password', e.target.value)} className="clay-input" placeholder="Min. 8 characters" />
+          <PasswordInput required minLength={8} value={form.password} onChange={e => set('password', e.target.value)} className="clay-input" placeholder="Min. 8 characters" />
           <PasswordStrengthMeter password={form.password} />
         </Field>
         <Field label="Role">

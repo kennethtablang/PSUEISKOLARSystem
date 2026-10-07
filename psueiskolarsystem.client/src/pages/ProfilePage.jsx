@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import Layout from '../components/Layout';
+import PasswordInput from '../components/PasswordInput';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/UIContext';
 import { updateProfile, enable2fa, disable2fa, updateNotificationPreferences, sendRecoveryEmailCode, confirmRecoveryEmail, removeRecoveryEmail } from '../api/auth';
@@ -390,9 +391,8 @@ export default function ProfilePage() {
                     <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
                       <Lock size={13} style={{ color: 'var(--text-muted)' }} strokeWidth={2} />
                     </span>
-                    <input
+                    <PasswordInput
                       id={`pw-${slug(label)}`}
-                      type="password"
                       required
                       value={val}
                       onChange={e => set(e.target.value)}
@@ -688,7 +688,7 @@ function RecoveryEmailCard({ token, user, onSession }) {
           </div>
           <div>
             <label htmlFor="recovery-password" className={label} style={{ color: 'var(--text)' }}>Current password</label>
-            <input id="recovery-password" type="password" required value={password} onChange={e => setPassword(e.target.value)}
+            <PasswordInput id="recovery-password" required value={password} onChange={e => setPassword(e.target.value)}
               className="clay-input" placeholder="••••••••" autoComplete="current-password" />
           </div>
           <div className="flex gap-2">
@@ -723,7 +723,7 @@ function RecoveryEmailCard({ token, user, onSession }) {
         <form onSubmit={handleRemove} className="space-y-3">
           <div>
             <label htmlFor="recovery-remove-password" className={label} style={{ color: 'var(--text)' }}>Current password</label>
-            <input id="recovery-remove-password" type="password" required value={password} onChange={e => setPassword(e.target.value)}
+            <PasswordInput id="recovery-remove-password" required value={password} onChange={e => setPassword(e.target.value)}
               className="clay-input" placeholder="••••••••" autoComplete="current-password" autoFocus />
           </div>
           <div className="flex gap-2">
@@ -792,9 +792,8 @@ function Disable2faModal({ token, onClose, onDisabled }) {
               <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
                 <Lock size={13} style={{ color: 'var(--text-muted)' }} strokeWidth={2} />
               </span>
-              <input
+              <PasswordInput
                 id="profile-current-password"
-                type="password"
                 required
                 value={password}
                 onChange={e => setPassword(e.target.value)}
