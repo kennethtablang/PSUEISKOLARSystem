@@ -13,7 +13,7 @@ import {
   FolderOpen, User, LogOut, BarChart2,
   ChevronLeft, Settings, Menu, X, Activity, Award, MessageSquare,
   Sun, Moon, Monitor, HelpCircle, UserCheck, Banknote, Wallet,
-  ListChecks, HandCoins, Gift, Building2,
+  ListChecks, HandCoins, Gift, Building2, QrCode,
 } from 'lucide-react';
 import { getPendingApprovalCount } from '../api/scholarApprovals';
 import { getPendingDocumentCount } from '../api/documents';
@@ -50,6 +50,7 @@ const navByRole = {
     { to: '/analytics',       label: 'Data Visualization', Icon: BarChart2 },
     { section: 'System' },
     { to: '/settings',      label: 'Settings',      Icon: Settings  },
+    { to: '/system-qr',     label: 'System QR Code', Icon: QrCode   },
     { to: '/activity-log',  label: 'Activity Log',  Icon: Activity  },
     { to: '/help',          label: 'Help & FAQ',    Icon: HelpCircle },
   ],

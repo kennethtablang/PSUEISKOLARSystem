@@ -7,8 +7,10 @@ import {
   getRequirements, uploadDocument, startDocumentReview,
 } from '../api/documents';
 import { getActiveSemester } from '../api/settings';
+import { getCampuses } from '../api/campuses';
+import { academicYearOptions } from '../constants/grants';
 import { useTitle } from '../hooks/useTitle';
-import { CheckCircle2, XCircle, FilePlus2, Download, Loader, ChevronDown, ChevronRight } from 'lucide-react';
+import { CheckCircle2, XCircle, FilePlus2, Download, Loader, ChevronDown, ChevronRight, Building2, Eye, ShieldAlert } from 'lucide-react';
 import DocumentPreview from '../components/DocumentPreview';
 import Pagination from '../components/Pagination';
 import { TableSkeleton, EmptyState } from '../components/ListState';
@@ -34,17 +36,26 @@ const awaiting = s => s.status === 'Pending' || s.status === 'UnderReview';
  * Document Review, one row per scholar. A scholar who handed in five documents used to appear
  * five times; now their name is listed once, and opening it shows every document they sent in
  * a single scrollable review — each with its own Verified / Rejected decision.
+ *
+ * Reviewing is the campus coordinator's job. The administrator reads the queue campus by
+ * campus (like Messages) to check where each campus stands, and only steps in to review when
+ * a campus's coordinator is too busy — opening a scholar is a status check until they choose to.
  */
 export default function DocumentReviewPage() {
   useTitle('Document Review');
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const isAdmin = user?.role === 'Administrator';
   const toast = useToast();
   const confirm = useConfirm();
+  const [campuses, setCampuses] = useState([]);
+  const [campusId, setCampusId] = useState('');   // '' = every campus (administrator)
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [reviewing, setReviewing] = useState(null);   // scholarId being reviewed
   const [filing, setFiling] = useState(false);
-  const [filters, setFilters] = useState({ status: 'Pending', academicYear: '', semester: '' });
+  // The administrator checks status, so they start on every status; a coordinator on the queue.
+  const defaultStatus = isAdmin ? '' : 'Pending';
+  const [filters, setFilters] = useState({ status: defaultStatus, academicYear: '', semester: '' });
   const [selected, setSelected] = useState(new Set()); // scholarIds
   const [bulkFeedback, setBulkFeedback] = useState('');
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -89,7 +100,8 @@ export default function DocumentReviewPage() {
       if (!g) {
         g = {
           scholarId: s.scholarId, scholarName: s.scholarName, scholarEmail: s.scholarEmail,
-          studentId: s.studentId, scholarshipTypeName: s.scholarshipTypeName, docs: [], latest: s.submittedAt,
+          studentId: s.studentId, scholarshipTypeName: s.scholarshipTypeName,
+          campusId: s.campusId, campusName: s.campusName, docs: [], latest: s.submittedAt,
         };
         map.set(s.scholarId, g);
       }
@@ -99,15 +111,31 @@ export default function DocumentReviewPage() {
     return [...map.values()].sort((a, b) => String(b.latest).localeCompare(String(a.latest)));
   }, [submissions]);
 
+  // Per campus: scholars listed and their documents by status, for the campus list.
+  const campusStats = useMemo(() => {
+    const stats = {};
+    for (const g of groups) {
+      const st = (stats[g.campusId ?? 'none'] ??= { scholars: 0, awaiting: 0, verified: 0, rejected: 0 });
+      st.scholars++;
+      for (const d of g.docs) {
+        if (awaiting(d)) st.awaiting++;
+        else if (d.status === 'Verified') st.verified++;
+        else if (d.status === 'Rejected' || d.status === 'Incomplete') st.rejected++;
+      }
+    }
+    return stats;
+  }, [groups]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return groups;
-    return groups.filter(g =>
+    const atCampus = campusId ? groups.filter(g => String(g.campusId) === String(campusId)) : groups;
+    if (!q) return atCampus;
+    return atCampus.filter(g =>
       (g.scholarName ?? '').toLowerCase().includes(q) ||
       (g.scholarEmail ?? '').toLowerCase().includes(q) ||
       (g.studentId ?? '').toLowerCase().includes(q) ||
       g.docs.some(d => (d.requirementName ?? '').toLowerCase().includes(q)));
-  }, [groups, search]);
+  }, [groups, search, campusId]);
 
   function toggle(id) {
     setSelected(prev => {
@@ -149,9 +177,10 @@ export default function DocumentReviewPage() {
   }
 
   useEffect(() => {
+    if (isAdmin) getCampuses(token).then(setCampuses).catch(() => { /* the list still works unfiltered */ });
     getActiveSemester(token)
       .then(data => {
-        const initialFilters = { status: 'Pending', academicYear: data.academicYear, semester: String(data.semester) };
+        const initialFilters = { status: defaultStatus, academicYear: data.academicYear, semester: String(data.semester) };
         setFilters(initialFilters);
         load(initialFilters);
       })
@@ -171,8 +200,12 @@ export default function DocumentReviewPage() {
   // A selection made under one search must not silently carry rows the next search hides.
   function changeSearch(v) { setSearch(v); setPage(1); setSelected(new Set()); }
   function changePageSize(v) { setPageSize(v); setPage(1); }
+  function pickCampus(id) { setCampusId(id); setPage(1); setSelected(new Set()); }
 
-  const waitingScholars = groups.filter(g => g.docs.some(awaiting)).length;
+  const inScope = campusId ? groups.filter(g => String(g.campusId) === String(campusId)) : groups;
+  const waitingScholars = inScope.filter(g => g.docs.some(awaiting)).length;
+  const selectedCampus = campuses.find(c => String(c.id) === String(campusId));
+  const totalAwaiting = groups.reduce((n, g) => n + g.docs.filter(awaiting).length, 0);
   const allVisibleSelected = filtered.length > 0 && filtered.every(g => selected.has(g.scholarId));
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const paged = filtered.slice((page - 1) * pageSize, page * pageSize);
@@ -185,7 +218,9 @@ export default function DocumentReviewPage() {
           <div>
             <h1 className="page-title">Document Review</h1>
             <p className="page-subtitle">
+              {isAdmin && (selectedCampus ? `${selectedCampus.name} · ` : 'All campuses · ')}
               {waitingScholars} scholar{waitingScholars !== 1 ? 's' : ''} with documents awaiting a decision
+              {isAdmin && ' — each campus coordinator reviews their own campus; open a scholar to check the status.'}
             </p>
             <span className="page-title-bar" />
           </div>
@@ -210,25 +245,70 @@ export default function DocumentReviewPage() {
             <option value="">All Statuses</option>
             {STATUSES.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
           </select>
-          <input
-            type="text"
-            value={filters.academicYear}
-            onChange={e => setFilter('academicYear', e.target.value)}
-            className="clay-input"
-            style={{ ...ctlStyle, width: 110 }}
-            placeholder="2025-2026"
-          />
+          <select value={filters.academicYear} onChange={e => setFilter('academicYear', e.target.value)}
+            className="clay-input" style={{ ...ctlStyle, width: 'auto' }} aria-label="Academic year">
+            <option value="">All Years</option>
+            {academicYearOptions(filters.academicYear).map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
           <select value={filters.semester} onChange={e => setFilter('semester', e.target.value)} className="clay-input" style={{ ...ctlStyle, width: 'auto' }}>
             <option value="">All Semesters</option>
             <option value="1">Semester 1</option>
             <option value="2">Semester 2</option>
           </select>
+          {/* Campus picker where the campus list does not fit. */}
+          {isAdmin && (
+            <select value={campusId} onChange={e => pickCampus(e.target.value)} aria-label="Campus"
+              className="clay-input lg:hidden" style={{ ...ctlStyle, width: 'auto' }}>
+              <option value="">All campuses ({groups.length})</option>
+              {campuses.map(c => (
+                <option key={c.id} value={c.id}>{c.name} ({campusStats[c.id]?.scholars ?? 0})</option>
+              ))}
+            </select>
+          )}
         </div>
 
         {error && <ErrorBox>{error}</ErrorBox>}
 
+        <div className={isAdmin ? 'lg:grid lg:grid-cols-[230px_minmax(0,1fr)] lg:gap-5 lg:items-start' : ''}>
+        {/* ── Campus list (administrator): one campus's documents at a time, like Messages ── */}
+        {isAdmin && (
+          <aside className="clay-card overflow-hidden hidden lg:block" aria-label="Campuses">
+            <div className="px-4 pt-4 pb-3" style={{ borderBottom: '1.5px solid var(--surface-inset)' }}>
+              <h2 className="text-sm font-black flex items-center gap-1.5" style={{ color: 'var(--text-strong)' }}>
+                <Building2 size={14} strokeWidth={2.4} /> Campuses
+              </h2>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Documents awaiting a decision</p>
+            </div>
+            <div className="py-1">
+              <CampusItem label="All campuses" active={!campusId} scholars={groups.length} awaiting={totalAwaiting} onClick={() => pickCampus('')} />
+              {campuses.map(c => (
+                <CampusItem key={c.id} label={c.name} active={String(c.id) === String(campusId)}
+                  scholars={campusStats[c.id]?.scholars ?? 0} awaiting={campusStats[c.id]?.awaiting ?? 0}
+                  onClick={() => pickCampus(String(c.id))} />
+              ))}
+            </div>
+          </aside>
+        )}
+        <div className="min-w-0">
+
+        {/* The chosen campus at a glance: where its documents stand. */}
+        {isAdmin && selectedCampus && (
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            {[
+              ['Awaiting decision', campusStats[selectedCampus.id]?.awaiting ?? 0, 'var(--tone-attention-fg)'],
+              ['Verified', campusStats[selectedCampus.id]?.verified ?? 0, 'var(--tone-ok-fg)'],
+              ['Rejected', campusStats[selectedCampus.id]?.rejected ?? 0, 'var(--tone-bad-fg)'],
+            ].map(([label, n, color]) => (
+              <div key={label} className="clay-card px-4 py-3">
+                <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{label}</p>
+                <p className="text-xl font-black" style={{ color }}>{n}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Bulk action bar */}
-        {selected.size > 0 && (
+        {!isAdmin && selected.size > 0 && (
           <div className="clay-card p-3 mb-4 flex items-center gap-3 flex-wrap" style={{ background: 'var(--accent-soft-bg)', border: '1.5px solid var(--accent-soft-border)' }}>
             <span className="text-sm font-bold px-2" style={{ color: 'var(--accent)' }}>
               {selected.size} scholar{selected.size === 1 ? '' : 's'} · {selectedDocIds.length} document{selectedDocIds.length === 1 ? '' : 's'} awaiting
@@ -258,17 +338,21 @@ export default function DocumentReviewPage() {
           {loading ? (
             <TableSkeleton />
           ) : filtered.length === 0 ? (
-            <EmptyState title="No submissions found" message="No submissions match the current filters." />
+            <EmptyState title="No submissions found" message={selectedCampus
+              ? `No submissions from ${selectedCampus.name} match the current filters.`
+              : 'No submissions match the current filters.'} />
           ) : (
             <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-sm">
               <thead className="clay-table-head">
                 <tr>
-                  <th className="px-4 py-3">
-                    <input type="checkbox" checked={allVisibleSelected}
-                      onChange={toggleAll} aria-label="Select all shown scholars"
-                      style={{ width: 16, height: 16, accentColor: 'var(--accent)' }} />
-                  </th>
-                  {['Scholar', 'Scholarship', 'Documents', 'Status', 'Last Submitted', ''].map(h => (
+                  {!isAdmin && (
+                    <th className="px-4 py-3">
+                      <input type="checkbox" checked={allVisibleSelected}
+                        onChange={toggleAll} aria-label="Select all shown scholars"
+                        style={{ width: 16, height: 16, accentColor: 'var(--accent)' }} />
+                    </th>
+                  )}
+                  {['Scholar', ...(isAdmin && !campusId ? ['Campus'] : []), 'Scholarship', 'Documents', 'Status', 'Last Submitted', ''].map(h => (
                     <th key={h} className="text-left px-5 py-3 text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{h}</th>
                   ))}
                 </tr>
@@ -279,17 +363,22 @@ export default function DocumentReviewPage() {
                   const counts = g.docs.reduce((acc, d) => ({ ...acc, [d.status]: (acc[d.status] ?? 0) + 1 }), {});
                   return (
                     <tr key={g.scholarId} className="clay-table-row">
-                      <td className="px-4 py-3.5">
-                        <input type="checkbox" checked={selected.has(g.scholarId)} onChange={() => toggle(g.scholarId)}
-                          aria-label={`Select ${g.scholarName}`}
-                          style={{ width: 16, height: 16, accentColor: 'var(--accent)' }} />
-                      </td>
+                      {!isAdmin && (
+                        <td className="px-4 py-3.5">
+                          <input type="checkbox" checked={selected.has(g.scholarId)} onChange={() => toggle(g.scholarId)}
+                            aria-label={`Select ${g.scholarName}`}
+                            style={{ width: 16, height: 16, accentColor: 'var(--accent)' }} />
+                        </td>
+                      )}
                       <td className="px-5 py-3.5">
                         <button onClick={() => setReviewing(g.scholarId)} className="font-semibold hover:underline text-left" style={{ color: 'var(--text-strong)' }}>
                           {g.scholarName}
                         </button>
                         <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{g.studentId ? `${g.studentId} · ` : ''}{g.scholarEmail}</p>
                       </td>
+                      {isAdmin && !campusId && (
+                        <td className="px-5 py-3.5 text-xs" style={{ color: 'var(--text)' }}>{g.campusName ?? '—'}</td>
+                      )}
                       <td className="px-5 py-3.5 text-xs" style={{ color: 'var(--text)' }}>{g.scholarshipTypeName ?? '—'}</td>
                       <td className="px-5 py-3.5" style={{ color: 'var(--text)' }}>
                         <p className="font-semibold">{g.docs.length} document{g.docs.length === 1 ? '' : 's'}</p>
@@ -313,7 +402,7 @@ export default function DocumentReviewPage() {
                           className="text-xs font-bold hover:underline"
                           style={{ color: waiting ? 'var(--accent)' : 'var(--text-muted)' }}
                         >
-                          {waiting ? `Review ${waiting}` : 'View'}
+                          {isAdmin ? 'Check status' : waiting ? `Review ${waiting}` : 'View'}
                         </button>
                       </td>
                     </tr>
@@ -335,12 +424,15 @@ export default function DocumentReviewPage() {
             label="scholars"
           />
         )}
+        </div>
+        </div>
       </div>
 
       {reviewingGroup && (
         <ScholarReviewModal
           group={reviewingGroup}
           token={token}
+          statusOnly={isAdmin}
           onClose={() => { setReviewing(null); load(); }}
           onSaved={count => { setReviewing(null); toast(`${count} decision${count === 1 ? '' : 's'} saved — the scholar has been notified.`, 'success'); load(); }}
         />
@@ -479,9 +571,13 @@ function FileForScholarModal({ token, defaultPeriod, onClose, onSaved }) {
  * and reject others in a single pass. Opening it moves the scholar's submitted documents to
  * Under Review, which is what their tracker shows.
  */
-function ScholarReviewModal({ group, token, onClose, onSaved }) {
+function ScholarReviewModal({ group, token, statusOnly, onClose, onSaved }) {
   // { [submissionId]: { status, feedback } } — only documents the reviewer has decided on.
   const [decisions, setDecisions] = useState({});
+  // The administrator opens a scholar to check status; deciding is the coordinator's, unless
+  // the administrator explicitly steps in for a busy one.
+  const [steppingIn, setSteppingIn] = useState(false);
+  const readOnly = statusOnly && !steppingIn;
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -489,12 +585,13 @@ function ScholarReviewModal({ group, token, onClose, onSaved }) {
     Number(awaiting(b)) - Number(awaiting(a)) || String(a.requirementName).localeCompare(String(b.requirementName))),
   [group.docs]);
 
-  // Opening the review is the office "looking at" the documents.
+  // Opening the review is the office "looking at" the documents — but a status check isn't.
   useEffect(() => {
+    if (readOnly) return;
     const ids = group.docs.filter(d => d.status === 'Pending').map(d => d.id);
     if (ids.length) startDocumentReview(ids, token).catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [readOnly]);
 
   const decided = Object.entries(decisions).filter(([, d]) => d?.status);
 
@@ -524,13 +621,28 @@ function ScholarReviewModal({ group, token, onClose, onSaved }) {
 
   return (
     <Modal
-      title="Review Documents"
-      subtitle={`${group.scholarName}${group.studentId ? ` · ${group.studentId}` : ''}${group.scholarshipTypeName ? ` · ${group.scholarshipTypeName}` : ''} · ${docs.length} document${docs.length === 1 ? '' : 's'}`}
+      title={readOnly ? 'Document Status' : 'Review Documents'}
+      subtitle={`${group.scholarName}${group.studentId ? ` · ${group.studentId}` : ''}${statusOnly && group.campusName ? ` · ${group.campusName}` : ''}${group.scholarshipTypeName ? ` · ${group.scholarshipTypeName}` : ''} · ${docs.length} document${docs.length === 1 ? '' : 's'}`}
       onClose={onClose}
       width={1080}
       dismissible={!submitting}
     >
       {error && <ErrorBox>{error}</ErrorBox>}
+      {statusOnly && (
+        <div className="rounded-2xl px-4 py-3 mb-4 flex items-center gap-3 flex-wrap"
+          style={{ background: readOnly ? 'var(--surface-inset)' : 'var(--tone-attention-bg)', border: '1.5px solid var(--hairline)' }}>
+          {readOnly ? <Eye size={16} style={{ color: 'var(--text-muted)' }} /> : <ShieldAlert size={16} style={{ color: 'var(--tone-attention-fg)' }} />}
+          <p className="text-xs flex-1 min-w-[200px]" style={{ color: readOnly ? 'var(--text)' : 'var(--tone-attention-fg)' }}>
+            {readOnly
+              ? `Status check only — ${group.campusName ? `the ${group.campusName} coordinator` : 'the campus coordinator'} reviews these documents. Step in only when the coordinator is too busy.`
+              : 'You are reviewing in place of the campus coordinator. Your decisions are recorded under your name.'}
+          </p>
+          <button type="button" onClick={() => setSteppingIn(v => !v)} disabled={submitting}
+            className="clay-btn clay-btn-ghost px-3 py-1.5 text-xs font-bold">
+            {readOnly ? 'Review for the coordinator' : 'Back to status check'}
+          </button>
+        </div>
+      )}
       <div className="space-y-4 overflow-y-auto pr-1" style={{ maxHeight: 'min(70vh, 820px)' }}>
         {docs.map((d, i) => (
           <DocReviewCard
@@ -538,6 +650,7 @@ function ScholarReviewModal({ group, token, onClose, onSaved }) {
             index={i + 1}
             submission={d}
             token={token}
+            readOnly={readOnly}
             decision={decisions[d.id]}
             onDecision={patch => setDecision(d.id, patch)}
           />
@@ -545,26 +658,35 @@ function ScholarReviewModal({ group, token, onClose, onSaved }) {
       </div>
       <div className="flex items-center gap-3 pt-4 mt-4 flex-wrap" style={{ borderTop: '1.5px solid var(--hairline)' }}>
         <p className="text-xs flex-1" style={{ color: 'var(--text-muted)' }}>
-          {decided.length === 0
+          {readOnly ? 'Each document shows its current status and history.' : decided.length === 0
             ? 'Choose Verified or Rejected on each document you have checked.'
             : `${decided.length} decision${decided.length === 1 ? '' : 's'} ready to save.`}
         </p>
         <button type="button" onClick={onClose} disabled={submitting} className="clay-btn clay-btn-ghost px-5 py-2.5 text-sm">Close</button>
-        <button type="button" onClick={handleSave} disabled={submitting || decided.length === 0}
-          className="clay-btn clay-btn-primary px-5 py-2.5 text-sm" style={{ opacity: submitting || decided.length === 0 ? 0.6 : 1 }}>
-          {submitting ? 'Saving…' : `Save ${decided.length || ''} Decision${decided.length === 1 ? '' : 's'}`}
-        </button>
+        {!readOnly && (
+          <button type="button" onClick={handleSave} disabled={submitting || decided.length === 0}
+            className="clay-btn clay-btn-primary px-5 py-2.5 text-sm" style={{ opacity: submitting || decided.length === 0 ? 0.6 : 1 }}>
+            {submitting ? 'Saving…' : `Save ${decided.length || ''} Decision${decided.length === 1 ? '' : 's'}`}
+          </button>
+        )}
       </div>
     </Modal>
   );
 }
 
-function DocReviewCard({ index, submission, token, decision, onDecision }) {
+function DocReviewCard({ index, submission, token, readOnly, decision, onDecision }) {
   const toast = useToast();
   const [preview, setPreview] = useState(null);   // { url, contentType, fileName }
   const [previewError, setPreviewError] = useState('');
   const [history, setHistory] = useState(null);
-  const [showHistory, setShowHistory] = useState(false);
+  // A status check shows the history straight away — it's what the administrator came for.
+  const [showHistory, setShowHistory] = useState(readOnly);
+
+  useEffect(() => {
+    if (!readOnly || history) return;
+    getSubmissionHistory(submission.id, token).then(setHistory).catch(() => setHistory([]));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [readOnly]);
   const status = decision?.status ?? '';
   const isRejected = status === 'Rejected';
 
@@ -604,7 +726,7 @@ function DocReviewCard({ index, submission, token, decision, onDecision }) {
           </p>
         </div>
         <div className="flex items-center gap-3 shrink-0">
-          <StatusBadge status={submission.status === 'Pending' ? 'UnderReview' : submission.status} />
+          <StatusBadge status={submission.status === 'Pending' && !readOnly ? 'UnderReview' : submission.status} />
           <button
             type="button"
             onClick={() => downloadFile(submission.id, submission.fileName, token).catch(e => toast(e.message, 'error'))}
@@ -633,6 +755,16 @@ function DocReviewCard({ index, submission, token, decision, onDecision }) {
         </div>
 
         <div className="space-y-3 min-w-0">
+          {readOnly ? (
+            <div className="text-xs space-y-1" style={{ color: 'var(--text)' }}>
+              <p>
+                {submission.reviewedBy
+                  ? <>Last decided by <strong>{submission.reviewedBy}</strong>{submission.reviewedAt && ` on ${new Date(submission.reviewedAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}`}.</>
+                  : 'No decision yet.'}
+              </p>
+              {submission.feedbackNote && <p style={{ color: 'var(--text-muted)' }}>Feedback: {submission.feedbackNote}</p>}
+            </div>
+          ) : (<>
           <fieldset style={{ border: 'none', padding: 0, margin: 0 }}>
             <legend className="block text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text)' }}>
               Decision
@@ -672,6 +804,7 @@ function DocReviewCard({ index, submission, token, decision, onDecision }) {
               className="clay-input"
             />
           </Field>
+          </>)}
 
           <button type="button" onClick={toggleHistory} className="text-xs font-semibold flex items-center gap-1 hover:underline"
             style={{ color: 'var(--text-muted)' }}>
@@ -705,5 +838,27 @@ function DocReviewCard({ index, submission, token, decision, onDecision }) {
         </div>
       </div>
     </section>
+  );
+}
+
+function CampusItem({ label, active, scholars, awaiting, onClick }) {
+  return (
+    <button onClick={onClick} aria-pressed={active}
+      className="w-full text-left px-4 py-2.5 flex items-center justify-between gap-2"
+      style={{
+        background: active ? 'rgba(0,48,135,0.08)' : 'transparent',
+        borderLeft: active ? '3px solid var(--accent)' : '3px solid transparent',
+      }}>
+      <span className="text-sm truncate" style={{ color: 'var(--text-strong)', fontWeight: active ? 800 : 600 }}>{label}</span>
+      <span className="flex items-center gap-1.5 shrink-0">
+        <span className="text-xs" style={{ color: 'var(--text-faint)' }} title="Scholars">{scholars}</span>
+        {awaiting > 0 && (
+          <span className="text-xs font-bold px-1.5 rounded-full" title="Documents awaiting a decision"
+            style={{ background: 'var(--tone-attention-bg)', color: 'var(--tone-attention-fg)', minWidth: 18, textAlign: 'center' }}>
+            {awaiting}
+          </span>
+        )}
+      </span>
+    </button>
   );
 }

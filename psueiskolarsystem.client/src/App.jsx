@@ -41,6 +41,7 @@ import GrantTypesPage from './pages/GrantTypesPage';
 import CampusesPage from './pages/CampusesPage';
 import GranteesPage from './pages/GranteesPage';
 import GranteeProfilePage from './pages/GranteeProfilePage';
+import SystemQrPage from './pages/SystemQrPage';
 
 const admin = ['Administrator'];
 const adminCoord = ['Administrator', 'ScholarshipCoordinator'];
@@ -93,6 +94,7 @@ export default function App() {
           <Route path="/scholarship-types/:id" element={<ProtectedRoute roles={adminCoord}><ScholarshipTypeDetailPage /></ProtectedRoute>} />
           <Route path="/grant-types/:id" element={<ProtectedRoute roles={adminCoord}><GrantTypeDetailPage /></ProtectedRoute>} />
           <Route path="/settings"      element={<ProtectedRoute roles={admin}><SettingsPage /></ProtectedRoute>} />
+          <Route path="/system-qr"     element={<ProtectedRoute roles={admin}><SystemQrPage /></ProtectedRoute>} />
           <Route path="/activity-log" element={<ProtectedRoute roles={admin}><ActivityLogPage /></ProtectedRoute>} />
           <Route path="/announcements" element={<ProtectedRoute roles={adminCoord}><AnnouncementsPage /></ProtectedRoute>} />
           <Route path="/analytics"    element={<ProtectedRoute roles={adminCoord}><AnalyticsPage /></ProtectedRoute>} />

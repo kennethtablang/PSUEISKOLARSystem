@@ -44,6 +44,20 @@ namespace PSUEISKOLARSystem.Server.Data
             campusId is int c ? q.Where(t => t.CampusId == null || t.CampusId == c) : q;
 
         /// <summary>
+        /// Grant types that apply at the campus: every general type plus the campus's own.
+        /// Every type when <paramref name="campusId"/> is null.
+        /// </summary>
+        public static IQueryable<GrantType> VisibleAt(this IQueryable<GrantType> q, int? campusId) =>
+            campusId is int c ? q.Where(t => t.CampusId == null || t.CampusId == c) : q;
+
+        /// <summary>
+        /// Whether a staff member limited to <paramref name="campusId"/> may change the grant type.
+        /// General types belong to the administrator; a campus type to that campus's coordinator.
+        /// </summary>
+        public static bool CanManage(this GrantType type, ClaimsPrincipal user, int? campusId) =>
+            user.IsInRole(UserRoles.Administrator) || (campusId is int c && type.CampusId == c);
+
+        /// <summary>
         /// Whether a staff member limited to <paramref name="campusId"/> may change the type.
         /// General types belong to the administrator; a campus type to that campus's coordinator.
         /// </summary>

@@ -50,8 +50,9 @@ function Dot({ state }) {
  * @param {string|null} status   the document's status, or null when nothing was submitted
  * @param {boolean}     missed   the deadline passed with nothing submitted (upload locked)
  * @param {boolean}     compact  smaller labels, for dense lists
+ * @param {object}      dates    optional { [step label]: ISO date } shown under each reached step
  */
-export default function DocumentTracker({ status, missed = false, compact = false }) {
+export default function DocumentTracker({ status, missed = false, compact = false, dates }) {
   const steps = stepsFor(status, missed);
   const resubmit = status === 'Rejected' || status === 'Incomplete';
   return (
@@ -68,6 +69,11 @@ export default function DocumentTracker({ status, missed = false, compact = fals
                 {resubmit && s.label === 'Need to resubmit' && <RotateCcw size={10} strokeWidth={2.6} />}
                 {s.label}
               </span>
+              {dates?.[s.label] && (
+                <span className="text-[10px] mt-0.5 text-center leading-tight" style={{ color: 'var(--text-muted)' }}>
+                  {new Date(dates[s.label]).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </span>
+              )}
             </div>
             {i < steps.length - 1 && (
               <span aria-hidden="true" className="flex-1 mt-[10px] mx-1" style={{

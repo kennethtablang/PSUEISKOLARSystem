@@ -49,7 +49,8 @@ export default function ScholarshipTypesPage() {
     ? types.filter(t =>
         t.name.toLowerCase().includes(q) ||
         (t.category ?? '').toLowerCase().includes(q) ||
-        (t.campusName ?? '').toLowerCase().includes(q) ||
+        // Campus-only types match their campus; general ones match "all campuses".
+        (t.campusName ?? 'All campuses').toLowerCase().includes(q) ||
         (t.description ?? '').toLowerCase().includes(q))
     : types;
   const displayed = category ? searched.filter(t => t.category === category) : searched;
@@ -124,8 +125,9 @@ export default function ScholarshipTypesPage() {
             value={search}
             onChange={e => setSearch(e.target.value)}
             className="clay-input"
-            style={{ height: 36, minHeight: 36, fontSize: 12.5, padding: '0 10px', width: '100%', maxWidth: 280 }}
-            placeholder="Search scholarship types…"
+            style={{ height: 36, minHeight: 36, fontSize: 12.5, padding: '0 10px', width: '100%', maxWidth: 320 }}
+            placeholder="Search scholarship types and campus…"
+            aria-label="Search scholarship types and campus"
           />
           {/* Government / Private: the two kinds of scholarship the office manages. */}
           <div className="flex gap-1" role="group" aria-label="Category">

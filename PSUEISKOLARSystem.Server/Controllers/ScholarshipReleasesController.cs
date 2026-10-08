@@ -589,7 +589,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     "Scholarship release scheduled",
                     $"Your {type.Name} for {PeriodLabel(year, dto.Semester)} (PHP {amount:N2}{each}) is scheduled for release on {scheduledDate:MMMM d, yyyy}.",
                     NotificationCategories.Account,
-                    "/my-profile");
+                    "/dashboard");
 
             _ = notifications.BroadcastAsync("AnalyticsChanged");
             return Ok(new { created, rescheduled, skipped, total = selected.Count, amount });
@@ -652,7 +652,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     "Scholarship released",
                     $"Your {r.ScholarshipType.Name} for {PeriodLabel(r.AcademicYear, r.Semester)} (PHP {r.Amount:N2}) has been released.",
                     NotificationCategories.Account,
-                    "/my-profile");
+                    "/dashboard");
 
             _ = notifications.BroadcastAsync("AnalyticsChanged");
             return Ok(new { released = releases.Count, exempted = exempted.Count, skipped = ids.Count - releases.Count });
@@ -696,7 +696,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 $"Your {release.ScholarshipType.Name} for {period} (PHP {release.Amount:N2}) has been released" +
                 (string.IsNullOrWhiteSpace(release.ReferenceNo) ? "." : $" under reference {release.ReferenceNo}."),
                 NotificationCategories.Account,
-                "/my-profile");
+                "/dashboard");
 
             _ = notifications.BroadcastAsync("AnalyticsChanged");
             return Ok(new { release.Status, release.ReleasedAt, release.ReferenceNo });

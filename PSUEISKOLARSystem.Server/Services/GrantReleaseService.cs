@@ -28,8 +28,8 @@ namespace PSUEISKOLARSystem.Server.Services
         /// <summary>Today's date in the Philippines, which is what "release day" means to the office.</summary>
         public static DateTime PhilippineToday() => DateTime.UtcNow.Add(PhilippineOffset).Date;
 
-        /// <summary>Where a recipient sees their grants: grantees and scholars have different pages.</summary>
-        public static string GrantsLink(bool isGrantee) => isGrantee ? "/my-grants" : "/my-profile";
+        /// <summary>Where a recipient sees their grants: grantees on My Grants, scholars on their dashboard.</summary>
+        public static string GrantsLink(bool isGrantee) => isGrantee ? "/my-grants" : "/dashboard";
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {

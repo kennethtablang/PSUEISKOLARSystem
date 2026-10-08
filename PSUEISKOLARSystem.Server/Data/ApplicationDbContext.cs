@@ -457,6 +457,13 @@ namespace PSUEISKOLARSystem.Server.Data
                 .Property(t => t.DefaultAmount)
                 .HasPrecision(12, 2);
 
+            // Campus-only grant types (revision 8), restricted like campus scholarship types.
+            builder.Entity<GrantType>()
+                .HasOne(t => t.Campus)
+                .WithMany()
+                .HasForeignKey(t => t.CampusId)
+                .OnDelete(DeleteBehavior.Restrict);
+
             // Restrict: a type that has paid out grants is part of the disbursement record.
             builder.Entity<OneTimeGrant>()
                 .HasOne(g => g.GrantType)

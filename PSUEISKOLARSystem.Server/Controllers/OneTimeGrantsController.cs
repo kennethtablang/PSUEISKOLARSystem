@@ -368,7 +368,8 @@ namespace PSUEISKOLARSystem.Server.Controllers
         private async Task<string?> CheckGrantTypeAsync(int? grantTypeId)
         {
             if (grantTypeId is not int id) return null;
-            var type = await db.GrantTypes.FindAsync(id);
+            // Another campus's own grant type is not one a coordinator can record against.
+            var type = await db.GrantTypes.VisibleAt(await db.CampusOfAsync(User)).FirstOrDefaultAsync(t => t.Id == id);
             if (type is null) return "Grant type not found.";
             if (!type.IsActive) return $"'{type.Name}' is deactivated and no longer takes new grants.";
             return null;

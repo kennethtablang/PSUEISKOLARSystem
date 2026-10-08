@@ -99,6 +99,10 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     StudentId = db.ScholarProfiles.Where(sp => sp.UserId == ds.ScholarId).Select(sp => sp.StudentId).FirstOrDefault(),
                     ScholarshipTypeName = db.ScholarProfiles.Where(sp => sp.UserId == ds.ScholarId)
                         .Select(sp => sp.ScholarshipType != null ? sp.ScholarshipType.Name : null).FirstOrDefault(),
+                    // The scholar's campus, so the administrator can check documents campus by campus.
+                    CampusId = db.ScholarProfiles.Where(sp => sp.UserId == ds.ScholarId).Select(sp => sp.CampusId).FirstOrDefault(),
+                    CampusName = db.ScholarProfiles.Where(sp => sp.UserId == ds.ScholarId)
+                        .Select(sp => sp.Campus != null ? sp.Campus.Name : null).FirstOrDefault(),
                     // On-time / late vs the requirement's deadline for this period (FR-16.3)
                     DueDate = db.SubmissionDeadlines
                         .Where(dl => dl.RequirementId == ds.RequirementId &&

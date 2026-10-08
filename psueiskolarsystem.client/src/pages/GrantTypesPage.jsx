@@ -11,7 +11,7 @@ import { useTitle } from '../hooks/useTitle';
 import {
   getGrantTypes, createGrantType, updateGrantType, activateGrantType, deleteGrantType,
 } from '../api/grantTypes';
-import { Gift, Plus, Pencil, RotateCcw, Trash2, CalendarX2, ChevronRight } from 'lucide-react';
+import { Gift, Plus, Pencil, RotateCcw, Trash2, CalendarX2, ChevronRight, MapPin, Globe2 } from 'lucide-react';
 
 const peso = v => `₱${Number(v || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const EMPTY = { name: '', description: '', sponsor: '', defaultAmount: '', scheduledDate: '' };
@@ -29,6 +29,9 @@ const todayIso = () => {
  * waiting on one. Setting the date announces it to the grantees; once the release day is over
  * the type and its grantee accounts are deactivated automatically (their data stays for the
  * analytics), so there is no deactivate button — only reactivate.
+ *
+ * A coordinator may add grant types of their own, used only at their campus (like a campus-only
+ * scholarship type); they manage those, and see the administrator's general ones read-only.
  */
 export default function GrantTypesPage() {
   useTitle('Grant Types');
@@ -36,6 +39,10 @@ export default function GrantTypesPage() {
   const toast = useToast();
   const confirm = useConfirm();
   const isAdmin = user?.role === 'Administrator';
+  // Coordinators may add grant types too — those are exclusive to their campus.
+  const canCreate = isAdmin || (user?.role === 'ScholarshipCoordinator' && user?.campusId != null);
+  // Older servers don't send canManage; then only the administrator manages.
+  const canManage = t => t.canManage ?? isAdmin;
 
   const [types, setTypes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -116,13 +123,13 @@ export default function GrantTypesPage() {
           <div>
             <h1 className="page-title">Grant Types</h1>
             <p className="page-subtitle">
-              One-time grants the office gives out. The release date can be set later — once it is, the grantees are
+              One-time grants the office gives out{isAdmin ? '' : ', for every campus plus the ones exclusive to your campus'}. The release date can be set later — once it is, the grantees are
               told automatically, every pending grant is marked released on that day, and the grantee accounts under the
               type are deactivated automatically when the release day is over. Open a grant type to see its grantees.
             </p>
             <span className="page-title-bar" />
           </div>
-          {isAdmin && (
+          {canCreate && (
             <button onClick={() => { setFormError(''); setEditing({ ...EMPTY }); }}
               className="clay-btn clay-btn-primary text-sm px-4 flex items-center gap-2">
               <Plus size={15} /> Add Grant Type
@@ -159,9 +166,20 @@ export default function GrantTypesPage() {
                 {types.map(t => (
                   <tr key={t.id} className="clay-table-row" style={{ opacity: t.isActive ? 1 : 0.7 }}>
                     <td className="px-5 py-3">
-                      <Link to={`/grant-types/${t.id}`} className="font-semibold hover:underline inline-flex items-center gap-1" style={{ color: 'var(--text-strong)' }}>
-                        {t.name} <ChevronRight size={13} style={{ color: 'var(--text-muted)' }} />
-                      </Link>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Link to={`/grant-types/${t.id}`} className="font-semibold hover:underline inline-flex items-center gap-1" style={{ color: 'var(--text-strong)' }}>
+                          {t.name} <ChevronRight size={13} style={{ color: 'var(--text-muted)' }} />
+                        </Link>
+                        {t.campusName ? (
+                          <span className="status-badge tone-warn inline-flex items-center gap-1" title="Only this campus uses this grant type">
+                            <MapPin size={11} /> {t.campusName}
+                          </span>
+                        ) : (
+                          <span className="status-badge tone-neutral inline-flex items-center gap-1" title="Every campus uses this grant type">
+                            <Globe2 size={11} /> All campuses
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
                         {[t.sponsor, t.description].filter(Boolean).join(' · ') || '—'}
                       </p>
@@ -197,7 +215,7 @@ export default function GrantTypesPage() {
                           </span>}
                     </td>
                     <td className="px-5 py-3 text-right whitespace-nowrap">
-                      {isAdmin && (
+                      {canManage(t) && (
                         <>
                           <button className="p-2 rounded-lg" title="Edit" aria-label={`Edit ${t.name}`}
                             onClick={() => { setFormError(''); setEditing({ id: t.id, name: t.name, description: t.description ?? '', sponsor: t.sponsor ?? '', defaultAmount: t.defaultAmount ?? '', scheduledDate: t.scheduledDate ? String(t.scheduledDate).slice(0, 10) : '' }); }}>
@@ -226,7 +244,9 @@ export default function GrantTypesPage() {
       </div>
 
       {editing && (
-        <Modal title={editing.id ? 'Edit Grant Type' : 'Add Grant Type'} onClose={() => setEditing(null)} dismissible={!saving}>
+        <Modal title={editing.id ? 'Edit Grant Type' : 'Add Grant Type'}
+          subtitle={!editing.id && !isAdmin ? 'This grant type will be used only at your campus.' : undefined}
+          onClose={() => setEditing(null)} dismissible={!saving}>
           <form onSubmit={save} className="space-y-4">
             {formError && <p role="alert" className="text-sm p-3 rounded-2xl" style={{ background: 'var(--danger-bg)', color: 'var(--danger)' }}>{formError}</p>}
             <Field label="Name">

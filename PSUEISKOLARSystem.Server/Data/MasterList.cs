@@ -280,7 +280,7 @@ namespace PSUEISKOLARSystem.Server.Data
                     userId,
                     "Your account is now a scholar account",
                     $"The scholarship office listed you under {type ?? "a scholarship"}, so your grantee account has been upgraded to " +
-                    "your scholar account. Sign in with the same email and password. Your one-time grants are still on your profile — " +
+                    "your scholar account. Sign in with the same email and password. Your one-time grants are still on your dashboard — " +
                     "please update your year level, course and details.",
                     NotificationCategories.Account,
                     "/my-profile");

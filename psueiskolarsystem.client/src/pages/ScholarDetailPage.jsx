@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
-import { AlertTriangle, Printer, Award, BanknoteArrowUp, History, Camera, Wallet, FileCheck, Eye, Download, CalendarClock, Lock } from 'lucide-react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { AlertTriangle, Printer, Award, History, Camera, FileCheck, Eye, Download } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
@@ -20,8 +20,8 @@ import Avatar from '../components/Avatar';
 import logoPsu from '../assets/logo-psu.png';
 import StatusBadge from '../components/StatusBadge';
 import { ReleaseModal } from './OneTimeGrantsPage';
+import { MissedDeadlinesCard, ScholarshipReleasesCard, OneTimeGrantsCard } from '../components/ScholarHistoryCards';
 import { ClayModal, ErrorBox, ModalButtons } from './UsersPage';
-import { peso } from '../constants/grants';
 import Field from '../components/Field';
 import Modal from '../components/Modal';
 import DocumentPreview from '../components/DocumentPreview';
@@ -169,10 +169,11 @@ export default function ScholarDetailPage() {
         getScholarshipTypes(token),
         getGrades(targetUserId, token).catch(() => []),
         getScholarshipHistory(targetUserId, token).catch(() => []),
-        getOneTimeGrants(token, { scholarId: targetUserId, pageSize: 50 }).catch(() => null),
-        getScholarReleases(targetUserId, token).catch(() => []),
+        // Money and missed deadlines only show on this page for staff (a scholar's are on their dashboard).
+        isAdminOrCoord ? getOneTimeGrants(token, { scholarId: targetUserId, pageSize: 50 }).catch(() => null) : null,
+        isAdminOrCoord ? getScholarReleases(targetUserId, token).catch(() => []) : [],
         getCampuses(token).catch(() => []),
-        getMissedDeadlines(token, targetUserId).catch(() => []),
+        isAdminOrCoord ? getMissedDeadlines(token, targetUserId).catch(() => []) : [],
       ]);
       setProfile(p);
       setPrograms(prog);
@@ -326,7 +327,7 @@ export default function ScholarDetailPage() {
                   <p className="text-xs mt-0.5">
                     {isOwnProfile
                       ? <>The scholarship office listed you under <strong>{profile.scholarshipTypeName ?? 'a scholarship'}</strong>, so
-                          your grantee account was upgraded instead of opening a new one. Your one-time grants are still below.
+                          your grantee account was upgraded instead of opening a new one. Your one-time grants are on your dashboard.
                           Please update your year level, course and details.</>
                       : <>This scholar&apos;s grantee account became their scholar account on{' '}
                           {new Date(profile.convertedFromGranteeAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}.
@@ -441,17 +442,13 @@ export default function ScholarDetailPage() {
               <PersonalDetailsView personal={profile.personal} birthDate={profile.birthDate} />
             </div>
 
-            {/* Recurring per-period payouts. A scholar is told "Your scholarship has been
-                released" and sent here, so this is where the release has to be visible. */}
-            {missed.length > 0 && <MissedDeadlinesCard missed={missed} isAdminOrCoord={isAdminOrCoord} />}
-            <ScholarshipReleasesCard releases={releases} isAdminOrCoord={isAdminOrCoord} />
-
-            {/* One-time grants — one-off awards on top of the scholarship */}
-            <OneTimeGrantsCard
-              grants={grants}
-              isAdminOrCoord={isAdminOrCoord}
-              onRelease={handleReleaseGrant}
-            />
+            {/* Missed deadlines, recurring releases and one-time grants. Staff see them here;
+                a scholar sees their own on the dashboard — My Profile is their information only. */}
+            {isAdminOrCoord && (<>
+              {missed.length > 0 && <MissedDeadlinesCard missed={missed} isAdminOrCoord />}
+              <ScholarshipReleasesCard releases={releases} isAdminOrCoord />
+              <OneTimeGrantsCard grants={grants} isAdminOrCoord onRelease={handleReleaseGrant} />
+            </>)}
 
             {grades.length >= 2 && (
               <GradeTrendChart grades={grades} minimumGwa={profile.minimumGwa} />
@@ -661,191 +658,6 @@ function ScholarshipCard({ profile, history, isAdminOrCoord, onChange }) {
           </ol>
         </div>
       )}
-    </div>
-  );
-}
-
-/* ── Recurring scholarship payouts, one row per academic period ──
-   Read-only here: recording and releasing are done from the Releases page, which has the
-   period pickers and the batch generator. This card exists so the scholar can see the money
-   they were notified about, and so staff see it beside the one-time grants. */
-/* Requirements whose deadline passed with nothing submitted. Uploading is locked for that
-   period, so the scholar sees here what they missed instead of a silent gap in the checklist. */
-function MissedDeadlinesCard({ missed, isAdminOrCoord }) {
-  return (
-    <div className="clay-card p-5 mb-6" style={{ border: '1.5px solid var(--danger-border)' }}>
-      <div className="flex items-center gap-2 mb-3">
-        <Lock size={15} style={{ color: 'var(--danger)' }} />
-        <h2 className="font-black text-sm" style={{ color: 'var(--text-strong)' }}>Missed Deadlines</h2>
-        <span className="status-badge tone-bad ml-auto">{missed.length} locked</span>
-      </div>
-      <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>
-        {isAdminOrCoord
-          ? 'Nothing was submitted before these deadlines, so the scholar can no longer upload them. You can still file a document for them from Document Review.'
-          : 'Nothing was submitted before these deadlines, so uploading is locked for them. Contact the scholarship office about any of these.'}
-      </p>
-      <ul className="space-y-2">
-        {missed.map(m => (
-          <li key={m.id} className="flex items-center justify-between gap-3 px-3 py-2 rounded-xl text-sm" style={{ background: 'var(--danger-bg)' }}>
-            <span className="font-semibold" style={{ color: 'var(--danger)' }}>{m.requirementName}</span>
-            <span className="text-xs shrink-0" style={{ color: 'var(--danger)' }}>
-              {m.academicYear} · Sem {m.semester} · due {new Date(m.dueDate).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function ScholarshipReleasesCard({ releases, isAdminOrCoord }) {
-  const released = releases.filter(r => r.status === 'Released');
-  const totalReleased = released.reduce((sum, r) => sum + r.amount, 0);
-  const pending = releases.filter(r => r.status === 'Pending');
-  const pendingTotal = pending.reduce((sum, r) => sum + r.amount, 0);
-
-  return (
-    <div className="clay-card p-6 mb-5">
-      <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-        <h2 className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-          Scholarship Releases
-        </h2>
-        {isAdminOrCoord && (
-          <Link to="/scholarship-releases" className="text-xs font-medium hover:underline flex items-center gap-1" style={{ color: 'var(--accent)' }}>
-            <Wallet size={12} strokeWidth={2.8} /> Manage releases
-          </Link>
-        )}
-      </div>
-
-      {releases.length === 0 ? (
-        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-          No scholarship releases recorded yet. These are the per-semester or per-year payouts
-          for the scholarship above.
-        </p>
-      ) : (
-        <>
-          <div className="flex flex-wrap gap-3 mb-4">
-            <MiniStat label="Released" value={peso(totalReleased)} color="#0a5a3a" />
-            <MiniStat label="Pending" value={peso(pendingTotal)} color="#7d5a00" />
-            <MiniStat label="Periods" value={String(releases.length)} />
-          </div>
-          <ul className="space-y-2">
-            {releases.map(r => (
-              <li key={r.id} className="clay-card-inner px-3.5 py-3">
-                <div className="flex items-start justify-between gap-3 flex-wrap">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>
-                      {r.scholarshipTypeName}
-                    </p>
-                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                      {r.periodLabel}
-                      {r.yearLevel ? ` · Year ${r.yearLevel}` : ''}
-                      {r.campusName ? ` · ${r.campusName}` : ''}
-                    </p>
-                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-faint)' }}>
-                      {r.releasedAt
-                        ? `Received ${new Date(r.releasedAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}`
-                        : r.scheduledDate
-                          ? `Scheduled for ${new Date(String(r.scheduledDate).slice(0, 10) + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}`
-                          : 'Not yet released'}
-                      {r.referenceNo ? ` · ref ${r.referenceNo}` : ''}
-                    </p>
-                  </div>
-                  <div className="text-right shrink-0 flex flex-col items-end gap-1.5">
-                    <span className="font-mono font-bold text-sm" style={{ color: 'var(--text-strong)' }}>{peso(r.amount)}</span>
-                    <StatusBadge status={r.status} />
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-    </div>
-  );
-}
-
-/* ── One-off financial awards on top of the scholarship ── */
-function OneTimeGrantsCard({ grants, isAdminOrCoord, onRelease }) {
-  const items = grants?.items ?? [];
-
-  return (
-    <div className="clay-card p-6 mb-5">
-      <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-        <h2 className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-          One-Time Grants
-        </h2>
-        {/* No "record grant" here: a scholar on a grant type's cross-matching list gets the
-            grant on their profile automatically, so there is nothing to key in by hand. */}
-        {isAdminOrCoord && (
-          <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-            Added automatically from each grant type’s cross-matching list
-          </span>
-        )}
-      </div>
-
-      {items.length === 0 ? (
-        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-          No one-time grants recorded. These are one-off awards separate from the scholarship above.
-        </p>
-      ) : (
-        <>
-          <div className="flex flex-wrap gap-3 mb-4">
-            <MiniStat label="Awarded" value={peso(grants.totalAmount)} />
-            <MiniStat label="Released" value={peso(grants.releasedAmount)} color="#0a5a3a" />
-            <MiniStat label="Pending" value={peso(grants.pendingAmount)} color="#7d5a00" />
-          </div>
-          <ul className="space-y-2">
-            {items.map(g => (
-              <li key={g.id} className="clay-card-inner px-3.5 py-3">
-                <div className="flex items-start justify-between gap-3 flex-wrap">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>{g.title}</p>
-                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                      {[g.source, g.purpose].filter(Boolean).join(' · ') || '—'}
-                    </p>
-                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-faint)' }}>
-                      Awarded {new Date(g.awardedOn).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
-                      {g.releaseStatus === 'Released' && g.releasedAt &&
-                        ` · Received ${new Date(g.releasedAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}`}
-                      {g.referenceNo ? ` · ref ${g.referenceNo}` : ''}
-                    </p>
-                    {g.releaseStatus === 'Pending' && g.scheduledReleaseDate && (
-                      <p className="text-xs mt-0.5 font-semibold flex items-center gap-1" style={{ color: 'var(--tone-warn-fg)' }}>
-                        <CalendarClock size={11} strokeWidth={2.6} />
-                        Release scheduled {new Date(String(g.scheduledReleaseDate).slice(0, 10) + 'T00:00:00')
-                          .toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
-                      </p>
-                    )}
-                  </div>
-                  <div className="text-right shrink-0 flex flex-col items-end gap-1.5">
-                    <span className="font-mono font-bold text-sm" style={{ color: 'var(--text-strong)' }}>{peso(g.amount)}</span>
-                    <StatusBadge status={g.releaseStatus} />
-                    {isAdminOrCoord && g.releaseStatus === 'Pending' && (
-                      <button
-                        onClick={() => onRelease(g)}
-                        className="text-xs font-bold hover:underline flex items-center gap-1"
-                        style={{ color: 'var(--tone-ok-fg)' }}
-                      >
-                        <BanknoteArrowUp size={11} strokeWidth={2.6} /> Release
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-    </div>
-  );
-}
-
-function MiniStat({ label, value, color }) {
-  return (
-    <div className="flex-1 min-w-[110px]">
-      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{label}</p>
-      <p className="text-sm font-black font-mono mt-0.5" style={{ color: color ?? 'var(--text-strong)' }}>{value}</p>
     </div>
   );
 }

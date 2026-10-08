@@ -34,6 +34,14 @@ namespace PSUEISKOLARSystem.Server.Models
         /// </summary>
         public DateTime? ScheduledDate { get; set; }
 
+        /// <summary>
+        /// Null for a general grant type (the administrator's, open to every campus); set for a
+        /// coordinator's own grant type, which only that campus uses — like a campus-only
+        /// <see cref="ScholarshipType"/>.
+        /// </summary>
+        public int? CampusId { get; set; }
+        public Campus? Campus { get; set; }
+
         public bool IsActive { get; set; } = true;
 
         /// <summary>

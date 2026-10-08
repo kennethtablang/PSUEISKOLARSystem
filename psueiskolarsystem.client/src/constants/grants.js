@@ -67,3 +67,18 @@ export function currentAcademicYear(now = new Date()) {
   const start = now.getMonth() >= 5 ? now.getFullYear() : now.getFullYear() - 1;
   return `${start}-${start + 1}`;
 }
+
+/**
+ * Academic years for a year dropdown: a few back and a couple ahead of the current one,
+ * newest first. `include` keeps an out-of-range year (e.g. the active period) selectable.
+ */
+export function academicYearOptions(include, now = new Date()) {
+  const start = parseInt(currentAcademicYear(now), 10);
+  const opts = [];
+  for (let y = start + 1; y >= start - 4; y--) opts.push(`${y}-${y + 1}`);
+  if (include && /^\d{4}-\d{4}$/.test(include) && !opts.includes(include)) {
+    opts.push(include);
+    opts.sort().reverse();
+  }
+  return opts;
+}

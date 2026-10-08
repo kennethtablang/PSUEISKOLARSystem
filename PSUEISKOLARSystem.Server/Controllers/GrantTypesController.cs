@@ -17,6 +17,9 @@ namespace PSUEISKOLARSystem.Server.Controllers
     /// account under the type so they can no longer sign in, while their profiles and grants
     /// stay on record for the analytics. Scholars who received the grant are not touched —
     /// their account belongs to their scholarship, not to the grant.
+    ///
+    /// Coordinators may add grant types of their own, which only their campus uses (like a
+    /// campus-only scholarship type); they manage those and see the general ones.
     /// </summary>
     [ApiController]
     [Route("api/grant-types")]
@@ -39,6 +42,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             var lines = db.EligibilityRecords.AtCampus(campusId);
 
             var types = await db.GrantTypes
+                .VisibleAt(campusId)
                 .OrderByDescending(t => t.IsActive)
                 .ThenBy(t => t.Name)
                 .Select(t => new
@@ -53,6 +57,10 @@ namespace PSUEISKOLARSystem.Server.Controllers
                     t.CreatedAt,
                     t.DeactivatedAt,
                     t.AccountsClosedAt,
+                    t.CampusId,
+                    CampusName = t.Campus != null ? t.Campus.Name : null,
+                    // Computed here rather than via CanManage(): it has to translate to SQL.
+                    CanManage = campusId == null ? User.IsInRole(UserRoles.Administrator) : t.CampusId == campusId,
                     GrantCount = grants.Count(g => g.GrantTypeId == t.Id),
                     ReleasedCount = grants.Count(g => g.GrantTypeId == t.Id && g.ReleaseStatus == GrantReleaseStatuses.Released),
                     PendingCount = grants.Count(g => g.GrantTypeId == t.Id && g.ReleaseStatus == GrantReleaseStatuses.Pending),
@@ -71,9 +79,13 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
         // POST /api/grant-types
         [HttpPost]
-        [Authorize(Roles = UserRoles.Administrator)]
         public async Task<IActionResult> Create(GrantTypeRequest dto)
         {
+            // The administrator's grant types apply to every campus; a coordinator's only to theirs.
+            var campusId = await db.CampusOfAsync(User);
+            if (User.IsInRole(UserRoles.ScholarshipCoordinator) && campusId is null)
+                return BadRequest(new { message = "Your account has no campus yet. Ask the administrator to assign one." });
+
             var error = await ValidateAsync(dto, null);
             if (error is not null) return BadRequest(new { message = error });
 
@@ -84,9 +96,11 @@ namespace PSUEISKOLARSystem.Server.Controllers
                 Sponsor = Trim(dto.Sponsor),
                 DefaultAmount = dto.DefaultAmount,
                 ScheduledDate = dto.ScheduledDate?.Date,
+                CampusId = campusId,
             };
             db.GrantTypes.Add(type);
             db.Audit(this, "CreateGrantType", $"Added grant type '{type.Name}'" +
+                (campusId is null ? " for all campuses" : $" for campus #{campusId}") +
                 (type.ScheduledDate is DateTime d ? $" — release on {d:MMM d, yyyy}" : " — release date not set yet"));
             await db.SaveChangesAsync();
             await AnnounceReleaseDateAsync(type);
@@ -95,11 +109,10 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
         // PUT /api/grant-types/{id}
         [HttpPut("{id:int}")]
-        [Authorize(Roles = UserRoles.Administrator)]
         public async Task<IActionResult> Update(int id, GrantTypeRequest dto)
         {
-            var type = await db.GrantTypes.FindAsync(id);
-            if (type is null) return NotFound();
+            var (type, denied) = await ManagedTypeAsync(id);
+            if (type is null) return denied!;
 
             var error = await ValidateAsync(dto, id);
             if (error is not null) return BadRequest(new { message = error });
@@ -166,11 +179,10 @@ namespace PSUEISKOLARSystem.Server.Controllers
         /// still-active type keeps their account, since they are still owed something.
         /// </summary>
         [HttpPatch("{id:int}/deactivate")]
-        [Authorize(Roles = UserRoles.Administrator)]
         public async Task<IActionResult> Deactivate(int id)
         {
-            var type = await db.GrantTypes.FindAsync(id);
-            if (type is null) return NotFound();
+            var (type, denied) = await ManagedTypeAsync(id);
+            if (type is null) return denied!;
             if (!type.IsActive) return BadRequest(new { message = $"'{type.Name}' is already deactivated." });
 
             var (closed, keptOpen) = await GrantReleaseService.CloseGranteeAccountsAsync(db, id);
@@ -195,11 +207,10 @@ namespace PSUEISKOLARSystem.Server.Controllers
         // this is the way back when the office needs them open again (e.g. someone did not
         // receive their grant). The automatic close does not run again for the same date.
         [HttpPatch("{id:int}/activate")]
-        [Authorize(Roles = UserRoles.Administrator)]
         public async Task<IActionResult> Activate(int id)
         {
-            var type = await db.GrantTypes.FindAsync(id);
-            if (type is null) return NotFound();
+            var (type, denied) = await ManagedTypeAsync(id);
+            if (type is null) return denied!;
 
             var granteeIds = await GrantReleaseService.GranteeIdsAsync(db, id);
             var users = await db.Users.Where(u => granteeIds.Contains(u.Id) && !u.IsActive).ToListAsync();
@@ -215,11 +226,10 @@ namespace PSUEISKOLARSystem.Server.Controllers
 
         // DELETE /api/grant-types/{id} — only while nothing has been recorded under it.
         [HttpDelete("{id:int}")]
-        [Authorize(Roles = UserRoles.Administrator)]
         public async Task<IActionResult> Delete(int id)
         {
-            var type = await db.GrantTypes.FindAsync(id);
-            if (type is null) return NotFound();
+            var (type, denied) = await ManagedTypeAsync(id);
+            if (type is null) return denied!;
 
             if (await db.OneTimeGrants.AnyAsync(g => g.GrantTypeId == id) ||
                 await db.EligibilityRecords.AnyAsync(e => e.GrantTypeId == id))
@@ -229,6 +239,21 @@ namespace PSUEISKOLARSystem.Server.Controllers
             db.GrantTypes.Remove(type);
             await db.SaveChangesAsync();
             return NoContent();
+        }
+
+        /// <summary>
+        /// The grant type, when the caller may change it: any type for the administrator, only
+        /// their own campus's for a coordinator. Otherwise the response to send back instead.
+        /// </summary>
+        private async Task<(GrantType? Type, IActionResult? Denied)> ManagedTypeAsync(int id)
+        {
+            var campusId = await db.CampusOfAsync(User);
+            var type = await db.GrantTypes.VisibleAt(campusId).FirstOrDefaultAsync(t => t.Id == id);
+            if (type is null) return (null, NotFound());
+            if (!type.CanManage(User, campusId))
+                return (null, StatusCode(StatusCodes.Status403Forbidden,
+                    new { message = $"'{type.Name}' is a grant type for every campus — only the administrator can change it." }));
+            return (type, null);
         }
 
         private Task<string?> RoleIdAsync(string role) =>

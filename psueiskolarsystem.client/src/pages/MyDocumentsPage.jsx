@@ -10,13 +10,14 @@ import { getDeadlines } from '../api/deadlines';
 import { getUploadPolicy, acceptAttribute, validateUpload, FALLBACK_UPLOAD_POLICY } from '../api/uploadPolicy';
 import { useTitle } from '../hooks/useTitle';
 import DocumentPreview from '../components/DocumentPreview';
-import { Eye, X, Download, Image, Loader, BookOpen, ChevronDown, ChevronUp, CalendarClock, Lock } from 'lucide-react';
+import { Eye, X, Download, Image, Loader, BookOpen, ChevronRight, CalendarClock, Lock, RotateCcw } from 'lucide-react';
 import ImageLightbox from '../components/ImageLightbox';
 import InfoTip from '../components/InfoTip';
 import StatusBadge from '../components/StatusBadge';
 import { statusDot } from '../constants/statusTones';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import DocumentTracker from '../components/DocumentTracker';
+import Modal from '../components/Modal';
 
 export default function MyDocumentsPage() {
   useTitle('My Documents');
@@ -42,6 +43,8 @@ export default function MyDocumentsPage() {
   const [period,      setPeriod]      = useState({ academicYear: '', semester: 1 });
   const [periodReady, setPeriodReady] = useState(false);
   const [sampleUrl,   setSampleUrl]   = useState(null);
+  // The document whose status dialog is open: { requirement, submission, deadline }.
+  const [tracking,    setTracking]    = useState(null);
 
   // Size cap and accepted extensions, from the server's System Settings rather than a copy
   // kept here — the two used to disagree. Falls back to the shipped defaults until it loads.
@@ -394,6 +397,7 @@ export default function MyDocumentsPage() {
                           removing={removing === sub?.id}
                           onPreview={() => handlePreview(sub)}
                           onViewSample={() => handleViewSample(req.id)}
+                          onTrack={() => setTracking({ requirement: req, submission: sub, deadline: deadlineByReq[req.id] })}
                           uploadLocked={!isApproved}
                           accept={acceptAttribute(uploadPolicy)}
                           token={token}
@@ -461,6 +465,16 @@ export default function MyDocumentsPage() {
         )}
       </div>
 
+      {tracking && (
+        <DocumentStatusModal
+          {...tracking}
+          period={period}
+          token={token}
+          onPreview={() => { const sub = tracking.submission; setTracking(null); if (preview?.submissionId !== sub.id) handlePreview(sub); }}
+          onClose={() => setTracking(null)}
+        />
+      )}
+
       {sampleUrl && (
         <ImageLightbox
           url={sampleUrl}
@@ -502,22 +516,16 @@ function Badge({ tone, children }) {
   );
 }
 
-function RequirementRow({ requirement, submission, deadline, uploading, removing, loadingPreview, isPreviewing, onUpload, onDelete, onPreview, onViewSample, uploadLocked, accept, token }) {
+/* One requirement in the checklist. The tracker no longer sits on every card: a submitted
+   document is listed with its status, and clicking it opens a dialog that tracks it — when it
+   was submitted, put under review, and verified or sent back for resubmission. */
+function RequirementRow({ requirement, submission, deadline, uploading, removing, loadingPreview, isPreviewing, onUpload, onDelete, onPreview, onViewSample, onTrack, uploadLocked, accept, token }) {
   const toast = useToast();
   const inputId  = `file-${requirement.id}`;
   // The deadline passed and nothing was submitted: the slot is locked for this period.
   const missed = !submission && !!deadline && new Date(deadline.dueDate) < new Date();
   const canUpload = !missed && (!submission || submission.status === 'Rejected' || submission.status === 'Incomplete');
-  const [showHistory, setShowHistory] = useState(false);
-  const [history, setHistory] = useState(null);
-
-  async function toggleHistory() {
-    if (!showHistory && history === null) {
-      try { setHistory(await getSubmissionHistory(submission.id, token)); }
-      catch { setHistory([]); }
-    }
-    setShowHistory(v => !v);
-  }
+  const needsResubmit = submission?.status === 'Rejected' || submission?.status === 'Incomplete';
 
   return (
     <div className="clay-card p-5"
@@ -525,7 +533,14 @@ function RequirementRow({ requirement, submission, deadline, uploading, removing
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <p className="font-semibold" style={{ color: 'var(--text-strong)' }}>{requirement.name}</p>
+            {submission ? (
+              <button onClick={onTrack} className="font-semibold text-left hover:underline" style={{ color: 'var(--text-strong)' }}
+                title="Track this document">
+                {requirement.name}
+              </button>
+            ) : (
+              <p className="font-semibold" style={{ color: 'var(--text-strong)' }}>{requirement.name}</p>
+            )}
             {requirement.isRequired && (
               <span className="text-xs px-1.5 py-0.5 rounded-xl font-medium"
                 style={{ background: 'var(--accent-soft-bg)', color: 'var(--accent)', border: '1px solid var(--accent-soft-border)' }}>
@@ -555,10 +570,6 @@ function RequirementRow({ requirement, submission, deadline, uploading, removing
         )}
       </div>
 
-      <div className="mt-3">
-        <DocumentTracker status={submission?.status ?? null} missed={missed} compact />
-      </div>
-
       {missed && (
         <div className="mt-2 p-2 rounded-xl text-xs flex items-start gap-1.5"
           style={{ background: 'var(--danger-bg)', border: '1px solid var(--danger-border)', color: 'var(--danger)' }}>
@@ -582,10 +593,11 @@ function RequirementRow({ requirement, submission, deadline, uploading, removing
         </div>
       )}
 
-      {submission?.feedbackNote && (
-        <div className="mt-2 p-2 rounded-xl text-xs"
+      {needsResubmit && (
+        <div className="mt-2 p-2 rounded-xl text-xs flex items-center gap-1.5"
           style={{ background: 'var(--danger-bg)', border: '1px solid var(--danger-border)', color: 'var(--danger)' }}>
-          <span className="font-medium">Feedback:</span> {submission.feedbackNote}
+          <RotateCcw size={12} className="shrink-0" />
+          <span>Needs resubmission — open Track status to see the reviewer&apos;s feedback.</span>
         </div>
       )}
 
@@ -646,42 +658,129 @@ function RequirementRow({ requirement, submission, deadline, uploading, removing
 
         {submission && (
           <button
-            onClick={toggleHistory}
-            className={`text-xs flex items-center gap-1 hover:underline ${submission.status === 'Verified' ? 'ml-auto' : ''}`}
-            style={{ color: 'var(--text-muted)' }}>
-            {showHistory ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-            History
+            onClick={onTrack}
+            className={`text-xs font-semibold flex items-center gap-1 hover:underline ${submission.status === 'Verified' ? 'ml-auto' : ''}`}
+            style={{ color: 'var(--accent)' }}>
+            Track status <ChevronRight size={12} strokeWidth={2.6} />
           </button>
         )}
       </div>
+    </div>
+  );
+}
 
-      {showHistory && history !== null && (
-        <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--hairline)' }}>
-          {history.length === 0 ? (
-            <p className="text-xs" style={{ color: 'var(--text-faint)' }}>No history yet.</p>
-          ) : (
-            <ol className="space-y-2.5">
-              {history.map((h, i) => (
-                <li key={h.id} className="flex items-start gap-2.5">
-                  <div className="flex flex-col items-center shrink-0">
-                    <div className="w-2 h-2 rounded-full mt-0.5" style={{ background: statusDot(h.status) }} />
-                    {i < history.length - 1 && <div className="w-px flex-1 mt-1" style={{ background: 'var(--hairline-strong)', minHeight: 12 }} />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold" style={{ color: 'var(--text-strong)' }}>
-                      {h.status === 'Pending' ? 'Submitted' : h.status === 'UnderReview' ? 'Under Review' : h.status === 'Incomplete' ? 'Rejected' : h.status}
-                    </p>
-                    {h.note && <p className="text-xs" style={{ color: 'var(--text)' }}>{h.note}</p>}
-                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-faint)' }}>
-                      {new Date(h.changedAt).toLocaleString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ol>
-          )}
+/* When a document reached each step of the latest submission cycle, read off its history.
+   A resubmission starts a new cycle, so only entries from the latest "Submitted" onward count. */
+function stepDates(history, submission) {
+  const lastSubmit = history.map(h => h.status).lastIndexOf('Pending');
+  const cycle = lastSubmit >= 0 ? history.slice(lastSubmit) : history;
+  const at = statuses => cycle.filter(h => statuses.includes(h.status)).at(-1)?.changedAt;
+  const decided = at(['Verified', 'Rejected', 'Incomplete']) ?? submission.reviewedAt;
+  return {
+    Submitted: (lastSubmit >= 0 ? cycle[0].changedAt : null) ?? submission.submittedAt,
+    'Under Review': at(['UnderReview']),
+    Verified: submission.status === 'Verified' ? decided : null,
+    Rejected: submission.status === 'Rejected' || submission.status === 'Incomplete' ? decided : null,
+  };
+}
+
+const fmtDateTime = d => d
+  ? new Date(d).toLocaleString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  : '—';
+const statusLabel = st => st === 'Pending' ? 'Submitted' : st === 'UnderReview' ? 'Under Review' : st === 'Incomplete' ? 'Rejected' : st;
+
+/* The status dialog: the document's details, its tracker with the date of each step, the
+   reviewer's feedback, and the full history. */
+function DocumentStatusModal({ requirement, submission, deadline, period, token, onPreview, onClose }) {
+  const toast = useToast();
+  const [history, setHistory] = useState(null);
+
+  useEffect(() => {
+    getSubmissionHistory(submission.id, token).then(setHistory).catch(() => setHistory([]));
+  }, [submission.id, token]);
+
+  const dates = history ? stepDates(history, submission) : { Submitted: submission.submittedAt };
+  const rejected = submission.status === 'Rejected' || submission.status === 'Incomplete';
+
+  return (
+    <Modal title={requirement.name} subtitle={`${period.academicYear} · Sem ${period.semester}`} onClose={onClose} width={640}>
+      <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 mb-5">
+        <Info label="Status" value={<StatusBadge status={submission.status} />} />
+        <Info label="File" value={<span className="break-all">{submission.fileName} <span style={{ color: 'var(--text-muted)' }}>· {formatBytes(submission.fileSizeBytes)}</span></span>} />
+        <Info label="Submitted on" value={fmtDateTime(dates.Submitted)} />
+        <Info label="Under review since" value={fmtDateTime(dates['Under Review'])} />
+        <Info label={rejected ? 'Sent back on' : 'Verified on'} value={fmtDateTime(rejected ? dates.Rejected : dates.Verified)} />
+        <Info label="Reviewed by" value={submission.reviewedBy ?? '—'} />
+        {deadline && (
+          <Info label="Deadline" value={<>
+            {new Date(deadline.dueDate).toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' })}
+            <span style={{ color: submission.isLate ? 'var(--tone-attention-fg)' : 'var(--tone-ok-fg)' }}> · {submission.isLate ? 'submitted late' : 'on time'}</span>
+          </>} />
+        )}
+      </dl>
+
+      <div className="rounded-2xl px-4 py-4 mb-4" style={{ background: 'var(--surface-inset)' }}>
+        <DocumentTracker status={submission.status} dates={dates} />
+      </div>
+
+      {rejected && (
+        <div className="p-3 rounded-xl text-xs mb-4 flex items-start gap-2"
+          style={{ background: 'var(--danger-bg)', border: '1px solid var(--danger-border)', color: 'var(--danger)' }}>
+          <RotateCcw size={13} className="shrink-0 mt-px" />
+          <span>
+            <strong>You need to resubmit this document.</strong>
+            {submission.feedbackNote ? <> Feedback: {submission.feedbackNote}</> : ' Upload a corrected file from My Documents.'}
+          </span>
         </div>
       )}
+      {!rejected && submission.feedbackNote && (
+        <p className="p-3 rounded-xl text-xs mb-4" style={{ background: 'var(--surface-inset)', color: 'var(--text)' }}>
+          <strong>Note from the reviewer:</strong> {submission.feedbackNote}
+        </p>
+      )}
+
+      <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>History</p>
+      {history === null ? (
+        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Loading…</p>
+      ) : history.length === 0 ? (
+        <p className="text-xs" style={{ color: 'var(--text-faint)' }}>No history yet.</p>
+      ) : (
+        <ol className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
+          {history.map((h, i) => (
+            <li key={h.id} className="flex items-start gap-2.5">
+              <div className="flex flex-col items-center shrink-0">
+                <div className="w-2 h-2 rounded-full mt-0.5" style={{ background: statusDot(h.status) }} />
+                {i < history.length - 1 && <div className="w-px flex-1 mt-1" style={{ background: 'var(--hairline-strong)', minHeight: 12 }} />}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold" style={{ color: 'var(--text-strong)' }}>{statusLabel(h.status)}</p>
+                {h.note && <p className="text-xs" style={{ color: 'var(--text)' }}>{h.note}</p>}
+                <p className="text-xs mt-0.5" style={{ color: 'var(--text-faint)' }}>{fmtDateTime(h.changedAt)}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
+
+      <div className="flex items-center gap-2 pt-4 mt-4 flex-wrap" style={{ borderTop: '1.5px solid var(--hairline)' }}>
+        <button onClick={onPreview} className="clay-btn text-sm px-3 py-1.5 flex items-center gap-1.5" style={{ color: 'var(--accent)' }}>
+          <Eye size={13} strokeWidth={2.5} /> Preview
+        </button>
+        <button onClick={() => downloadFile(submission.id, submission.fileName, token).catch(e => toast(e.message, 'error'))}
+          className="clay-btn text-sm px-3 py-1.5 flex items-center gap-1.5" style={{ color: 'var(--accent)' }}>
+          <Download size={13} strokeWidth={2.5} /> Download
+        </button>
+        <button onClick={onClose} className="clay-btn clay-btn-ghost text-sm px-4 py-1.5 ml-auto">Close</button>
+      </div>
+    </Modal>
+  );
+}
+
+function Info({ label, value }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{label}</dt>
+      <dd className="text-sm font-semibold mt-0.5" style={{ color: 'var(--text-strong)' }}>{value}</dd>
     </div>
   );
 }

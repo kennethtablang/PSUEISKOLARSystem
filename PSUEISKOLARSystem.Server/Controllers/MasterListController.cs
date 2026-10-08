@@ -224,7 +224,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             var types = await db.ScholarshipTypes.VisibleAt(scope).OrderBy(t => t.Name).Select(t => t.Name).ToListAsync();
             for (int i = 0; i < types.Count; i++) reference.Cell(i + 2, 4).Value = types[i];
             reference.Cell(1, 6).Value = "Grant types"; reference.Cell(1, 6).Style.Font.Bold = true;
-            var grants = await db.GrantTypes.OrderBy(t => t.Name).Select(t => t.Name).ToListAsync();
+            var grants = await db.GrantTypes.VisibleAt(scope).OrderBy(t => t.Name).Select(t => t.Name).ToListAsync();
             for (int i = 0; i < grants.Count; i++) reference.Cell(i + 2, 6).Value = grants[i];
             reference.Columns().AdjustToContents();
 
@@ -260,7 +260,7 @@ namespace PSUEISKOLARSystem.Server.Controllers
             var scope = await db.CampusOfAsync(User);
             var campusByCode = await db.Campuses.ToDictionaryAsync(c => c.Code.ToUpper(), c => c.Id);
             var typeByName = await db.ScholarshipTypes.VisibleAt(scope).ToDictionaryAsync(t => t.Name.ToUpper(), t => t.Id);
-            var grantByName = await db.GrantTypes.ToDictionaryAsync(t => t.Name.ToUpper(), t => t.Id);
+            var grantByName = await db.GrantTypes.VisibleAt(scope).ToDictionaryAsync(t => t.Name.ToUpper(), t => t.Id);
 
             var results = new List<ImportRowResult>();
             var addedLines = new List<EligibilityRecord>();
@@ -400,8 +400,12 @@ namespace PSUEISKOLARSystem.Server.Controllers
             else
             {
                 if (grantTypeId is not int gt) return (null, "A grantee line needs a grant type.");
-                var type = await db.GrantTypes.FindAsync(gt);
+                // A coordinator lists grantees only under the grant types that apply at their campus.
+                var type = await db.GrantTypes.VisibleAt(scope).FirstOrDefaultAsync(t => t.Id == gt);
                 if (type is null) return (null, "The selected grant type does not exist.");
+                if (type.CampusId is int grantCampus && campusId is int grantLineCampus && grantCampus != grantLineCampus)
+                    return (null, $"{type.Name} is only for its own campus's students.");
+                if (type.CampusId is int onlyGrantCampus) campusId ??= onlyGrantCampus;
                 if (!type.IsActive) return (null, $"'{type.Name}' is deactivated. Reactivate it before adding grantees.");
                 if (grantAmount is decimal a && (a <= 0 || a > 10_000_000m)) return (null, "Grant amount must be greater than zero.");
                 if (grantAmount is null && type.DefaultAmount is null)

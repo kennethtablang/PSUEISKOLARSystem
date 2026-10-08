@@ -17,7 +17,7 @@ import { useTitle } from '../hooks/useTitle';
 import { ctlStyle, localDateInput } from '../constants/ui';
 import {
   peso, isRecurring, periodChoicesFor, semesterLabel, periodLabel,
-  currentAcademicYear, BOTH_SEMESTERS, FREQUENCY_LABELS,
+  currentAcademicYear, academicYearOptions, BOTH_SEMESTERS, FREQUENCY_LABELS,
 } from '../constants/grants';
 import {
   BanknoteArrowUp, CircleCheckBig, Clock, CircleAlert,
@@ -102,9 +102,8 @@ export default function ScholarshipReleasesPage() {
     if (!allowed.includes(semester)) setSemester(allowed[0]);
   }, [selectedType, semester]);
 
-  // Only the latest request may fill the table, and only a complete YYYY-YYYY is worth
-  // requesting: the year box used to fire per keystroke, flashing "invalid academic year"
-  // errors while typing and letting a slow earlier response overwrite the current one.
+  // Only the latest request may fill the table, so a slow earlier response can't overwrite
+  // the current one. The year is a dropdown now, but the active period could still be blank.
   const requestSeq = useRef(0);
   const yearComplete = /^\d{4}-\d{4}$/.test(academicYear.trim());
 
@@ -255,14 +254,15 @@ export default function ScholarshipReleasesPage() {
                 ))}
               </select>
 
-              <input
+              <select
                 value={academicYear}
                 onChange={e => setAcademicYear(e.target.value)}
                 className="clay-input"
                 style={{ ...ctlStyle, width: 130 }}
-                placeholder="2025-2026"
                 aria-label="Academic year"
-              />
+              >
+                {academicYearOptions(academicYear).map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
 
               <select
                 value={semester}
@@ -366,9 +366,9 @@ export default function ScholarshipReleasesPage() {
                 <TableSkeleton />
               ) : !monitor ? (
                 <EmptyState
-                title={typeId && !yearComplete ? 'Enter the academic year' : 'Pick a scholarship'}
+                title={typeId && !yearComplete ? 'Pick the academic year' : 'Pick a scholarship'}
                 message={typeId && !yearComplete
-                  ? 'Type the academic year as YYYY-YYYY (e.g. 2025-2026) to see who has been paid.'
+                  ? 'Choose the academic year above to see who has been paid.'
                   : 'Choose a scholarship and period above to see who has been paid.'} />
               ) : rows.length === 0 ? (
                 <EmptyState

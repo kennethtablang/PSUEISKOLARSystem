@@ -10,7 +10,10 @@ import { PieChart, Pie, Cell, Tooltip } from 'recharts';
 import { useTheme } from '../context/ThemeContext';
 import { vizTokens, tooltipStyle } from '../constants/viz';
 import InfoTip from '../components/InfoTip';
-import DocumentTracker from '../components/DocumentTracker';
+import { MissedDeadlinesCard, ScholarshipReleasesCard, OneTimeGrantsCard } from '../components/ScholarHistoryCards';
+import { getScholarReleases } from '../api/scholarshipReleases';
+import { getOneTimeGrants } from '../api/oneTimeGrants';
+import { getMissedDeadlines } from '../api/deadlines';
 import { GraduationCap, ClipboardList, AlertTriangle, BarChart2, Inbox, Clock, FileCheck, ArrowRight, RefreshCw, CalendarClock, MessageSquare, Megaphone, FolderOpen, User, Activity, UserCheck, Banknote, ShieldX, ShieldQuestion, MapPin, Download, FileText } from 'lucide-react';
 import { useTitle } from '../hooks/useTitle';
 import { useMyCampus } from '../hooks/useMyCampus';
@@ -30,6 +33,10 @@ export default function DashboardPage() {
   const [activity, setActivity] = useState([]);            // recent audit-log activity (staff)
   const [pendingApprovals, setPendingApprovals] = useState(0);
   const [grantSummary, setGrantSummary] = useState(null);  // one-time grant totals (staff)
+  // The scholar's own history, moved here from My Profile: releases, grants, missed deadlines.
+  const [myReleases, setMyReleases] = useState([]);
+  const [myGrants, setMyGrants] = useState(null);
+  const [myMissed, setMyMissed] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
@@ -87,6 +94,22 @@ export default function DashboardPage() {
 
     return () => { cancelled = true; };
   }, [token, reloadKey]);
+
+  useEffect(() => {
+    if (user?.role !== 'Scholar' || !user?.id) return;
+    let cancelled = false;
+    Promise.all([
+      getScholarReleases(user.id, token).catch(() => []),
+      getOneTimeGrants(token, { scholarId: user.id, pageSize: 50 }).catch(() => null),
+      getMissedDeadlines(token, user.id).catch(() => []),
+    ]).then(([rel, gr, miss]) => {
+      if (cancelled) return;
+      setMyReleases(rel ?? []);
+      setMyGrants(gr);
+      setMyMissed(miss ?? []);
+    });
+    return () => { cancelled = true; };
+  }, [token, user?.role, user?.id, reloadKey]);
 
   function retry() {
     setLoading(true);
@@ -385,6 +408,7 @@ export default function DashboardPage() {
           return (
           <div className="mb-8 space-y-4">
             <h2 className="text-base font-black" style={{ color: 'var(--text-strong)' }}>Document Compliance</h2>
+            {myMissed.length > 0 && <MissedDeadlinesCard missed={myMissed} />}
 
             {/* Progress card */}
             <div className="clay-card p-5">
@@ -430,59 +454,7 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Each document's progress: Submitted → Under Review → Verified, or → Rejected →
-                Need to resubmit; a missed deadline shows the slot as locked. */}
-            {compliance.documents?.length > 0 && (
-              <div className="clay-card p-5">
-                <p className="text-xs font-bold uppercase tracking-wider mb-4" style={{ color: 'var(--text-muted)' }}>
-                  Status of Each Document
-                </p>
-                <ul className="space-y-5">
-                  {compliance.documents.map(d => (
-                    <li key={d.requirementId}>
-                      <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
-                        <p className="text-sm font-bold" style={{ color: 'var(--text-strong)' }}>
-                          {d.name}
-                          {d.isRequired && <span className="text-[10px] font-bold ml-2 px-1.5 py-0.5 rounded-lg" style={{ background: 'var(--accent-soft-bg)', color: 'var(--accent)' }}>Required</span>}
-                        </p>
-                        <span className="text-[11px]" style={{ color: d.missed ? 'var(--danger)' : 'var(--text-muted)' }}>
-                          {d.missed
-                            ? `Locked — deadline was ${new Date(d.dueDate).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}`
-                            : d.submittedAt
-                              ? `Submitted ${new Date(d.submittedAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}`
-                              : d.dueDate ? `Due ${new Date(d.dueDate).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}` : 'Not submitted'}
-                        </span>
-                      </div>
-                      <DocumentTracker status={d.status} missed={d.missed} compact />
-                      {(d.status === 'Rejected' || d.status === 'Incomplete') && d.feedbackNote && (
-                        <p className="text-xs mt-2 px-3 py-2 rounded-xl" style={{ background: 'var(--danger-bg)', color: 'var(--danger)' }}>
-                          <strong>Feedback:</strong> {d.feedbackNote}
-                        </p>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {/* Incomplete items list */}
-            {compliance.incompleteItems.length > 0 && (
-              <div className="clay-card p-5 tone-warn" style={{ background: 'var(--tone-bg)', border: '1.5px solid var(--tone-border)' }}>
-                <p className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: 'var(--tone-fg)' }}>
-                  Needs Resubmission
-                </p>
-                <ul className="space-y-1.5">
-                  {compliance.incompleteItems.map(name => (
-                    <li key={name} className="flex items-center gap-2 text-sm" style={{ color: 'var(--tone-fg)' }}>
-                      <AlertTriangle size={13} strokeWidth={2.5} />
-                      {name}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {/* CTA to My Documents */}
+            {/* Each document's status and its tracker live on My Documents. */}
             {(compliance.pendingCount > 0 || compliance.incompleteItems.length > 0 || verified < compliance.totalRequired) && (
               <Link to="/my-documents"
                 className="flex items-center justify-between p-4 rounded-2xl"
@@ -501,6 +473,16 @@ export default function DashboardPage() {
           </div>
           );
         })()}
+
+        {/* Scholarship releases and one-time grants (scholar) — the history used to sit on
+            My Profile; a release or grant notification now links here. */}
+        {user?.role === 'Scholar' && (
+          <div className="mb-8">
+            <h2 className="text-base font-black mb-4" style={{ color: 'var(--text-strong)' }}>My Scholarship Releases &amp; Grants</h2>
+            <ScholarshipReleasesCard releases={myReleases} />
+            <OneTimeGrantsCard grants={myGrants} />
+          </div>
+        )}
 
         {/* Quick actions (scholar) */}
         {user?.role === 'Scholar' && (
